@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "644270097493",
+    "project_id": "rhlaa-app",
+    "storage_bucket": "rhlaa-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644270097493:android:be4f5e0f71628d43bfc0dc",
+        "android_client_info": {
+          "package_name": "com.example.rhlaa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwyVnAKIjsAYYMNg26OT-XBd4bZE-UWC4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644270097493:android:f7d8895ed5d756a9bfc0dc",
+        "android_client_info": {
+          "package_name": "com.example.rhlaa_admin_panel"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwyVnAKIjsAYYMNg26OT-XBd4bZE-UWC4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

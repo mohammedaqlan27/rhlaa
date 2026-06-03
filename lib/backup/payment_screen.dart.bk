@@ -1,0 +1,145 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/notification_service.dart';
+
+class PaymentScreen extends StatefulWidget {
+  final String tripId;
+  final int seatNumber;
+  final String bookingId;
+
+  const PaymentScreen({
+    super.key,
+    required this.tripId,
+    required this.seatNumber,
+    required this.bookingId,
+  });
+
+  @override
+  State<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends State<PaymentScreen> {
+  String _selectedMethod = 'نقداً عند اللقاء';
+  bool _isProcessing = false;
+
+  Future<void> _confirmPayment() async {
+    setState(() => _isProcessing = true);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ يجب تسجيل الدخول لإتمام الدفع')),
+      );
+      setState(() => _isProcessing = false);
+      return;
+    }
+
+    try {
+      final bookingRef = FirebaseFirestore.instance.collection('bookings').doc(widget.bookingId);
+
+      await bookingRef.update({
+        'paymentStatus': 'مدفوع',
+        'paymentMethod': _selectedMethod,
+        'paidAt': FieldValue.serverTimestamp(),
+      });
+
+      // استدعاء موحّد لخدمة الإشعارات: تمرير title و body و type
+      await NotificationService().sendNotification(
+        userId: user.uid,
+        title: 'تأكيد الدفع',
+        body: '💳 تم تأكيد دفعك للرحلة ${widget.tripId} بنجاح عبر $_selectedMethod.',
+        type: 'تأكيد دفع',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ تم الدفع وتأكيد الحجز')),
+      );
+      Navigator.pop(context);
+    } catch (e, st) {
+      debugPrint('PaymentScreen._confirmPayment error: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ فشل في تأكيد الدفع: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('💳 الدفع وتأكيد الحجز'),
+        backgroundColor: const Color(0xFFB39DDB),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                const Text('يرجى تأكيد الحجز والدفع', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.confirmation_number),
+                  title: Text('رقم الرحلة: ${widget.tripId}'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.event_seat),
+                  title: Text('رقم المقعد: ${widget.seatNumber}'),
+                ),
+                const SizedBox(height: 20),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('اختر طريقة الدفع:', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedMethod,
+                  items: [
+                    'نقداً عند اللقاء',
+                    'بطاقة إلكترونية (غير مفعّل حالياً)',
+                  ].map<DropdownMenuItem<String>>((method) => DropdownMenuItem<String>(
+                    value: method,
+                    child: Text(method),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val == null) return;
+                    setState(() => _selectedMethod = val);
+                  },
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.payment),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _confirmPayment,
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text('ادفع واحجز'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: _isProcessing ? null : () => Navigator.pop(context),
+                  icon: const Icon(Icons.cancel),
+                  label: const Text('إلغاء'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

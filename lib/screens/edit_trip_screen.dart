@@ -1,0 +1,271 @@
+// lib/screens/edit_trip_screen.dart
+// (معدّل ليتعامل مع Trip حيث departureTime/date هما DateTime؟)
+
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/trip.dart';
+
+class EditTripScreen extends StatefulWidget {
+  final String tripId;
+
+  const EditTripScreen({super.key, required this.tripId});
+
+  @override
+  State<EditTripScreen> createState() => _EditTripScreenState();
+}
+
+class _EditTripScreenState extends State<EditTripScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late Trip _trip;
+  bool _isLoading = true;
+  bool _isSaving = false;
+
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _originController = TextEditingController();
+  final _destinationController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _timeController = TextEditingController();
+  final _flexibleWindowController = TextEditingController();
+
+  final List<String> carTypes = ['سيارة سيدان', 'سيارة دفع رباعي', 'سيارة فان'];
+  final List<String> tripCategories = ['داخلية', 'خارجية'];
+
+  String _carType = 'سيارة سيدان';
+  String _tripCategory = 'داخلية';
+  int _totalSeats = 4;
+  DateTime _selectedDate = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrip();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _originController.dispose();
+    _destinationController.dispose();
+    _priceController.dispose();
+    _timeController.dispose();
+    _flexibleWindowController.dispose();
+    super.dispose();
+  }
+
+  DateTime _toDateTime(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
+
+  Future<void> _loadTrip() async {
+    setState(() => _isLoading = true);
+    try {
+      final doc = await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).get();
+      if (!doc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ الرحلة غير موجودة')));
+          Navigator.pop(context);
+        }
+        return;
+      }
+
+      _trip = Trip.fromDocument(doc);
+
+      _titleController.text = _trip.title;
+      _descriptionController.text = _trip.description;
+      _originController.text = _trip.origin;
+      _destinationController.text = _trip.destination;
+      _priceController.text = _trip.price.toString();
+      _timeController.text = _trip.time;
+      _flexibleWindowController.text = _trip.flexibleWindow;
+      _carType = _trip.vehicleType.isNotEmpty ? _trip.vehicleType : carTypes.first;
+      _tripCategory = _trip.tripCategory.isNotEmpty ? _trip.tripCategory : tripCategories.first;
+      _totalSeats = _trip.totalSeats;
+      final dt = _toDateTime(_trip.departureTime);
+      _selectedDate = DateTime(dt.year, dt.month, dt.day);
+
+      setState(() => _isLoading = false);
+    } catch (e, st) {
+      debugPrint('EditTripScreen._loadTrip error: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل تحميل بيانات الرحلة')));
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final parsedPrice = double.tryParse(_priceController.text.trim());
+      final hour = _parseHourFromTimeString(_timeController.text);
+      final minute = _parseMinuteFromTimeString(_timeController.text);
+      final departureDateTime = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        hour,
+        minute,
+      );
+
+      final updatedTrip = _trip.copyWith(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        origin: _originController.text.trim(),
+        destination: _destinationController.text.trim(),
+        price: parsedPrice ?? _trip.price,
+        time: _timeController.text.trim(),
+        flexibleWindow: _flexibleWindowController.text.trim(),
+        vehicleType: _carType,
+        tripCategory: _tripCategory,
+        totalSeats: _totalSeats,
+        departureTime: departureDateTime,
+      );
+
+      await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).update(updatedTrip.toMap());
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم حفظ التعديلات')));
+        Navigator.pop(context);
+      }
+    } catch (e, st) {
+      debugPrint('EditTripScreen._saveChanges error: $e\n$st');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل حفظ التعديلات: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  int _parseHourFromTimeString(String time) {
+    try {
+      final parts = time.split(':');
+      if (parts.isNotEmpty) {
+        final h = int.tryParse(parts[0].trim());
+        if (h != null && h >= 0 && h <= 23) return h;
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  int _parseMinuteFromTimeString(String time) {
+    try {
+      final parts = time.split(':');
+      if (parts.length > 1) {
+        final m = int.tryParse(parts[1].trim());
+        if (m != null && m >= 0 && m <= 59) return m;
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('تعديل الرحلة'), backgroundColor: Colors.orange.shade700),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  _buildTextField(_titleController, 'عنوان الرحلة', icon: Icons.title),
+                  _buildTextField(_descriptionController, 'الوصف', icon: Icons.description, maxLines: 3),
+                  _buildTextField(_originController, 'نقطة الانطلاق', icon: Icons.location_on),
+                  _buildTextField(_destinationController, 'الوجهة', icon: Icons.flag),
+                  _buildTextField(_priceController, 'السعر', icon: Icons.attach_money, keyboardType: TextInputType.number),
+                  _buildTextField(_timeController, 'الوقت (HH:mm)', icon: Icons.access_time, keyboardType: TextInputType.datetime),
+                  _buildTextField(_flexibleWindowController, 'نافذة مرنة', icon: Icons.schedule),
+                  const SizedBox(height: 12),
+                  _buildDropdown('نوع السيارة', _carType, carTypes, (val) => setState(() => _carType = val)),
+                  _buildDropdown('فئة الرحلة', _tripCategory, tripCategories, (val) => setState(() => _tripCategory = val)),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    title: Text('📅 تاريخ الرحلة: ${_selectedDate.toLocal().toString().split(' ')[0]}'),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) setState(() => _selectedDate = picked);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _saveChanges,
+                    icon: const Icon(Icons.save),
+                    label: _isSaving ? const Text('جاري الحفظ...') : const Text('حفظ التعديلات'),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 50)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      {IconData icon = Icons.edit, TextInputType keyboardType = TextInputType.text, int maxLines = 1}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: TextFormField(
+        controller: controller,
+        maxLines: maxLines,
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: const OutlineInputBorder()),
+        keyboardType: keyboardType,
+        validator: (val) {
+          if (val == null || val.trim().isEmpty) return 'يرجى إدخال $label';
+          if (label == 'السعر') {
+            final p = double.tryParse(val.trim());
+            if (p == null) return 'الرجاء إدخال سعر صالح';
+          }
+          if (label == 'الوقت (HH:mm)') {
+            final parts = val.split(':');
+            if (parts.length != 2) return 'الوقت يجب أن يكون بالشكل HH:mm';
+            final h = int.tryParse(parts[0]);
+            final m = int.tryParse(parts[1]);
+            if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) return 'الوقت غير صالح';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
+  Widget _buildDropdown(String label, String value, List<String> items, void Function(String) onChanged) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+        onChanged: (val) {
+          if (val == null) return;
+          onChanged(val);
+        },
+        decoration: InputDecoration(labelText: label, prefixIcon: const Icon(Icons.arrow_drop_down), border: const OutlineInputBorder()),
+      ),
+    );
+  }
+}

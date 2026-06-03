@@ -1,0 +1,181 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+
+import '../models/trip.dart';
+import '../services/booking_service.dart';
+import '../screens/payment_screen.dart';
+
+class TripDetailsScreen extends StatelessWidget {
+  final Trip trip;
+
+  const TripDetailsScreen({super.key, required this.trip});
+
+  /// عنصر عرض تفصيل واحد
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blue.shade800),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ✅ تم التصحيح: تعديل دالة الحجز لتناسب واجهة BookingService
+  Widget _buildBookButton(BuildContext context) {
+    final bookingService = Provider.of<BookingService>(context, listen: false);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null || trip.status != 'مجدولة') return const SizedBox();
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: ElevatedButton.icon(
+        onPressed: trip.availableSeats > 0
+            ? () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('جاري محاولة حجز المقعد...')),
+                );
+
+                // ✅ تم التصحيح: استخدام المعاملات الصحيحة لـ createBooking
+                final errorMessage = await bookingService.createBooking(
+                  tripId: trip.id!,
+                  passengerId: uid,
+                  seatsToBook: 1,
+                  tripPricePerSeat: trip.price,
+                  isFamilyBooking: false,
+                  childrenCount: 0,
+                );
+
+                if (context.mounted) {
+                  if (errorMessage == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✅ تم حجز المقعد بنجاح')),
+                    );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaymentScreen(
+                          tripId: trip.id!,
+                          seatNumber: 1,
+                          bookingId: '', // سيتم تحديثه بعد الحجز الفعلي
+                        ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('❌ فشل في الحجز: $errorMessage')),
+                    );
+                  }
+                }
+              }
+            : null,
+        icon: const Icon(Icons.event_seat),
+        label: Text(
+          trip.availableSeats > 0
+              ? 'حجز المقعد - ${trip.price.toStringAsFixed(2)} ريال'
+              : 'لا توجد مقاعد متاحة',
+          style: const TextStyle(fontSize: 18),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: trip.availableSeats > 0 ? Colors.blue.shade900 : Colors.grey,
+          minimumSize: const Size(double.infinity, 50),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedDate = DateFormat('yyyy/MM/dd | HH:mm').format(trip.departureTime);
+    final statusColor = trip.status == 'مجدولة' ? Colors.green : Colors.red;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('تفاصيل الرحلة'),
+        backgroundColor: Colors.blue.shade900,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              child: Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // العنوان والحالة
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              trip.title,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF3913A1),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              trip.status,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 30),
+
+                      // تفاصيل الرحلة الأساسية
+                      _buildDetailRow(Icons.place, 'الانطلاق', trip.origin),
+                      _buildDetailRow(Icons.flag, 'الوجهة', trip.destination),
+                      _buildDetailRow(Icons.access_time, 'التاريخ والوقت', formattedDate),
+                      _buildDetailRow(Icons.person, 'السائق', trip.driverName),
+
+                      const Divider(height: 30),
+
+                      // تفاصيل الحجز والمركبة
+                      _buildDetailRow(Icons.event_seat, 'المقاعد المتاحة', '${trip.availableSeats} من ${trip.totalSeats}'),
+                      _buildDetailRow(Icons.money, 'سعر المقعد', '${trip.price.toStringAsFixed(2)} ريال'),
+                      _buildDetailRow(Icons.directions_car, 'نوع المركبة', trip.vehicleType),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // زر الحجز
+          _buildBookButton(context),
+        ],
+      ),
+    );
+  }
+}
