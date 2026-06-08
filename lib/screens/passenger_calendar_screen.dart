@@ -46,28 +46,35 @@ class _PassengerCalendarScreenState extends State<PassengerCalendarScreen> {
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('trips')
-          .where('status', isEqualTo: 'مفعّلة')
+          .where('status', whereIn: ['active', 'مفعّلة'])
           .where('availableSeats', isGreaterThan: 0)
+          .orderBy('date')
           .get();
 
       final Map<DateTime, List<Map<String, dynamic>>> events = {};
 
       for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final raw = data['departureTime'] ?? data['date'] ?? data['createdAt'];
-        final date = _toDateTime(raw);
-        final day = _normalizeDay(date);
+        try {
+          final data = doc.data();
+          final raw = data['departureTime'] ?? data['date'] ?? data['createdAt'];
+          final date = _toDateTime(raw);
+          final day = _normalizeDay(date);
 
-        events.putIfAbsent(day, () => []);
-        events[day]!.add({
-          'id': doc.id,
-          'title': (data['title'] ?? data['tripTitle'] ?? 'رحلة بدون عنوان').toString(),
-          'origin': (data['origin'] ?? 'غير محددة').toString(),
-          'destination': (data['destination'] ?? 'غير محددة').toString(),
-          'time': DateFormat('HH:mm').format(date),
-          'vehicleType': (data['vehicleType'] ?? data['vehicle_type'] ?? 'غير معروف').toString(),
-          'availableSeats': (data['availableSeats'] is int) ? data['availableSeats'] : (int.tryParse('${data['availableSeats']}') ?? 0),
-        });
+          events.putIfAbsent(day, () => []);
+          events[day]!.add({
+            'id': doc.id,
+            'title': (data['title'] ?? data['tripTitle'] ?? 'رحلة بدون عنوان').toString(),
+            'origin': (data['origin'] ?? 'غير محددة').toString(),
+            'destination': (data['destination'] ?? 'غير محددة').toString(),
+            'time': DateFormat('HH:mm').format(date),
+            'vehicleType': (data['vehicleType'] ?? data['vehicle_type'] ?? 'غير معروف').toString(),
+            'availableSeats': (data['availableSeats'] is int)
+                ? data['availableSeats']
+                : (int.tryParse('${data['availableSeats']}') ?? 0),
+          });
+        } catch (e, st) {
+          debugPrint('PassengerCalendarScreen.parse doc error: $e\n$st');
+        }
       }
 
       if (!mounted) return;
@@ -93,7 +100,9 @@ class _PassengerCalendarScreenState extends State<PassengerCalendarScreen> {
   Future<void> _openTripDetailsById(String? tripId) async {
     if (tripId == null || tripId.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('معرف الرحلة غير متوفر')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('معرف الرحلة غير متوفر')),
+        );
       }
       return;
     }
@@ -101,15 +110,26 @@ class _PassengerCalendarScreenState extends State<PassengerCalendarScreen> {
     try {
       final doc = await FirebaseFirestore.instance.collection('trips').doc(tripId).get();
       if (!doc.exists) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الرحلة غير موجودة')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('الرحلة غير موجودة')),
+          );
+        }
         return;
       }
       final trip = Trip.fromDocument(doc);
       if (!mounted) return;
-      Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
-    } catch (e) {
-      debugPrint('PassengerCalendarScreen._openTripDetailsById error: $e');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('فشل جلب تفاصيل الرحلة')));
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)),
+      );
+    } catch (e, st) {
+      debugPrint('PassengerCalendarScreen._openTripDetailsById error: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('فشل جلب تفاصيل الرحلة')),
+        );
+      }
     }
   }
 
@@ -128,81 +148,86 @@ class _PassengerCalendarScreenState extends State<PassengerCalendarScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _hasError
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
-                      const SizedBox(height: 12),
-                      const Text('حدث خطأ أثناء تحميل الرحلات. حاول مرة أخرى لاحقًا.'),
-                      const SizedBox(height: 8),
-                      ElevatedButton(onPressed: _loadTrips, child: const Text('إعادة المحاولة')),
-                    ],
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
+            const SizedBox(height: 12),
+            const Text('حدث خطأ أثناء تحميل الرحلات. حاول مرة أخرى لاحقًا.'),
+            const SizedBox(height: 8),
+            ElevatedButton(onPressed: _loadTrips, child: const Text('إعادة المحاولة')),
+          ],
+        ),
+      )
+          : Column(
+        children: [
+          TableCalendar<Map<String, dynamic>>(
+            locale: 'ar',
+            firstDay: DateTime.utc(2023, 1, 1),
+            lastDay: DateTime.utc(2030, 12, 31),
+            focusedDay: _focusedDay,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            eventLoader: (day) => _getEventsForDay(day),
+            calendarStyle: const CalendarStyle(
+              todayDecoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+              selectedDecoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+              markerDecoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+            ),
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+              });
+            },
+            onPageChanged: (focusedDay) {
+              setState(() {
+                _focusedDay = focusedDay;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: selectedTrips.isEmpty
+                ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.event_busy, size: 60, color: Colors.grey),
+                  SizedBox(height: 10),
+                  Text('لا توجد رحلات في هذا اليوم.', style: TextStyle(fontSize: 16)),
+                ],
+              ),
+            )
+                : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: selectedTrips.length,
+              itemBuilder: (context, index) {
+                final trip = selectedTrips[index];
+                return Card(
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: const Icon(Icons.directions_car, color: Colors.blue),
+                    title: Text('🚗 ${trip['title']}'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('📍 من ${trip['origin']} إلى ${trip['destination']}'),
+                        Text('🕒 الوقت: ${trip['time']}'),
+                        Text('🚗 النوع: ${trip['vehicleType']}'),
+                        Text('🪑 المقاعد المتاحة: ${trip['availableSeats']}'),
+                      ],
+                    ),
+                    onTap: () => _openTripDetailsById(trip['id'] as String?),
                   ),
-                )
-              : Column(
-                  children: [
-                    TableCalendar<Map<String, dynamic>>(
-                      locale: 'ar',
-                      firstDay: DateTime.utc(2023, 1, 1),
-                      lastDay: DateTime.utc(2030, 12, 31),
-                      focusedDay: _focusedDay,
-                      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                      eventLoader: (day) => _getEventsForDay(day),
-                      calendarStyle: const CalendarStyle(
-                        todayDecoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
-                        selectedDecoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
-                        markerDecoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-                      ),
-                      onDaySelected: (selectedDay, focusedDay) {
-                        setState(() {
-                          _selectedDay = selectedDay;
-                          _focusedDay = focusedDay;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: selectedTrips.isEmpty
-                          ? const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.event_busy, size: 60, color: Colors.grey),
-                                  SizedBox(height: 10),
-                                  Text('لا توجد رحلات في هذا اليوم.', style: TextStyle(fontSize: 16)),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: selectedTrips.length,
-                              itemBuilder: (context, index) {
-                                final trip = selectedTrips[index];
-                                return Card(
-                                  elevation: 3,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  child: ListTile(
-                                    leading: const Icon(Icons.directions_car, color: Colors.blue),
-                                    title: Text('🚗 ${trip['title']}'),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('📍 من ${trip['origin']} إلى ${trip['destination']}'),
-                                        Text('🕒 الوقت: ${trip['time']}'),
-                                        Text('🚗 النوع: ${trip['vehicleType']}'),
-                                        Text('🪑 المقاعد المتاحة: ${trip['availableSeats']}'),
-                                      ],
-                                    ),
-                                    onTap: () => _openTripDetailsById(trip['id'] as String?),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

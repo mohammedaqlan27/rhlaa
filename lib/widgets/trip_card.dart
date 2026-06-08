@@ -57,7 +57,7 @@ class TripCard extends StatelessWidget {
     final total = _safeInt(trip.totalSeats);
     final price = _safeDouble(trip.price);
     final priceText =
-        price % 1 == 0 ? price.toStringAsFixed(0) : price.toStringAsFixed(2);
+    price % 1 == 0 ? price.toStringAsFixed(0) : price.toStringAsFixed(2);
     final vehicleType = _safeString(trip.vehicleType);
     final driverName = _safeString(trip.driverName);
     final hasSeats = available > 0;
@@ -69,23 +69,31 @@ class TripCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Card(
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          elevation: 6,
+          elevation: 8,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // العنوان وحالة المقاعد
+                // شعار التطبيق + العنوان
                 Row(
                   children: [
+                    // شعار أو أيقونة مميزة للتطبيق
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                      child: Icon(Icons.directions_bus,
+                          color: theme.colorScheme.primary, size: 22),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         titleText,
                         style: theme.textTheme.titleLarge?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
-                          fontSize: 10,
+                          fontSize: 16,
                         ),
                       ),
                     ),
