@@ -1,4 +1,6 @@
 // lib/state/auth_state.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,13 +16,17 @@ class AuthState with ChangeNotifier {
   String? userType;
   String? userRole;
 
+  StreamSubscription<User?>? _authSub;
+
   AuthState() {
+    // احصل على المستخدم الحالي إن وُجد
     _user = _auth.currentUser;
     if (_user != null) {
       _loadUserProfile(_user!.uid);
     }
 
-    _auth.userChanges().listen((u) {
+    // استمع لتغيرات المستخدم وحدث الحالة عند التغيير
+    _authSub = _auth.userChanges().listen((u) {
       _user = u;
       if (u != null) {
         _loadUserProfile(u.uid);
@@ -29,13 +35,23 @@ class AuthState with ChangeNotifier {
         userRole = null;
         notifyListeners();
       }
+    }, onError: (e, st) {
+      debugPrint('AuthState.userChanges error: $e\n$st');
     });
   }
 
+  // getters
   User? get firebaseUser => _user;
   User? get user => _user;
   String? get userId => _user?.uid;
 
+  Object? get email => null;
+
+  Object? get mobileNumber => null;
+
+  Object? get displayName => null;
+
+  /// تسجيل مستخدم جديد وحفظ بياناته في Firestore
   Future<bool> register({
     required String email,
     required String password,
@@ -80,7 +96,9 @@ class AuthState with ChangeNotifier {
           await _user!.updateDisplayName(nickname);
           _user = _auth.currentUser;
         }
-      } catch (_) {}
+      } catch (_) {
+        // تجاهل أخطاء تحديث displayName
+      }
 
       await _loadUserProfile(uid);
 
@@ -98,6 +116,7 @@ class AuthState with ChangeNotifier {
     }
   }
 
+  /// تسجيل الدخول
   Future<bool> login(String email, String password) async {
     try {
       isLoading = true;
@@ -114,32 +133,44 @@ class AuthState with ChangeNotifier {
     } on FirebaseAuthException catch (e) {
       errorMessage = e.message;
       return false;
+    } catch (e) {
+      errorMessage = e.toString();
+      return false;
     } finally {
       isLoading = false;
       notifyListeners();
     }
   }
 
+  /// تسجيل الخروج
   Future<void> logout() async {
-    await _auth.signOut();
-    _user = null;
-    userType = null;
-    userRole = null;
-    notifyListeners();
+    try {
+      await _auth.signOut();
+    } catch (e, st) {
+      debugPrint('AuthState.logout error: $e\n$st');
+    } finally {
+      _user = null;
+      userType = null;
+      userRole = null;
+      notifyListeners();
+    }
   }
 
+  /// تحميل ملف المستخدم من Firestore وتعيين الدور/النوع
   Future<void> _loadUserProfile(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
       final data = doc.data() as Map<String, dynamic>?;
 
       if (data != null) {
+        // دعم عدة تسميات للحقل لأن البنية قد تختلف بين المشاريع
         final rawUserType = data['userType'] ?? data['user_type'] ?? data['role'] ?? data['userRole'] ?? data['user_role'];
         final rawUserRole = data['userRole'] ?? data['user_role'] ?? data['role'] ?? data['userType'] ?? data['user_type'];
 
         userType = rawUserType?.toString().trim();
         userRole = rawUserRole?.toString().trim();
 
+        // إذا لم يُحدد userRole لكن userType موجود، استخدمه كدور
         if ((userRole == null || userRole!.isEmpty) && userType != null && userType!.isNotEmpty) {
           userRole = userType;
         }
@@ -149,15 +180,26 @@ class AuthState with ChangeNotifier {
       }
     } catch (e, st) {
       debugPrint('AuthState._loadUserProfile error: $e\n$st');
+      userType = null;
+      userRole = null;
     } finally {
       notifyListeners();
     }
   }
 
+  /// إعادة تحميل بروفايل المستخدم الحالي
   Future<void> reloadProfile() async {
     final uid = _auth.currentUser?.uid;
     if (uid != null) {
       await _loadUserProfile(uid);
     }
   }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> signOut() async {}
 }

@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip.dart';
 import '../services/booking_service.dart';
 import '../screens/payment_screen.dart';
+import '../screens/auth_screen.dart';
 
 class TripDetailsScreen extends StatelessWidget {
   final Trip trip;
@@ -18,6 +19,7 @@ class TripDetailsScreen extends StatelessWidget {
     if (value == null) return DateTime.now();
     try {
       if (value is DateTime) return value;
+      // Firestore Timestamp compatibility
       if (value.runtimeType.toString().contains('Timestamp')) {
         final toDate = (value as dynamic).toDate();
         if (toDate is DateTime) return toDate;
@@ -63,7 +65,7 @@ class TripDetailsScreen extends StatelessWidget {
   bool _isStatusActive(String? status) {
     if (status == null) return false;
     final s = status.toLowerCase();
-    return s == 'مفعّلة' || s == 'active' || s == 'مفعلة';
+    return s == 'مفعّلة' || s == 'active' || s == 'مفعلة' || s == 'confirmed' || s == 'مؤكد';
   }
 
   Future<String?> _fetchLatestBookingId(String tripId, String passengerId) async {
@@ -97,79 +99,129 @@ class TripDetailsScreen extends StatelessWidget {
   }
 
   Widget _buildBookButton(BuildContext context) {
-    final bookingService = Provider.of<BookingService>(context, listen: false);
+    BookingService? bookingService;
+    try {
+      // حاول الحصول على BookingService من Provider إن وُجد
+      bookingService = Provider.of<BookingService>(context, listen: false);
+    } catch (_) {
+      bookingService = null;
+    }
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final theme = Theme.of(context);
 
-    if (uid == null || !_isStatusActive(trip.status)) return const SizedBox();
+    // إذا لم يكن المستخدم مسجل أو الحالة غير مفعلة، لا نعرض زر الحجز
+    if (uid == null || !_isStatusActive(trip.status)) {
+      // إذا المستخدم غير مسجل، نعرض زر يوجه لشاشة المصادقة (اختياري)
+      if (uid == null) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              if (!context.mounted) return;
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+            },
+            icon: const Icon(Icons.login),
+            label: const Text('تسجيل الدخول للحجز'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              minimumSize: const Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        );
+      }
+      return const SizedBox();
+    }
 
     final int availableSeats = trip.availableSeats ?? 0;
     final double price = trip.price ?? 0.0;
+
+    // إذا لم يتوفر BookingService، نعرض رسالة توضيحية بدلًا من محاولة الحجز
+    if (bookingService == null) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ElevatedButton.icon(
+          onPressed: () {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('خدمة الحجز غير متاحة حالياً')),
+            );
+          },
+          icon: const Icon(Icons.event_seat),
+          label: const Text('خدمة الحجز غير متاحة'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey,
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: ElevatedButton.icon(
         onPressed: availableSeats > 0
             ? () async {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('جاري محاولة حجز المقعد...')),
-                );
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('جاري محاولة حجز المقعد...')),
+          );
 
-                try {
-                  final errorMessage = await bookingService.createBooking(
+          try {
+            final errorMessage = await bookingService!.createBooking(
+              tripId: trip.id ?? '',
+              passengerId: uid,
+              seatsToBook: 1,
+              tripPricePerSeat: price,
+              isFamilyBooking: false,
+              childrenCount: 0,
+            );
+
+            if (!context.mounted) return;
+
+            if (errorMessage == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('✅ تم حجز المقعد بنجاح')),
+              );
+
+              final bookingId = await _fetchLatestBookingId(trip.id ?? '', uid);
+
+              if (!context.mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PaymentScreen(
                     tripId: trip.id ?? '',
-                    passengerId: uid,
-                    seatsToBook: 1,
-                    tripPricePerSeat: price,
-                    isFamilyBooking: false,
-                    childrenCount: 0,
-                  );
-
-                  if (!context.mounted) return;
-
-                  if (errorMessage == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('✅ تم حجز المقعد بنجاح')),
-                    );
-
-                    final bookingId = await _fetchLatestBookingId(trip.id ?? '', uid);
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PaymentScreen(
-                          tripId: trip.id ?? '',
-                          seatNumber: 1,
-                          bookingId: bookingId ?? '',
-                        ),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('❌ فشل في الحجز: $errorMessage')),
-                    );
-                  }
-                } catch (e, st) {
-                  debugPrint('TripDetailsScreen.booking error: $e\n$st');
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('❌ حدث خطأ أثناء الحجز: $e')),
-                  );
-                }
-              }
+                    seatNumber: 1,
+                    bookingId: bookingId ?? '',
+                  ),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('❌ فشل في الحجز: $errorMessage')),
+              );
+            }
+          } catch (e, st) {
+            debugPrint('TripDetailsScreen.booking error: $e\n$st');
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('❌ حدث خطأ أثناء الحجز: $e')),
+            );
+          }
+        }
             : null,
         icon: const Icon(Icons.event_seat),
         label: Text(
           availableSeats > 0
-              ? 'حجز المقعد - ${price.toStringAsFixed(2)}ريال'
+              ? 'حجز المقعد - ${price.toStringAsFixed(2)} ريال'
               : 'لا توجد مقاعد متاحة',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: availableSeats > 0
-              ? theme.colorScheme.primary
-              : Colors.grey,
+          backgroundColor: availableSeats > 0 ? theme.colorScheme.primary : Colors.grey,
           minimumSize: const Size(double.infinity, 50),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -182,9 +234,7 @@ class TripDetailsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final dt = _toDateTime(trip.departureTime);
     final formattedDate = DateFormat('yyyy/MM/dd | HH:mm').format(dt);
-    final statusColor = _isStatusActive(trip.status)
-        ? Colors.green
-        : theme.colorScheme.error;
+    final statusColor = _isStatusActive(trip.status) ? Colors.green : theme.colorScheme.error;
     final titleText = (trip.title ?? 'رحلة').toString();
 
     return Scaffold(
@@ -246,11 +296,14 @@ class TripDetailsScreen extends StatelessWidget {
                       const Divider(height: 30),
 
                       // تفاصيل الحجز والمركبة
-                      _buildDetailRow(context, Icons.event_seat, 'المقاعد المتاحة', '${trip.availableSeats ?? 0} من ${trip.totalSeats ?? 0}'),
-                      _buildDetailRow(context, Icons.attach_money, 'سعر المقعد', '${(trip.price ?? 0.0).toStringAsFixed(2)} ريال'),
+                      _buildDetailRow(context, Icons.event_seat, 'المقاعد المتاحة',
+                          '${trip.availableSeats ?? 0} من ${trip.totalSeats ?? 0}'),
+                      _buildDetailRow(context, Icons.attach_money, 'سعر المقعد',
+                          '${(trip.price ?? 0.0).toStringAsFixed(2)} ريال'),
                       _buildDetailRow(context, Icons.directions_car, 'نوع المركبة', trip.vehicleType ?? 'غير معروف'),
                       _buildDetailRow(context, Icons.confirmation_number, 'رقم اللوحة', trip.carPlateNumber ?? 'غير متوفر'),
-                      _buildDetailRow(context, Icons.business, 'اسم مالك المركبة / المعرض', trip.carOwnerOfficialName )
+                      _buildDetailRow(context, Icons.business, 'اسم مالك المركبة / المعرض',
+                          trip.carOwnerOfficialName ?? 'غير متوفر'),
                     ],
                   ),
                 ),

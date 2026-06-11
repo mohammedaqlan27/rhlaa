@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../utils/constants.dart'; // استيراد ملف الثوابت لاستخدام الألوان والخطوط
 
 class CustomTextField extends StatefulWidget {
@@ -42,7 +43,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
       children: [
         Text(
           widget.label,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: AppFonts.arabicFont,
             fontWeight: FontWeight.bold,
             color: AppColors.darkPurple,
@@ -58,7 +59,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
           maxLines: widget.maxLines,
           readOnly: widget.readOnly,
           onTap: widget.onTap,
-          style: const TextStyle(fontFamily: AppFonts.arabicFont, fontSize: 15),
+          style: TextStyle(fontFamily: AppFonts.arabicFont, fontSize: 15),
           decoration: InputDecoration(
             hintText: widget.hint,
             hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import '../utils/constants.dart';// استيراد الثوابت لاستخدام الألوان
 
 class CustomLoadingIndicator extends StatelessWidget {
@@ -38,7 +39,7 @@ class CustomLoadingIndicator extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             message!,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: AppFonts.arabicFont,
               fontSize: 14,
               color: AppColors.darkPurple,

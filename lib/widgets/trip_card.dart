@@ -1,205 +1,104 @@
 // lib/widgets/trip_card.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip.dart';
 
 class TripCard extends StatelessWidget {
   final Trip trip;
   final VoidCallback? onTap;
-  final String currencyLabel;
-  final bool useAlternativeDesign;
+  final bool showPrice;
 
   const TripCard({
     super.key,
     required this.trip,
     this.onTap,
-    this.currencyLabel = 'ريال',
-    this.useAlternativeDesign = false,
+    this.showPrice = true,
   });
 
-  DateTime _toDateTime(dynamic value) {
-    if (value == null) return DateTime.now();
-    if (value is DateTime) return value;
-    if (value is Timestamp) return value.toDate();
-    if (value is String) {
-      final parsed = DateTime.tryParse(value);
-      return parsed ?? DateTime.now();
-    }
-    return DateTime.now();
+  String _formatSeats(Trip t) {
+    final avail = t.availableSeats ?? 0;
+    final total = t.totalSeats ?? 0;
+    return '$avail / $total';
   }
-
-  String _formatDateShort(DateTime dt) =>
-      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-
-  String _safeString(dynamic v, {String fallback = '-'}) =>
-      (v == null || v.toString().isEmpty) ? fallback : v.toString();
-
-  int _safeInt(dynamic v, {int fallback = 0}) =>
-      (v is int) ? v : int.tryParse(v.toString()) ?? fallback;
-
-  double _safeDouble(dynamic v, {double fallback = 0.0}) =>
-      (v is double) ? v : double.tryParse(v.toString()) ?? fallback;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final date = _toDateTime(trip.date ?? trip.departureTime);
-    final dateText = _formatDateShort(date);
+    final statusActive = (trip.status ?? '').toLowerCase().contains('مفع');
+    final priceText = (trip.price ?? 0.0).toStringAsFixed(2);
 
-    final titleText = trip.title?.isNotEmpty == true
-        ? trip.title!
-        : '${_safeString(trip.origin)} → ${_safeString(trip.destination)}';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(14.0),
+          child: Row(
+            children: [
+              // Left: icon / vehicle
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.directions_car, color: theme.colorScheme.primary, size: 32),
+              ),
+              const SizedBox(width: 12),
 
-    final originText = _safeString(trip.origin);
-    final destinationText = _safeString(trip.destination);
-    final timeText = _safeString(trip.time, fallback: '');
-    final available = _safeInt(trip.availableSeats);
-    final total = _safeInt(trip.totalSeats);
-    final price = _safeDouble(trip.price);
-    final priceText =
-    price % 1 == 0 ? price.toStringAsFixed(0) : price.toStringAsFixed(2);
-    final vehicleType = _safeString(trip.vehicleType);
-    final driverName = _safeString(trip.driverName);
-    final hasSeats = available > 0;
-
-    return Opacity(
-      opacity: hasSeats ? 1.0 : 0.85,
-      child: InkWell(
-        onTap: hasSeats ? onTap : null,
-        borderRadius: BorderRadius.circular(16),
-        child: Card(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          elevation: 8,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // شعار التطبيق + العنوان
-                Row(
+              // Middle: details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // شعار أو أيقونة مميزة للتطبيق
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-                      child: Icon(Icons.directions_bus,
-                          color: theme.colorScheme.primary, size: 22),
+                    Text(trip.title ?? 'رحلة', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.place, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text('${trip.origin ?? 'غير معروف'} → ${trip.destination ?? 'غير معروف'}', style: theme.textTheme.bodyMedium)),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        titleText,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: hasSeats
-                            ? theme.colorScheme.secondary.withOpacity(0.15)
-                            : Colors.grey.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        hasSeats ? 'متاح' : 'ممتلئ',
-                        style: TextStyle(
-                          color: hasSeats ? theme.colorScheme.secondary : Colors.grey.shade700,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.event_seat, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text(_formatSeats(trip), style: theme.textTheme.bodySmall),
+                        const SizedBox(width: 12),
+                        Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text(trip.departureTime != null ? trip.departureTime.toString().split('.').first : '-', style: theme.textTheme.bodySmall),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+              ),
 
-                // الموقع
-                Row(
-                  children: [
-                    Icon(Icons.location_on, size: 20, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '$originText → $destinationText',
-                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 15),
-                      ),
+              // Right: price & status
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (showPrice)
+                    Text('$priceText ر.س', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusActive ? Colors.green.withOpacity(0.12) : Colors.grey.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // الوقت والتاريخ
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 20, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Text(
-                      timeText.isNotEmpty ? '$timeText • $dateText' : dateText,
-                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 14),
+                    child: Text(
+                      trip.status ?? '',
+                      style: TextStyle(color: statusActive ? Colors.green : Colors.grey.shade700, fontWeight: FontWeight.w600),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // المقاعد والسعر
-                Row(
-                  children: [
-                    Icon(Icons.event_seat, size: 20, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Text('المقاعد: $available من $total',
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 14)),
-                    const Spacer(),
-                    Icon(Icons.attach_money, size: 20, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Text('$priceText $currencyLabel',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.secondary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        )),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // نوع المركبة واسم السائق
-                Row(
-                  children: [
-                    Icon(Icons.directions_car, size: 20, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text('نوع السيارة: $vehicleType',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(Icons.person, size: 20, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text('السائق: $driverName',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-
-                if (!hasSeats) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 18, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text('لا توجد مقاعد متاحة حالياً',
-                            style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                      ),
-                    ],
                   ),
                 ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
