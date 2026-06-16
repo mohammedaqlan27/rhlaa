@@ -85,9 +85,6 @@ class TestAllScreens extends StatelessWidget {
           _buildTile(context, "Payment Screen", const PaymentScreen(tripId: 'mock-trip-id', seatNumber: 1, bookingId: 'mock-booking-id')),
           _buildTile(context, "Driver Bookings Screen", const DriverBookingsScreen(tripId: 'mock-trip-id')),
           _buildTile(context, "Driver Trips Screen", const DriverTripsScreen()),
-          // ملاحظة: بعض الشاشات قد لا تكون Widgets مباشرة أو قد تحتاج بيانات إضافية.
-          // لتجنب استثناءات النوع، نفتح شاشة التقويم عبر مسار أو نعرض صفحة بديلة.
-          _buildTile(context, "Calendar Screen (via route)", _routeLauncher('/calendar', context)),
           _buildTile(context, "Driver Calendar Screen", const DriverCalendarScreen()),
           _buildTile(context, "Edit Profile Screen", const EditProfileScreen()),
           _buildTile(context, "Edit Trip Screen", const EditTripScreen(tripId: 'mock-trip-id')),
@@ -115,47 +112,29 @@ class TestAllScreens extends StatelessWidget {
     );
   }
 
-  /// يبني ListTile يفتح الصفحة المعطاة عند الضغط.
+  /// يبني ListTile يفتح الصفحة المعطاة عند الضغط مع زر رجوع للقائمة الرئيسية.
   ListTile _buildTile(BuildContext context, String title, Widget page) {
     return ListTile(
       title: Text(title),
       trailing: const Icon(Icons.open_in_new),
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
-    );
-  }
-
-  /// في حال كانت الشاشة المطلوبة تُفتح عبر مسار (route) وليس ويدجت مباشرة،
-  /// نستخدم هذه الدالة لبناء ويدجت وسيطة تقوم بالتوجيه عند الضغط.
-  Widget _routeLauncher(String routeName, BuildContext context) {
-    return Builder(
-      builder: (ctx) {
-        return ListTile(
-          title: Text('افتح: $routeName'),
-          trailing: const Icon(Icons.open_in_new),
-          onTap: () {
-            // إذا كان المسار معرفًا في التطبيق، ننتقل إليه، وإلا نعرض رسالة.
-            if (Navigator.canPop(ctx)) {
-              // لا نريد pop هنا، فقط محاولة فتح المسار
-            }
-            try {
-              Navigator.pushNamed(ctx, routeName);
-            } catch (_) {
-              // إذا لم يكن المسار معرفًا، نعرض صفحة بديلة بسيطة
-              Navigator.push(
-                ctx,
-                MaterialPageRoute(
-                  builder: (_) => Scaffold(
-                    appBar: AppBar(title: Text('مسار: $routeName')),
-                    body: Center(
-                      child: Text('المسار "$routeName" غير معرف أو يحتاج بيانات إضافية.'),
-                    ),
-                  ),
-                ),
-              );
-            }
-          },
-        );
-      },
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(
+              title: Text(title),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  // العودة مباشرة إلى القائمة الرئيسية
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+              ),
+            ),
+            body: page,
+          ),
+        ),
+      ),
     );
   }
 }
