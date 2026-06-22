@@ -1,8 +1,12 @@
+// lib/screens/edit_profile_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/app_card.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/custom_text_field.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -17,15 +21,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneController = TextEditingController();
   final _avatarController = TextEditingController();
 
-  // حقول جديدة
-  final _idNumberController = TextEditingController(); // رقم البطاقة/جواز السفر
-  final _carPlateController = TextEditingController(); // لوحة السيارة
-  final _carOwnerController = TextEditingController(); // اسم مالك السيارة
-  final _drivingLicenseController = TextEditingController(); // رخصة القيادة
+  final _idNumberController = TextEditingController();
+  final _carPlateController = TextEditingController();
+  final _carOwnerController = TextEditingController();
+  final _drivingLicenseController = TextEditingController();
 
   File? _selectedImage;
   bool _isLoading = false;
-  String? _userType; // راكب أو سائق
+  String? _userType;
+
+  static const Color _logoBlue = Color(0xFF1E70B8);
+  static const Color _logoTeal = Color(0xFF17A5A3);
+  static const Color _baseBg = Color(0xFFF1F5F9);
 
   @override
   void initState() {
@@ -70,7 +77,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _carPlateController.text = readString(['carPlateNumber', 'plateNumber']) ?? '';
       _carOwnerController.text = readString(['carOwnerOfficialName', 'vehicleOwner']) ?? '';
       _drivingLicenseController.text = readString(['drivingLicenseNumber', 'licenseNumber']) ?? '';
-      _userType = readString(['userType']); // passenger أو driver
+      _userType = readString(['userType']);
 
       setState(() {});
     } catch (e) {
@@ -101,7 +108,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       setState(() => _isLoading = false);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً', style: TextStyle(fontFamily: 'Cairo'))));
+      }
       return;
     }
 
@@ -122,11 +131,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       await FirebaseFirestore.instance.collection('users').doc(uid).update(updateData);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث الملف الشخصي بنجاح')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث ملفك الشخصي بنجاح', style: TextStyle(fontFamily: 'Cairo'))));
       Navigator.of(context).pop();
     } catch (e) {
       debugPrint('EditProfileScreen._saveChanges error: $e');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل تحديث الملف الشخصي: $e')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل التحديث: $e', style: const TextStyle(fontFamily: 'Cairo'))));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -135,86 +146,128 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final phoneRegex = RegExp(r'^(?:\+?\d{7,15})$');
+    final bool isDriver = (_userType?.toLowerCase().contains('driver') ?? false) || (_userType?.contains('سائق') ?? false);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('تعديل الملف الشخصي'), backgroundColor: Colors.blue.shade900),
+      backgroundColor: _baseBg,
+      appBar: AppBar(
+        title: const Text('تعديل الملف الشخصي', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: _baseBg,
+        foregroundColor: _logoBlue,
+        elevation: 0,
+        centerTitle: true,
+      ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Form(
-                    key: _formKey,
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        Center(
-                          child: GestureDetector(
-                            onTap: _pickImage,
-                            child: CircleAvatar(
-                              radius: 50,
-                              backgroundImage: _selectedImage != null
-                                  ? FileImage(_selectedImage!)
-                                  : (_avatarController.text.isNotEmpty ? NetworkImage(_avatarController.text) : null) as ImageProvider<Object>?,
-                              child: _selectedImage == null && _avatarController.text.isEmpty ? const Icon(Icons.camera_alt, size: 40) : null,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        _buildTextField(_nicknameController, 'الاسم الكامل', icon: Icons.person),
-                        const SizedBox(height: 16),
-                        _buildTextField(
-                          _phoneController,
-                          'رقم الهاتف',
-                          icon: Icons.phone,
-                          keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) return 'يرجى إدخال رقم الهاتف';
-                            if (!phoneRegex.hasMatch(value.trim())) return 'رقم الهاتف غير صالح';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTextField(_idNumberController, 'رقم البطاقة / جواز السفر', icon: Icons.credit_card),
-                        const SizedBox(height: 16),
-                        _buildTextField(_avatarController, 'رابط الصورة (اختياري)', icon: Icons.link, keyboardType: TextInputType.url, validator: (val) => null),
-                        const SizedBox(height: 20),
-                        const Divider(),
-                        const SizedBox(height: 8),
-                        Text('بيانات المركبة', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        _buildTextField(_carPlateController, 'رقم لوحة السيارة (إلزامي للسائق)', icon: Icons.confirmation_number),
-                        const SizedBox(height: 12),
-                        _buildTextField(_carOwnerController, 'اسم مالك المركبة الرسمي (اختياري)', icon: Icons.badge, validator: (val) => null),
-                        const SizedBox(height: 12),
-                        _buildTextField(_drivingLicenseController, 'رقم رخصة القيادة (اختياري)', icon: Icons.card_membership, validator: (val) => null),
-                        const SizedBox(height: 30),
-                        ElevatedButton.icon(
-                          onPressed: _saveChanges,
-                          icon: const Icon(Icons.save),
-                          label: const Text('حفظ التغييرات'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade900, minimumSize: const Size.fromHeight(50)),
-                        ),
-                      ],
-                    ),
+          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_logoBlue)))
+          : Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          children: [
+            // حاوية نيومورفية بيضاوية للصورة الشخصية
+            Center(
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: _baseBg,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFFCBD5E1).withOpacity(0.6), blurRadius: 12, offset: const Offset(4, 4)),
+                      const BoxShadow(color: Colors.white, blurRadius: 12, offset: Offset(-4, -4)),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 52,
+                    backgroundColor: _logoBlue.withOpacity(0.1),
+                    backgroundImage: _selectedImage != null
+                        ? FileImage(_selectedImage!)
+                        : (_avatarController.text.isNotEmpty && !_avatarController.text.startsWith('/')
+                        ? NetworkImage(_avatarController.text)
+                        : null) as ImageProvider<Object>?,
+                    child: _selectedImage == null && (_avatarController.text.isEmpty || _avatarController.text.startsWith('/'))
+                        ? const Icon(Icons.camera_enhance_rounded, size: 32, color: _logoBlue)
+                        : null,
                   ),
                 ),
               ),
             ),
-    );
-  }
+            const SizedBox(height: 24),
 
-  Widget _buildTextField(TextEditingController controller, String label,
-      {IconData icon = Icons.edit, TextInputType keyboardType = TextInputType.text, String? Function(String?)? validator}) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: const OutlineInputBorder()),
-      keyboardType: keyboardType,
-      validator: validator ?? (val) => val == null || val.isEmpty ? 'يرجى إدخال $label' : null,
+            // كارت نيومورفي للبيانات الشخصية الأساسية
+            AppCard(
+              margin: EdgeInsets.zero,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  CustomTextField(controller: _nicknameController, label: 'الاسم الكامل', prefixIcon: Icons.person_rounded),
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: _phoneController,
+                    label: 'رقم الهاتف',
+                    prefixIcon: Icons.phone_android_rounded,
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'يرجى إدخال رقم الهاتف';
+                      if (!phoneRegex.hasMatch(value.trim())) return 'رقم الهاتف غير صحيح';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  CustomTextField(controller: _idNumberController, label: 'رقم البطاقة الشخصية / جواز السفر', prefixIcon: Icons.badge_rounded),
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                      controller: _avatarController,
+                      label: 'رابط الصورة الشخصية (اختياري)',
+                      prefixIcon: Icons.link_rounded,
+                      keyboardType: TextInputType.url,
+                      validator: (val) => null
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // قسم بيانات المركبة (يظهر بشكل أوضح ومخصص للسائقين)
+            Padding(
+              padding: const EdgeInsets.only(right: 6, bottom: 8),
+              child: Text(
+                  'بيانات المركبة والتوثيق',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: isDriver ? _logoTeal : Colors.black54)
+              ),
+            ),
+
+            AppCard(
+              margin: EdgeInsets.zero,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  CustomTextField(
+                    controller: _carPlateController,
+                    label: 'رقم لوحة السيارة ${isDriver ? "(مطلوب للقيادة)" : "(اختياري)"}',
+                    prefixIcon: Icons.pin_rounded,
+                    validator: (val) => isDriver && (val == null || val.isEmpty) ? 'بيانات اللوحة مطلوبة كابتن!' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  CustomTextField(controller: _carOwnerController, label: 'اسم مالك المركبة الرسمي', prefixIcon: Icons.assignment_ind_rounded, validator: (val) => null),
+                  const SizedBox(height: 16),
+                  CustomTextField(controller: _drivingLicenseController, label: 'رقم رخصة القيادة', prefixIcon: Icons.card_membership_rounded, validator: (val) => null),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // زر الحفظ النيومورفي المطور
+            CustomButton(
+              onPressed: _saveChanges,
+              text: 'حفظ التغييرات الجديدة',
+              icon: Icons.save_rounded,
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
     );
   }
 }

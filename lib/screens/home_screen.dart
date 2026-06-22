@@ -6,56 +6,56 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../state/auth_state.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/app_card.dart';
 import 'driver_home_screen.dart';
 import 'passenger_home_screen.dart';
 import 'auth_screen.dart';
 import 'edit_profile_screen.dart';
 
-/// شاشة رئيسية ذكية تختار الواجهة المناسبة بناءً على حالة المصادقة ودور المستخدم.
-/// تستخدم AppScaffold الموحد وتعرض ورقة إعدادات (Bottom Sheet) تحتوي على
-/// اسم المستخدم، البريد، رقم الهاتف، وروابط سريعة لتعديل الملف وتسجيل الخروج.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  static const Color _logoBlue = Color(0xFF1E70B8);
+  static const Color _logoTeal = Color(0xFF17A5A3);
+  static const Color _baseBg = Color(0xFFF1F5F9);
+
   Widget _loadingView(BuildContext context, {String? message}) {
     return AppScaffold(
-      title: 'Rhlaa',
+      title: 'رحلاء',
       isLoading: true,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox.shrink(), // AppScaffold يعرض LoadingIndicator عند isLoading=true
-            const SizedBox(height: 12),
-            Text(message ?? 'جاري التحميل...', style: Theme.of(context).textTheme.bodyLarge),
-          ],
-        ),
+        child: Text(message ?? 'جاري تهيئة رحلتك...', style: const TextStyle(fontFamily: 'Cairo', fontSize: 14)),
       ),
     );
   }
 
   Widget _notAuthenticatedView(BuildContext context) {
     return AppScaffold(
-      title: 'مرحباً',
+      title: 'مرحباً بك',
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('أهلاً بك في Rhlaa', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              const Text(
-                'الرجاء تسجيل الدخول أو إنشاء حساب للمتابعة.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              CustomButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())),
-                text: 'تسجيل الدخول / إنشاء حساب',
-                icon: Icons.login,
-              ),
-            ],
+        child: SingleChildScrollView(
+          child: AppCard(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.map_rounded, size: 64, color: _logoBlue),
+                const SizedBox(height: 16),
+                const Text('أهلاً بك في تطبيق رحلاء', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: _logoBlue)),
+                const SizedBox(height: 8),
+                const Text(
+                  'خطوتك الأولى لتجربة تنقل ذكية واقتصادية باليمن. الرجاء تسجيل الدخول أو إنشاء حساب جديد للبدء.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black54, height: 1.5),
+                ),
+                const SizedBox(height: 24),
+                CustomButton(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())),
+                  text: 'ابدأ الآن / تسجيل الدخول',
+                  icon: Icons.login_rounded,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -65,28 +65,30 @@ class HomeScreen extends StatelessWidget {
 
   Widget _rolePendingView(BuildContext context, AuthState authState) {
     return AppScaffold(
-      title: 'جارٍ التحميل',
+      title: 'التحقق من الحساب',
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 12),
-            const Text('جاري تحميل بيانات الحساب...'),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () async {
-                await authState.reloadProfile();
-                if (!authState.isLoading && (authState.userType ?? authState.userRole ?? '').toString().trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('لم يتم العثور على دور المستخدم بعد. حاول تسجيل الخروج ثم الدخول مجدداً.')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة المحاولة'),
-            ),
-          ],
+        child: AppCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_logoTeal)),
+              const SizedBox(height: 16),
+              const Text('جاري قراءة صلاحيات وهويتك الرقمية...', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await authState.reloadProfile();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: _logoBlue),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.refresh_rounded, color: _logoBlue, size: 18),
+                label: const Text('تحديث البيانات', style: TextStyle(fontFamily: 'Cairo', color: _logoBlue, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -94,23 +96,19 @@ class HomeScreen extends StatelessWidget {
 
   Widget _errorView(BuildContext context, String message, VoidCallback? onRetry) {
     return AppScaffold(
-      title: 'حدث خطأ',
+      title: 'تنبيه خطأ',
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        child: AppCard(
+          padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, size: 56, color: Theme.of(context).colorScheme.error),
+              const Icon(Icons.error_outline_rounded, size: 48, color: Colors.redAccent),
               const SizedBox(height: 12),
-              Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
-              const SizedBox(height: 16),
+              Text(message, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+              const SizedBox(height: 20),
               if (onRetry != null)
-                CustomButton(
-                  onPressed: onRetry,
-                  text: 'حاول مرة أخرى',
-                  icon: Icons.refresh,
-                ),
+                CustomButton(onPressed: onRetry, text: 'إعادة المحاولة السريعة', icon: Icons.refresh_rounded, backgroundColor: _logoTeal),
             ],
           ),
         ),
@@ -119,113 +117,114 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _showSettingsSheet(BuildContext context, User? firebaseUser, AuthState authState) async {
-    // احصل على القيم كسلاسل نصية مع حماية من null وأنواع غير متوقعة
-    final String name = (firebaseUser?.displayName ?? authState.displayName)?.toString() ?? 'مستخدم';
-    final String email = (firebaseUser?.email ?? authState.email)?.toString() ?? 'غير متوفر';
+    final String name = (firebaseUser?.displayName ?? authState.displayName)?.toString() ?? 'مستكشف رحلاء';
+    final String email = (firebaseUser?.email ?? authState.email)?.toString() ?? 'لا يوجد بريد مرتبط';
     final String phone = (firebaseUser?.phoneNumber ?? authState.mobileNumber)?.toString() ?? '';
 
     await showModalBottomSheet(
       context: context,
-      isScrollControlled: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 18),
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: _baseBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40,
+                width: 45,
                 height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.12),
-                  child: Text(
-                    name.isNotEmpty ? name[0] : 'U',
-                    style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              const SizedBox(height: 20),
+
+              // كارت الحساب الشخصي الغائر بنعومة داخل الـ Sheet
+              AppCard(
+                margin: EdgeInsets.zero,
+                padding: const EdgeInsets.all(12),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: _logoBlue.withOpacity(0.1),
+                    child: Text(
+                      name.isNotEmpty ? name[0] : 'R',
+                      style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _logoBlue),
+                    ),
                   ),
+                  title: Text(name, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold)),
+                  subtitle: Text(email, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11)),
                 ),
-                title: Text(name, style: Theme.of(context).textTheme.titleMedium),
-                subtitle: Text(email),
               ),
-              if (phone.isNotEmpty)
+
+              if (phone.isNotEmpty) ...[
+                const SizedBox(height: 10),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.phone, size: 18),
+                      const Icon(Icons.phone_iphone_rounded, size: 16, color: _logoTeal),
                       const SizedBox(width: 8),
-                      Text(phone),
+                      Text(phone, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black87)),
                     ],
                   ),
                 ),
+              ],
+              const SizedBox(height: 24),
+
+              CustomButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(ctx, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                },
+                text: 'إعدادات الحساب والملف الشخصي',
+                icon: Icons.manage_accounts_rounded,
+                backgroundColor: _logoBlue,
+              ),
               const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Column(
-                  children: [
-                    CustomButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.push(ctx, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-                      },
-                      text: 'تعديل الملف الشخصي',
-                      icon: Icons.edit,
-                    ),
-                    const SizedBox(height: 10),
-                    CustomButton(
-                      onPressed: () async {
-                        // تأكيد الخروج
-                        final confirm = await showDialog<bool>(
-                          context: ctx,
-                          builder: (dctx) => AlertDialog(
-                            title: const Text('تأكيد تسجيل الخروج'),
-                            content: const Text('هل أنت متأكد أنك تريد تسجيل الخروج؟'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.of(dctx).pop(false), child: const Text('إلغاء')),
-                              TextButton(onPressed: () => Navigator.of(dctx).pop(true), child: const Text('تسجيل الخروج')),
-                            ],
-                          ),
-                        );
 
-                        if (confirm == true) {
-                          Navigator.pop(ctx); // أغلق الـ sheet
-                          // حاول استخدام AuthState لتسجيل الخروج أولاً، وإلا استخدم FirebaseAuth مباشرة
-                          try {
-                            final dynamic maybeSignOut = authState.signOut;
-                            if (maybeSignOut is Function) {
-                              await maybeSignOut();
-                            } else {
-                              await FirebaseAuth.instance.signOut();
-                            }
-                          } catch (_) {
-                            try {
-                              await FirebaseAuth.instance.signOut();
-                            } catch (_) {}
-                          }
-
-                          // بعد الخروج، أعد التوجيه إلى شاشة المصادقة وأزل التاريخ
-                          if (context.mounted) {
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const AuthScreen()),
-                                  (route) => false,
-                            );
-                          }
-                        }
-                      },
-                      text: 'تسجيل الخروج',
-                      icon: Icons.logout,
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                      textColor: Colors.white,
+              CustomButton(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: ctx,
+                    builder: (dctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: const Text('تسجيل الخروج', style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold)),
+                      content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من نظام رحلاء حالياً؟', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(dctx).pop(false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
+                        TextButton(onPressed: () => Navigator.of(dctx).pop(true), child: const Text('خروج', style: TextStyle(fontFamily: 'Cairo', color: Colors.redAccent, fontWeight: FontWeight.bold))),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                  );
+
+                  if (confirm == true) {
+                    Navigator.pop(ctx);
+                    try {
+                      final dynamic maybeSignOut = authState.signOut;
+                      if (maybeSignOut is Function) {
+                        await maybeSignOut();
+                      } else {
+                        await FirebaseAuth.instance.signOut();
+                      }
+                    } catch (_) {
+                      try {
+                        await FirebaseAuth.instance.signOut();
+                      } catch (_) {}
+                    }
+
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const AuthScreen()),
+                            (route) => false,
+                      );
+                    }
+                  }
+                },
+                text: 'تسجيل خروج من الحساب',
+                icon: Icons.logout_rounded,
+                backgroundColor: Colors.redAccent.withOpacity(0.9),
               ),
             ],
           ),
@@ -239,53 +238,45 @@ class HomeScreen extends StatelessWidget {
     return Consumer<AuthState>(
       builder: (context, authState, _) {
         try {
-          // حالة التحميل العامة
           if (authState.isLoading && authState.firebaseUser == null) {
             return _loadingView(context);
           }
 
-          // إذا لم يكن هناك مستخدم مسجل، نعرض واجهة المصادقة
           final User? firebaseUser = authState.firebaseUser;
           if (firebaseUser == null) {
             return _notAuthenticatedView(context);
           }
 
-          // استخرج الدور/النوع من AuthState مع حماية من القيم الفارغة
-          final rawRole = (authState.userType ?? authState.userRole ?? '').toString().trim();
+          final role = (authState.userType ?? authState.userRole ?? '').toString().trim().toLowerCase();
 
-          if (rawRole.isEmpty) {
-            // دور غير متوفر بعد
+          if (role.isEmpty) {
             return _rolePendingView(context, authState);
           }
 
-          final role = rawRole.toLowerCase();
-
-          // AppScaffold مع زر إعدادات مخصص (يعرض ورقة الإعدادات التي أنشأناها)
           final actions = <Widget>[
             IconButton(
-              tooltip: 'الإعدادات',
-              icon: const Icon(Icons.settings),
+              tooltip: 'الإعدادات الحسابية',
+              icon: const Icon(Icons.account_circle_rounded, color: _logoBlue, size: 26),
               onPressed: () => _showSettingsSheet(context, firebaseUser, authState),
             ),
           ];
 
-          // توجيه حسب الدور (دعم كلمات عربية وإنجليزية)
           if (role.contains('driver') || role.contains('سائق')) {
             return AppScaffold(
-              title: 'Rhlaa',
+              title: 'كابتن رحلاء',
               actions: actions,
               body: const DriverHomeScreen(),
             );
           } else {
             return AppScaffold(
-              title: 'Rhlaa',
+              title: 'رحلاء تنقل للركاب',
               actions: actions,
               body: const PassengerHomeScreen(),
             );
           }
         } catch (e, st) {
           debugPrint('HomeScreen build error: $e\n$st');
-          return _errorView(context, 'حدث خطأ غير متوقع. الرجاء المحاولة لاحقاً.', () {
+          return _errorView(context, 'عذراً، حدث خطأ غير متوقع أثناء معالجة الجلسة.', () {
             authState.reloadProfile();
           });
         }

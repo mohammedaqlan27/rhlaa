@@ -1,11 +1,7 @@
 // lib/widgets/app_scaffold.dart
 import 'package:flutter/material.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/loading_indicator.dart';
+import 'custom_button.dart';
 
-/// AppScaffold
-/// غلاف شاشة موحّد يستخدم في معظم شاشات التطبيق.
-/// يوفر AppBar موحّد، زر إعدادات اختياري، drawer اختياري، وحالات تحميل/خطأ بسيطة.
 class AppScaffold extends StatelessWidget {
   final String? title;
   final Widget body;
@@ -32,31 +28,46 @@ class AppScaffold extends StatelessWidget {
     this.extendBodyBehindAppBar = false,
   }) : super(key: key);
 
+  static const Color _logoBlue = Color(0xFF1E70B8);
+  static const Color _baseBg = Color(0xFFF1F5F9);
+
   void _openSettings(BuildContext context) {
-    // افتراضي: افتح bottom sheet إعدادات بسيطة
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      ),
+      backgroundColor: Colors.transparent, // لإظهار استدارة الحواف بشكل صحيح
+      isScrollControlled: true,
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: _baseBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4))),
+              Container(
+                width: 45,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'الإعدادات والروابط السريعة',
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold, color: _logoBlue),
+              ),
               const SizedBox(height: 12),
-              Text('الإعدادات', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              const Text('يمكنك إضافة روابط سريعة هنا: تعديل الملف الشخصي، المساعدة، حول التطبيق.'),
-              const SizedBox(height: 16),
+              const Text(
+                'من هنا يمكنك تعديل ملفك الشخصي، الوصول إلى الدعم الفني، أو معرفة المزيد حول تطبيق رحلاء ومهمتنا لتسهيل تنقلك.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black54, height: 1.5),
+              ),
+              const SizedBox(height: 24),
               CustomButton(
                 onPressed: () => Navigator.of(ctx).pop(),
-                text: 'إغلاق',
+                text: 'إغلاق النافذة',
                 compact: true,
               ),
-              const SizedBox(height: 8),
             ],
           ),
         );
@@ -67,15 +78,20 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appBar = AppBar(
-      title: title != null ? Text(title!) : null,
+      title: title != null
+          ? Text(title!, style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold))
+          : null,
       centerTitle: true,
-      elevation: 2,
+      elevation: 0,
+      backgroundColor: _baseBg,
+      foregroundColor: _logoBlue,
+      scrolledUnderElevation: 0,
       actions: [
         if (actions != null) ...actions!,
         if (showSettingsButton)
           IconButton(
             tooltip: 'الإعدادات',
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_suggest_rounded, color: _logoBlue),
             onPressed: () => _openSettings(context),
           ),
       ],
@@ -86,7 +102,7 @@ class AppScaffold extends StatelessWidget {
       child: Padding(
         padding: padding,
         child: isLoading
-            ? Center(child: LoadingIndicator())
+            ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_logoBlue)))
             : body,
       ),
     );
@@ -94,6 +110,7 @@ class AppScaffold extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        backgroundColor: _baseBg, // توحيد الخلفية النيومورفية لكافة شاشات التطبيق
         extendBodyBehindAppBar: extendBodyBehindAppBar,
         appBar: appBar,
         drawer: drawer,
@@ -102,6 +119,4 @@ class AppScaffold extends StatelessWidget {
       ),
     );
   }
-
-  Widget? LoadingIndicator() {}
 }

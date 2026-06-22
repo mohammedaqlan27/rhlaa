@@ -1,7 +1,7 @@
 // lib/screens/trip_history_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../screens/trip_details_view_screen.dart';
+import '../screens/trip_details_screen.dart';
 import '../models/trip.dart';
 import '../utils/trip_exporter.dart' as exporter_service;
 
@@ -57,7 +57,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => TripDetailsViewScreen(tripData: trip.toMap()),
+                    builder: (_) => TripDetailsScreen(trip: trip),
                   ),
                 );
               },

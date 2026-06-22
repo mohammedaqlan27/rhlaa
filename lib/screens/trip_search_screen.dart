@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../models/trip.dart';
 import 'trip_details_screen.dart';
 import '../widgets/trip_card.dart';
+import '../widgets/app_card.dart';
+import '../widgets/custom_button.dart';
 
 class TripSearchScreen extends StatefulWidget {
   const TripSearchScreen({super.key});
@@ -30,11 +32,14 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   bool _isSearching = false;
   String? _errorMessage;
 
+  final Color _primaryColor = const Color(0xFF4A7DAB);
+  final Color _backgroundColor = const Color(0xFFF4F7FA);
+
   Future<void> _searchTrips() async {
     if (_selectedTripCategory == null || _selectedDestination == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى اختيار فئة الرحلة والوجهة')),
+        const SnackBar(content: Text('⚠️ يرجى اختيار فئة الرحلة والوجهة', style: TextStyle(fontFamily: 'Cairo'))),
       );
       return;
     }
@@ -47,22 +52,14 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
 
     try {
       Query query = FirebaseFirestore.instance.collection('trips');
-
-      // نبحث عن الرحلات المفعّلة فقط (ندعم صيغ متعددة لاحقًا إن لزم)
       query = query.where('status', whereIn: ['مفعّلة', 'active']);
-
-      // فئة الرحلة
       query = query.where('tripCategory', isEqualTo: _selectedTripCategory);
-
-      // الوجهة
       query = query.where('destination', isEqualTo: _selectedDestination);
 
-      // نوع المركبة اختياري
       if (_selectedVehicleType != null && _selectedVehicleType!.isNotEmpty) {
         query = query.where('vehicleType', isEqualTo: _selectedVehicleType);
       }
 
-      // ترتيب حسب وقت المغادرة إن أمكن
       Query orderedQuery;
       try {
         orderedQuery = query.orderBy('departureTime');
@@ -99,6 +96,26 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
     return null;
   }
 
+  Widget _buildCustomDropdownField({required Widget child, required IconData icon}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, color: _primaryColor),
+          const SizedBox(width: 12),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFallbackCard(BuildContext context, DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final departureDt = _toDateTime(data['departureTime'] ?? data['date'] ?? data['createdAt']);
@@ -110,98 +127,100 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
     final totalSeats = data['totalSeats'] is int ? data['totalSeats'] : int.tryParse('${data['totalSeats'] ?? 0}') ?? 0;
     final price = (data['price'] is num) ? (data['price'] as num).toDouble() : double.tryParse('${data['price'] ?? 0}') ?? 0.0;
 
-    final theme = Theme.of(context);
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
-            children: [
-              Icon(Icons.location_on, color: theme.colorScheme.secondary),
-              const SizedBox(width: 8),
-              Expanded(child: Text('$destination', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold))),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.orangeAccent),
+                    const SizedBox(width: 6),
+                    Text(destination, style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 16)),
+                  ],
                 ),
-                child: Text('${price.toStringAsFixed(0)} ريال', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.access_time, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Text(departureText, style: theme.textTheme.bodySmall),
-              const Spacer(),
-              Icon(Icons.event_seat, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Text('$availableSeats من $totalSeats', style: theme.textTheme.bodySmall),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Icons.directions_car, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Expanded(child: Text(vehicleType, style: theme.textTheme.bodyMedium)),
-              const SizedBox(width: 8),
-              Icon(Icons.person, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Text(driverName, style: theme.textTheme.bodyMedium),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton.icon(
-                onPressed: () {
-                  // محاولة تحويل إلى Trip ثم الانتقال إلى التفاصيل
-                  try {
-                    final trip = Trip.fromDocument(doc);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
-                  } catch (_) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر فتح تفاصيل الرحلة'))); 
-                  }
-                },
-                icon: Icon(Icons.info_outline, color: theme.colorScheme.primary),
-                label: Text('عرض التفاصيل', style: TextStyle(color: theme.colorScheme.primary)),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📌 ميزة الحجز قيد التطوير')));
-                },
-                icon: const Icon(Icons.check_circle),
-                label: const Text('احجز الآن'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.secondary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: _primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Text('${price.toStringAsFixed(0)} ريال', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                )
+              ],
+            ),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(departureText, style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Cairo')),
+                  ],
                 ),
-              ),
-            ],
-          ),
-        ]),
+                Row(
+                  children: [
+                    const Icon(Icons.event_seat, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text('$availableSeats / $totalSeats مقاعد', style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Cairo')),
+                  ],
+                )
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.directions_car, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(vehicleType, style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
+                const SizedBox(width: 14),
+                const Icon(Icons.person, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(driverName, style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    try {
+                      final trip = Trip.fromDocument(doc);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
+                    } catch (_) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر فتح تفاصيل الرحلة')));
+                    }
+                  },
+                  child: Text('التفاصيل', style: TextStyle(color: _primaryColor, fontFamily: 'Cairo')),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📌 ميزة الحجز قيد التطوير')));
+                  },
+                  child: const Text('احجز الآن', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+                )
+              ],
+            )
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildResultList(BuildContext context) {
-    final theme = Theme.of(context);
-
-    // إذا أمكن تحويل المستند إلى Trip، نستخدم TripCard (التصميم الموحد)
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       itemCount: _results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final doc = _results[index];
         try {
@@ -213,7 +232,6 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
             },
           );
         } catch (_) {
-          // إذا فشل التحويل نعرض بطاقة احتياطية مبسطة
           return _buildFallbackCard(context, doc);
         }
       },
@@ -222,99 +240,91 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final destinationOptions = _selectedTripCategory != null ? _destinations[_selectedTripCategory] ?? [] : <String>[];
 
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text('بحث عن الرحلات'),
-        backgroundColor: theme.colorScheme.primary,
+        title: const Text('بحث عن الرحلات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.5,
         centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            AppCard(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // فئة الرحلة
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text('🧭 اختر فئة الرحلة:', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedTripCategory,
-                      items: _tripCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedTripCategory = val;
-                          _selectedDestination = null;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.category, color: theme.colorScheme.secondary),
+                    const Text('🧭 فئة الرحلة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    _buildCustomDropdownField(
+                      icon: Icons.category_outlined,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedTripCategory,
+                          items: _tripCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedTripCategory = val;
+                              _selectedDestination = null;
+                            });
+                          },
+                          decoration: const InputDecoration(border: InputBorder.none),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-
-                    // الوجهة
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text('📍 اختر الوجهة:', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedDestination,
-                      items: destinationOptions.map((dest) => DropdownMenuItem(value: dest, child: Text(dest))).toList(),
-                      onChanged: (val) => setState(() => _selectedDestination = val),
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.location_on, color: theme.colorScheme.secondary),
+                    const SizedBox(height: 12),
+                    const Text('📍 الوجهة المقصودة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    _buildCustomDropdownField(
+                      icon: Icons.location_on_outlined,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedDestination,
+                          items: destinationOptions.map((dest) => DropdownMenuItem(value: dest, child: Text(dest, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+                          onChanged: (val) => setState(() => _selectedDestination = val),
+                          decoration: const InputDecoration(border: InputBorder.none),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-
-                    // نوع المركبة
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text('🚗 نوع السيارة (اختياري):', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedVehicleType,
-                      items: _vehicleTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-                      onChanged: (val) => setState(() => _selectedVehicleType = val),
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.directions_car, color: theme.colorScheme.secondary),
+                    const SizedBox(height: 12),
+                    const Text('🚗 نوع السيارة (اختياري)', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    _buildCustomDropdownField(
+                      icon: Icons.directions_car_outlined,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedVehicleType,
+                          items: _vehicleTypes.map((type) => DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+                          onChanged: (val) => setState(() => _selectedVehicleType = val),
+                          decoration: const InputDecoration(border: InputBorder.none),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-
-                    // أزرار البحث ومسح الاختيارات
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton.icon(
+                          flex: 2,
+                          child: CustomButton(
                             onPressed: _searchTrips,
-                            icon: Icon(Icons.search, color: theme.colorScheme.onPrimary),
-                            label: const Text('بحث', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
+                            text: 'ابدأ البحث الآن',
+                            icon: Icons.search,
                           ),
                         ),
                         const SizedBox(width: 12),
-                        OutlinedButton.icon(
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(color: _primaryColor),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                           onPressed: () {
                             setState(() {
                               _selectedTripCategory = null;
@@ -324,73 +334,39 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
                               _errorMessage = null;
                             });
                           },
-                          icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
-                          label: Text('مسح', style: TextStyle(color: theme.colorScheme.primary)),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: theme.colorScheme.primary),
-                            minimumSize: const Size(120, 48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
+                          child: Icon(Icons.refresh, color: _primaryColor),
+                        )
                       ],
-                    ),
+                    )
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // نتائج البحث / حالة التحميل / رسالة الخطأ
             Expanded(
               child: Builder(builder: (context) {
                 if (_isSearching) {
                   return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(color: theme.colorScheme.primary),
-                        const SizedBox(height: 12),
-                        Text('جاري البحث عن الرحلات...', style: theme.textTheme.bodyLarge),
-                      ],
-                    ),
+                    child: CircularProgressIndicator(color: _primaryColor),
                   );
                 }
-
                 if (_errorMessage != null) {
                   return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-                        const SizedBox(height: 12),
-                        Text(_errorMessage!, style: theme.textTheme.bodyLarge),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: _searchTrips,
-                          child: const Text('حاول مرة أخرى'),
-                          style: ElevatedButton.styleFrom(backgroundColor: theme.colorScheme.primary),
-                        ),
-                      ],
-                    ),
+                    child: Text(_errorMessage!, style: const TextStyle(fontFamily: 'Cairo', color: Colors.red)),
                   );
                 }
-
                 if (_results.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
-                        const SizedBox(height: 12),
-                        Text('لا توجد نتائج حالياً', style: theme.textTheme.bodyLarge),
-                        const SizedBox(height: 6),
-                        Text('جرّب تغيير الفلاتر أو المسح لإعادة البحث', style: theme.textTheme.bodySmall),
+                        Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+                        const SizedBox(height: 8),
+                        const Text('لا توجد نتائج بحث مطابقة حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
                       ],
                     ),
                   );
                 }
-
                 return _buildResultList(context);
               }),
             ),

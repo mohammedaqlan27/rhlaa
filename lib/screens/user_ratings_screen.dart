@@ -8,6 +8,12 @@ class UserRatingsScreen extends StatelessWidget {
 
   const UserRatingsScreen({super.key, required this.userId});
 
+  // ثيمات الهوية البصرية لتطبيق رحلاء
+  static const Color _logoBlue = Color(0xFF1E70B8);
+  static const Color _logoTeal = Color(0xFF17A5A3);
+  static const Color _starColor = Color(0xFFFFB300);
+  static const Color _backgroundColor = Color(0xFFF8FAFC);
+
   Future<List<Map<String, dynamic>>> _fetchRatings() async {
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -22,19 +28,17 @@ class UserRatingsScreen extends StatelessWidget {
         final data = doc.data();
         final fromUserId = data['fromUserId'] ?? data['from_user_id'];
 
-        String fromUserName = 'مستخدم غير معروف';
+        String fromUserName = 'عضو في رحلاء';
         if (fromUserId != null) {
           try {
             final userSnapshot = await FirebaseFirestore.instance.collection('users').doc(fromUserId.toString()).get();
             if (userSnapshot.exists) {
               final userData = userSnapshot.data();
               if (userData != null) {
-                fromUserName = (userData['name'] ?? userData['nickname'] ?? userData['displayName'] ?? fromUserName).toString();
+                fromUserName = (userData['nickname'] ?? userData['name'] ?? userData['displayName'] ?? fromUserName).toString();
               }
             }
-          } catch (_) {
-            // تجاهل خطأ جلب اسم المستخدم، نستخدم الاسم الافتراضي
-          }
+          } catch (_) {}
         }
 
         ratings.add({
@@ -44,7 +48,6 @@ class UserRatingsScreen extends StatelessWidget {
           'fromUserName': fromUserName,
         });
       }
-
       return ratings;
     } catch (e) {
       debugPrint('UserRatingsScreen._fetchRatings error: $e');
@@ -53,52 +56,66 @@ class UserRatingsScreen extends StatelessWidget {
   }
 
   String _formatTimestamp(dynamic ts) {
-    if (ts == null) return 'غير معروف';
+    if (ts == null) return 'تاريخ غير محدد';
     try {
-      if (ts is Timestamp) {
-        return DateFormat('yyyy-MM-dd – HH:mm').format(ts.toDate());
-      }
-      if (ts is DateTime) {
-        return DateFormat('yyyy-MM-dd – HH:mm').format(ts);
-      }
-      final parsed = DateTime.tryParse(ts.toString());
-      if (parsed != null) return DateFormat('yyyy-MM-dd – HH:mm').format(parsed);
+      if (ts is Timestamp) return DateFormat('yyyy/MM/dd | hh:mm a', 'ar').format(ts.toDate());
+      if (ts is DateTime) return DateFormat('yyyy/MM/dd | hh:mm a', 'ar').format(ts);
     } catch (_) {}
-    return 'غير معروف';
+    return 'قبل قليل';
   }
 
   Widget _buildRatingCard(Map<String, dynamic> rating) {
     final createdAtText = _formatTimestamp(rating['createdAt']);
     final note = (rating['note'] ?? '').toString().trim();
-    final displayNote = note.isNotEmpty ? note : 'لا توجد ملاحظة';
+    final displayNote = note.isNotEmpty ? note : 'اكتفى بالتقييم بالنجوم فقط دون إضافة ملاحظة.';
     final rawRating = rating['rating'];
     final ratingValue = (rawRating is num) ? rawRating.toDouble() : double.tryParse(rawRating?.toString() ?? '') ?? 0.0;
     final stars = ratingValue.round().clamp(0, 5);
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('👤 من: ${rating['fromUserName']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
-            children: List.generate(
-              5,
-              (i) => Icon(
-                i < stars ? Icons.star : Icons.star_border,
-                color: Colors.amber,
-                size: 20,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: _logoBlue.withOpacity(0.06), shape: BoxShape.circle),
+                    child: const Icon(Icons.person_outline_rounded, size: 16, color: _logoBlue),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(rating['fromUserName'] ?? 'راكب/سائق', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                ],
               ),
-            ),
+              Text(createdAtText, style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade400, fontSize: 10)),
+            ],
+          ),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 4)),
+          Row(
+            children: List.generate(5, (i) {
+              return Icon(
+                i < stars ? Icons.star_rounded : Icons.star_border_rounded,
+                color: i < stars ? _starColor : Colors.grey.shade300,
+                size: 16,
+              );
+            }),
           ),
           const SizedBox(height: 8),
-          Text('📝 الملاحظة: $displayNote'),
-          const SizedBox(height: 6),
-          Text('📅 التاريخ: $createdAtText', style: const TextStyle(color: Colors.grey)),
-        ]),
+          Text(
+            displayNote,
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: note.isNotEmpty ? Colors.black : Colors.grey.shade500, height: 1.4),
+          ),
+        ],
       ),
     );
   }
@@ -106,9 +123,13 @@ class UserRatingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text('⭐ التقييمات السابقة'),
-        backgroundColor: Colors.orange.shade700,
+        title: const Text('سجل الآراء والتقييمات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: _logoBlue,
+        foregroundColor: Colors.white,
+        centerTitle: true,
+        elevation: 0,
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _fetchRatings(),
@@ -118,16 +139,12 @@ class UserRatingsScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
+                  CircularProgressIndicator(strokeWidth: 2.5, color: _logoBlue),
                   SizedBox(height: 12),
-                  Text('جاري تحميل التقييمات...', style: TextStyle(fontSize: 16)),
+                  Text('جاري مراجعة سجل التقييمات...', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)),
                 ],
               ),
             );
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text('❌ حدث خطأ أثناء تحميل التقييمات: ${snapshot.error}'));
           }
 
           final ratings = snapshot.data ?? [];
@@ -136,31 +153,62 @@ class UserRatingsScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.rate_review, size: 60, color: Colors.grey),
+                  Icon(Icons.star_outline_rounded, size: 54, color: Colors.grey),
                   SizedBox(height: 10),
-                  Text('لا توجد تقييمات حتى الآن.', style: TextStyle(fontSize: 16)),
+                  Text('لا توجد تقييمات مسجلة لهذا الحساب حتى الآن.', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)),
                 ],
               ),
             );
           }
 
-          // حساب المتوسط بأمان
+          // حساب الإحصائيات الرياضية
           final numericRatings = ratings.map((r) {
             final raw = r['rating'];
-            if (raw is num) return raw.toDouble();
-            return double.tryParse(raw?.toString() ?? '') ?? 0.0;
+            return (raw is num) ? raw.toDouble() : double.tryParse(raw?.toString() ?? '') ?? 0.0;
           }).toList();
 
-          final average = numericRatings.isNotEmpty
-              ? numericRatings.reduce((a, b) => a + b) / numericRatings.length
-              : 0.0;
+          final average = numericRatings.reduce((a, b) => a + b) / numericRatings.length;
 
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text('⭐ متوسط التقييم: ${average.toStringAsFixed(1)} من 5',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              // كرت علوي مخصص للملخص العام
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: Row(
+                  children: [
+                    Column(
+                      children: [
+                        Text(average.toStringAsFixed(1), style: TextStyle(fontFamily: 'Cairo', fontSize: 36, fontWeight: FontWeight.bold, color: _logoBlue, height: 1.1)),
+                        const Text('من 5 درجات', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                    const SizedBox(width: 20),
+                    Container(width: 1, height: 50, color: Colors.grey.shade200),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.star_rounded, color: _starColor, size: 18),
+                              const SizedBox(width: 4),
+                              Text('إجمالي المراجعات: ${ratings.length}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text('يعكس هذا المتوسط سلوك وموثوقية العضو أثناء الرحلات المشتركة.', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey.shade500)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Expanded(
                 child: ListView.builder(

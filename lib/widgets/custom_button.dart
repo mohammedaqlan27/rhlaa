@@ -1,40 +1,17 @@
 // lib/widgets/custom_button.dart
 import 'package:flutter/material.dart';
 
-/// زر مخصص موحّد للاستخدام في التطبيق.
-/// يدعم نصًا أو ويدجت مخصصة كـ child، أيقونة، حالة تحميل، وألوان قابلة للتخصيص.
 class CustomButton extends StatelessWidget {
-  /// نص الزر (يُستخدم إذا لم يُمرر child).
   final String? text;
-
-  /// ويدجت مخصصة داخل الزر (تأخذ الأولوية على النص).
   final Widget? child;
-
-  /// دالة الاستدعاء عند الضغط.
   final VoidCallback? onPressed;
-
-  /// لون الخلفية للزر.
   final Color? backgroundColor;
-
-  /// لون النص/الأيقونات داخل الزر.
   final Color? textColor;
-
-  /// نصف قطر الحواف.
   final double borderRadius;
-
-  /// عرض الزر. افتراضيًا يأخذ العرض الكامل.
   final double width;
-
-  /// ارتفاع الزر.
   final double height;
-
-  /// حالة تحميل: عند true يعرض مؤشر تحميل ويعطل الزر.
   final bool isLoading;
-
-  /// أيقونة اختيارية تظهر قبل النص/المحتوى.
   final IconData? icon;
-
-  /// وضع مدمج (compact) يجعل الزر أصغر للاستخدام داخل بطاقات أو صفوف.
   final bool compact;
 
   const CustomButton({
@@ -44,46 +21,62 @@ class CustomButton extends StatelessWidget {
     required this.onPressed,
     this.backgroundColor,
     this.textColor,
-    this.borderRadius = 12.0,
+    this.borderRadius = 16.0, // حواف أكثر انسيابية وعصرية
     this.width = double.infinity,
     double? height,
     this.isLoading = false,
     this.icon,
     this.compact = false,
-  })  : height = height ?? (compact ? 42.0 : 55.0),
+  })  : height = height ?? (compact ? 44.0 : 54.0),
         assert(text != null || child != null, 'Either text or child must be provided'),
         super(key: key);
 
+  static const Color _logoBlue = Color(0xFF1E70B8);
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final Color bg = backgroundColor ?? theme.colorScheme.primary;
-    final Color fg = textColor ?? theme.colorScheme.onPrimary;
+    final Color bg = backgroundColor ?? _logoBlue;
+    final Color fg = textColor ?? Colors.white;
 
     return SizedBox(
       width: width,
       height: height,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-          ),
-          elevation: 2,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(borderRadius),
+          boxShadow: onPressed == null || isLoading
+              ? null
+              : [
+            BoxShadow(
+              color: bg.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        child: isLoading
-            ? SizedBox(
-          width: compact ? 18 : 24,
-          height: compact ? 18 : 24,
-          child: CircularProgressIndicator(
-            strokeWidth: compact ? 2.0 : 2.5,
-            valueColor: AlwaysStoppedAnimation<Color>(fg),
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: bg,
+            foregroundColor: fg,
+            disabledBackgroundColor: bg.withOpacity(0.6),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(borderRadius),
+            ),
+            elevation: 0, // الاعتماد على الـ BoxShadow المخصص بالأعلى لمظهر نيومورفي متناسق
+            padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 24),
           ),
-        )
-            : _buildContent(fg),
+          child: isLoading
+              ? SizedBox(
+            width: compact ? 18 : 22,
+            height: compact ? 18 : 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(fg),
+            ),
+          )
+              : _buildContent(fg),
+        ),
       ),
     );
   }
@@ -94,9 +87,10 @@ class CustomButton extends StatelessWidget {
           text!,
           textAlign: TextAlign.center,
           style: TextStyle(
+            fontFamily: 'Cairo',
             color: fg,
-            fontSize: compact ? 14 : 16,
-            fontWeight: FontWeight.w600,
+            fontSize: compact ? 13 : 15,
+            fontWeight: FontWeight.bold,
           ),
         );
 
@@ -106,8 +100,8 @@ class CustomButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: compact ? 16 : 20, color: fg),
-        SizedBox(width: compact ? 8 : 10),
+        Icon(icon, size: compact ? 18 : 22, color: fg),
+        const SizedBox(width: 8),
         Flexible(child: content),
       ],
     );

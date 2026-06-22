@@ -17,57 +17,49 @@ class DriverBookingsScreen extends StatefulWidget {
 }
 
 class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
-  /// محول آمن لأنواع التاريخ (Timestamp, DateTime, String)
+  // ألوان هوية رحلاء البصرية
+  final Color _logoBlue = const Color(0xFF1E70B8);
+  final Color _logoTeal = const Color(0xFF17A5A3);
+  final Color _logoGreen = const Color(0xFF4EBF64);
+  final Color _backgroundColor = const Color(0xFFF8FAFC);
+
+  String _selectedFilter = 'الكل';
+
+  get AppUser => null;
+
   DateTime _toDateTime(dynamic value) {
     if (value == null) return DateTime.now();
     try {
       if (value is DateTime) return value;
       if (value is Timestamp) return value.toDate();
-      if (value is String) {
-        return DateTime.tryParse(value) ?? DateTime.now();
-      }
+      if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
     } catch (_) {}
     return DateTime.now();
   }
 
-  /// جلب الحجوزات المرتبطة برقم الرحلة مع معلومات الرحلة والراكب
   Future<List<Map<String, dynamic>>> _fetchBookingsWithTripInfo(String tripId) async {
     final firestore = FirebaseFirestore.instance;
 
-    // جلب بيانات الرحلة (لعرض العنوان والوجهة)
     final tripDoc = await firestore.collection('trips').doc(tripId).get();
-    final tripData = tripDoc.data() as Map<String, dynamic>?;
+    final tripData = tripDoc.data();
 
     final tripTitle = tripData?['title'] ?? tripData?['tripTitle'] ?? 'رحلة غير معروفة';
     final tripDestination = tripData?['destination'] ?? tripData?['to'] ?? '';
 
-    // نحاول الاستعلام بصيغ متعددة للحقل tripId و createdAt
     QuerySnapshot bookingSnapshot;
     try {
       bookingSnapshot = await firestore
           .collection('bookings')
           .where('tripId', isEqualTo: tripId)
-          .orderBy('createdAt', descending: true)
           .get();
-      // إذا لم تُرجع نتائج، نجرب snake_case
       if (bookingSnapshot.docs.isEmpty) {
         bookingSnapshot = await firestore
             .collection('bookings')
             .where('trip_id', isEqualTo: tripId)
-            .orderBy('created_at', descending: true)
             .get();
       }
     } catch (e) {
-      // في حال فشل orderBy بسبب عدم وجود الحقل أو فهرس، نجرب بدون orderBy
-      try {
-        bookingSnapshot = await firestore.collection('bookings').where('tripId', isEqualTo: tripId).get();
-        if (bookingSnapshot.docs.isEmpty) {
-          bookingSnapshot = await firestore.collection('bookings').where('trip_id', isEqualTo: tripId).get();
-        }
-      } catch (e2) {
-        debugPrint('DriverBookingsScreen._fetchBookingsWithTripInfo query error: $e / $e2');
-        return [];
-      }
+      return [];
     }
 
     final bookings = <Map<String, dynamic>>[];
@@ -75,128 +67,192 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
     for (final doc in bookingSnapshot.docs) {
       try {
         final booking = Booking.fromDocument(doc);
-
-        // جلب بيانات الراكب إن أمكن
         String passengerName = 'راكب غير معروف';
+        String passengerPhone = 'لا يوجد رقم';
+
         if (booking.passengerId != null && booking.passengerId!.isNotEmpty) {
-          try {
-            final userDoc = await firestore.collection('users').doc(booking.passengerId).get();
-            if (userDoc.exists) {
-              final appUser = AppUser.fromDocument(userDoc);
-              // استخدم الحقل المعروف nickname كخيار أول، وإلا احتفظ بالقيمة الافتراضية
-              passengerName = appUser.nickname ?? passengerName;
-            }
-          } catch (e) {
-            debugPrint('DriverBookingsScreen._fetchBookingsWithTripInfo user fetch error: $e');
+          final userDoc = await firestore.collection('users').doc(booking.passengerId).get();
+          if (userDoc.exists) {
+            final appUser = AppUser.fromDocument(userDoc);
+            passengerName = appUser.nickname ?? passengerName;
+            passengerPhone = appUser.phoneNumber ?? passengerPhone;
           }
         }
 
         bookings.add({
           'booking': booking,
           'passengerName': passengerName,
+          'passengerPhone': passengerPhone,
           'tripTitle': tripTitle,
           'tripDestination': tripDestination,
         });
-      } catch (e, st) {
-        debugPrint('DriverBookingsScreen._parseBooking error: $e\n$st');
-      }
+      } catch (_) {}
     }
 
     return bookings;
   }
 
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('🔍 تصفية الحجوزات حسب الحالة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Icon(Icons.clear_all, color: _logoBlue),
+                title: const Text('عرض الكل', style: TextStyle(fontFamily: 'Cairo')),
+                onTap: () { setState(() => _selectedFilter = 'الكل'); Navigator.pop(context); },
+              ),
+              ListTile(
+                leading: Icon(Icons.check_circle_outline, color: _logoGreen),
+                title: const Text('المؤكدة فقط', style: TextStyle(fontFamily: 'Cairo')),
+                onTap: () { setState(() => _selectedFilter = 'مؤكد'); Navigator.pop(context); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.remove_circle_outline, color: Colors.orange),
+                title: const Text('المعلقة / قيد الانتظار', style: TextStyle(fontFamily: 'Cairo')),
+                onTap: () { setState(() => _selectedFilter = 'pending'); Navigator.pop(context); },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget buildBookingCard(Map<String, dynamic> data) {
     final booking = data['booking'] as Booking;
-    final passengerName = data['passengerName'] as String? ?? 'راكب غير معروف';
-    final tripTitle = data['tripTitle'] as String? ?? 'رحلة';
-    final tripDestination = data['tripDestination'] as String? ?? '';
+    final passengerName = data['passengerName'] as String;
+    final passengerPhone = data['passengerPhone'] as String;
+    final tripTitle = data['tripTitle'] as String;
+    final tripDestination = data['tripDestination'] as String;
 
-    // تحويل آمن لحقل createdAt الموجود داخل نموذج الحجز
     final createdAtDt = _toDateTime(booking.createdAt);
-    final createdAt = DateFormat('yyyy-MM-dd – HH:mm').format(createdAtDt);
+    final createdAt = DateFormat('yyyy-MM-dd – hh:mm a', 'ar').format(createdAtDt);
 
-    // دعم حالات متعددة للنص (عربي/إنجليزي)
-    final status = booking.bookingStatus ?? '';
-    final statusLower = status.toLowerCase();
-    final bool isConfirmed = statusLower == 'مؤكد' || statusLower == 'confirmed';
-    final statusColor = isConfirmed ? Colors.green : Colors.red;
+    final status = (booking.bookingStatus ?? '').toLowerCase();
+    final bool isConfirmed = status == 'مؤكد' || status == 'confirmed';
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.only(bottom: 16),
+    // فلترة الواجهة برمجياً بناءً على اختيار القائمة السفلية
+    if (_selectedFilter == 'مؤكد' && !isConfirmed) return const SizedBox.shrink();
+    if (_selectedFilter == 'pending' && isConfirmed) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('🧑‍💼 $passengerName', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text('🪑 عدد المقاعد: ${booking.bookedSeatsCount ?? 0}'),
-          const SizedBox(height: 4),
-          Text('📌 حالة الحجز: ${booking.bookingStatus ?? '-'}', style: TextStyle(color: statusColor)),
-          const SizedBox(height: 4),
-          Text('💳 حالة الدفع: ${booking.paymentStatus ?? '-'}'),
-          const SizedBox(height: 4),
-          Text('📅 تاريخ الحجز: $createdAt'),
-          const SizedBox(height: 8),
-          Text('🛣️ الرحلة: $tripTitle → $tripDestination'),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('🧑‍💼 $passengerName', style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isConfirmed ? _logoGreen.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isConfirmed ? 'مؤكد' : 'قيد الانتظار',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: isConfirmed ? _logoGreen : Colors.orange.shade800, fontWeight: FontWeight.bold),
+                  ),
+                )
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.event_seat_outlined, size: 16, color: _logoTeal),
+                const SizedBox(width: 6),
+                Text('المقاعد المحجوزة: ${booking.bookedSeatsCount ?? 0}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.phone_android_outlined, size: 16, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text('الهاتف: $passengerPhone', style: TextStyle(fontSize: 13, color: Colors.black)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text('وقت الطلب: $createdAt', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+            const Divider(height: 20),
+            Text('🛣️ $tripTitle ← $tripDestination', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: _logoBlue, fontWeight: FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      return const Scaffold(body: Center(child: Text('يجب تسجيل الدخول لعرض الحجوزات')));
-    }
-
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text('حجوزات الرحلة'),
-        backgroundColor: Colors.blue.shade900,
+        title: const Text('طلبات حجز الركاب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: _logoBlue,
+        foregroundColor: Colors.white,
+        centerTitle: true,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list_rounded),
+            onPressed: _showFilterBottomSheet,
+          )
+        ],
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchBookingsWithTripInfo(widget.tripId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('جاري تحميل الحجوزات...', style: TextStyle(fontSize: 16)),
-                ],
-              ),
+      body: SafeArea(
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchBookingsWithTripInfo(widget.tripId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator(color: _logoBlue));
+            }
+
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.assignment_turned_in_outlined, size: 64, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
+                    Text('لا توجد أي طلبات حجز لهذه الرحلة حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600, fontSize: 13)),
+                  ],
+                ),
+              );
+            }
+
+            final bookings = snapshot.data!;
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: bookings.length,
+              itemBuilder: (context, index) => buildBookingCard(bookings[index]),
             );
-          }
-
-          if (snapshot.hasError) {
-            debugPrint('DriverBookingsScreen FutureBuilder error: ${snapshot.error}');
-            return const Center(child: Text('حدث خطأ أثناء تحميل الحجوزات.'));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.event_busy, size: 60, color: Colors.grey),
-                  SizedBox(height: 10),
-                  Text('لا توجد حجوزات حالياً.', style: TextStyle(fontSize: 16)),
-                ],
-              ),
-            );
-          }
-
-          final bookings = snapshot.data!;
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: bookings.length,
-            itemBuilder: (context, index) => buildBookingCard(bookings[index]),
-          );
-        },
+          },
+        ),
       ),
     );
   }

@@ -11,7 +11,6 @@ import 'driver_home_screen.dart';
 import 'create_trip_screen.dart';
 import 'available_trips_screen.dart';
 import 'trip_details_screen.dart';
-import 'trip_details_view_screen.dart';
 import 'my_bookings_screen.dart';
 import 'rating_screen.dart';
 import 'notification_screen.dart';
@@ -22,7 +21,6 @@ import 'driver_calendar_screen.dart';
 import 'edit_profile_screen.dart';
 import 'edit_trip_screen.dart';
 import 'manage_trip_screen.dart';
-import 'passenger_bookings_screen.dart';
 import 'passenger_calendar_screen.dart';
 import 'profile_screen.dart';
 import 'trip_history_screen.dart';
@@ -78,7 +76,6 @@ class TestAllScreens extends StatelessWidget {
           _buildTile(context, "Create Trip Screen", const CreateTripScreen()),
           _buildTile(context, "Available Trips Screen", const AvailableTripsScreen(destination: 'TestDestination')),
           _buildTile(context, "Trip Details Screen", TripDetailsScreen(trip: mockTrip)),
-          _buildTile(context, "Trip Details View Screen", TripDetailsViewScreen(tripData: {'id': mockTrip.id, 'title': mockTrip.title})),
           _buildTile(context, "My Bookings Screen", const MyBookingsScreen()),
           _buildTile(context, "Rating Screen", const RatingScreen()),
           _buildTile(context, "Notification Screen", const NotificationScreen()),
@@ -89,7 +86,6 @@ class TestAllScreens extends StatelessWidget {
           _buildTile(context, "Edit Profile Screen", const EditProfileScreen()),
           _buildTile(context, "Edit Trip Screen", const EditTripScreen(tripId: 'mock-trip-id')),
           _buildTile(context, "Manage Trip Screen", const ManageTripScreen()),
-          _buildTile(context, "Passenger Bookings Screen", const PassengerBookingsScreen()),
           _buildTile(context, "Passenger Calendar Screen", const PassengerCalendarScreen()),
           _buildTile(context, "Profile Screen", const ProfileScreen()),
           _buildTile(context, "Trip History Screen", const TripHistoryScreen()),

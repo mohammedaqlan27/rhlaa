@@ -1,6 +1,8 @@
 // lib/widgets/trip_card.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/trip.dart';
+import 'app_card.dart';
 
 class TripCard extends StatelessWidget {
   final Trip trip;
@@ -14,93 +16,210 @@ class TripCard extends StatelessWidget {
     this.showPrice = true,
   });
 
+  // ألوان الهوية البصرية المعتمدة
+  static const Color _logoBlue = Color(0xFF1E70B8);
+  static const Color _logoTeal = Color(0xFF17A5A3);
+  static const Color _logoGreen = Color(0xFF4EBF64);
+
   String _formatSeats(Trip t) {
-    final avail = t.availableSeats ?? 0;
-    final total = t.totalSeats ?? 0;
+    final avail = t.availableSeats;
+    final total = t.totalSeats;
     return '$avail / $total';
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final statusActive = (trip.status ?? '').toLowerCase().contains('مفع');
-    final priceText = (trip.price ?? 0.0).toStringAsFixed(2);
+    // فحص حالة الرحلة للتلوين الديناميكي الذكي
+    final bool isStatusActive =
+        trip.status.toLowerCase() == 'active' || trip.status.contains('مفع');
+    final String priceText = trip.price.toStringAsFixed(0);
 
-    return InkWell(
+    // تنسيق وقت المغادرة بشكل أنيق للمستخدم العربي
+    final String formattedTime = trip.departureTime != null
+        ? DateFormat('hh:mm a', 'ar').format(trip.departureTime!)
+        : (trip.time ?? 'غير محدد');
+
+    return AppCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Card(
-        elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(14.0),
-          child: Row(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // السطر العلوي: اسم الرحلة / الكابتن وحالة الرحلة
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Left: icon / vehicle
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.directions_car, color: theme.colorScheme.primary, size: 32),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: _logoBlue.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.directions_car_filled_rounded,
+                        color: _logoBlue, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    (trip.title != null && trip.title!.isNotEmpty)
+                        ? trip.title!
+                        : 'رحلة تنقل',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
+              // حالة الرحلة
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isStatusActive
+                      ? _logoGreen.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isStatusActive ? 'نشطة' : trip.status,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isStatusActive ? _logoGreen : Colors.grey.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24, thickness: 0.5, color: Color(0xFFCBD5E1)),
 
-              // Middle: details
+          // مسار الرحلة: من وإلى
+          Row(
+            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(trip.title ?? 'رحلة', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.place, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Expanded(child: Text('${trip.origin ?? 'غير معروف'} → ${trip.destination ?? 'غير معروف'}', style: theme.textTheme.bodyMedium)),
+                        const Icon(Icons.radio_button_checked_rounded,
+                            size: 16, color: _logoTeal),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            trip.origin,
+                            style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 13,
+                                color: Colors.black),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const Padding(
+                      padding: EdgeInsets.only(right: 7),
+                      child: SizedBox(
+                          height: 8,
+                          child: VerticalDivider(
+                              width: 2,
+                              thickness: 1.5,
+                              color: Colors.black12)),
+                    ),
                     Row(
                       children: [
-                        Icon(Icons.event_seat, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text(_formatSeats(trip), style: theme.textTheme.bodySmall),
-                        const SizedBox(width: 12),
-                        Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text(trip.departureTime != null ? trip.departureTime.toString().split('.').first : '-', style: theme.textTheme.bodySmall),
+                        const Icon(Icons.location_on_rounded,
+                            size: 16, color: Colors.redAccent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            trip.destination,
+                            style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 13,
+                                color: Colors.black),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
 
-              // Right: price & status
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              // السعر
+              if (showPrice)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      priceText,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: _logoBlue,
+                      ),
+                    ),
+                    const Text(
+                      'ريال يمني',
+                      style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 10,
+                          color: Colors.black38,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const Divider(height: 24, thickness: 0.5, color: Color(0xFFCBD5E1)),
+
+          // المقاعد والوقت
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
                 children: [
-                  if (showPrice)
-                    Text('$priceText ر.س', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusActive ? Colors.green.withOpacity(0.12) : Colors.grey.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      trip.status ?? '',
-                      style: TextStyle(color: statusActive ? Colors.green : Colors.grey.shade700, fontWeight: FontWeight.w600),
-                    ),
+                  const Icon(Icons.event_seat_rounded,
+                      size: 16, color: Colors.black54),
+                  const SizedBox(width: 6),
+                  Text(
+                    'المقاعد المتاحة: ${_formatSeats(trip)}',
+                    style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.access_time_filled_rounded,
+                      size: 16, color: _logoTeal),
+                  const SizedBox(width: 6),
+                  Text(
+                    formattedTime,
+                    style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: _logoTeal,
+                        fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

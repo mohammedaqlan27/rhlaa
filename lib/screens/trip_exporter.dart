@@ -1,20 +1,13 @@
 // lib/screens/trip_exporter.dart
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip.dart';
-
-// استورد ملف الخدمة مع alias بصيغة lower_case لتجنب تحذيرات linter
+import '../widgets/app_card.dart';
+import '../widgets/custom_button.dart';
 import '../utils/trip_exporter.dart' as exporter_service;
 
-/// واجهة بسيطة لاستخدام خدمة التصدير (TripExporter) من utils.
-/// توفر:
-///  - زر لتصدير قائمة رحلات ممررة (قائمة عناصر Trip أو خريطة بيانات لكل رحلة)
-///  - زر لتصدير رحلات السائق الحالي عبر استدعاء fetchTrips من الخدمة
 class TripExporterScreen extends StatefulWidget {
-  /// إذا أردت تمرير عناصر جاهزة للتصدير، مرّرها هنا (Trip أو Map)
   final List<dynamic>? itemsToExport;
-  final String? driverIdForFetch; // إذا أردت زرًا لتحميل رحلات سائق محدد
+  final String? driverIdForFetch;
 
   const TripExporterScreen({Key? key, this.itemsToExport, this.driverIdForFetch}) : super(key: key);
 
@@ -26,142 +19,124 @@ class _TripExporterScreenState extends State<TripExporterScreen> {
   bool _isLoading = false;
   String? _error;
 
+  static const Color _logoBlue = Color(0xFF1E70B8);
+  static const Color _logoTeal = Color(0xFF17A5A3);
+  static const Color _baseBg = Color(0xFFF1F5F9);
+
   Future<void> _exportItems(List<dynamic> items) async {
     if (items.isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    setState(() { _isLoading = true; _error = null; });
 
     try {
-      // بعض المشاريع تستخدم دالة التصدير لقبول List<Trip> فقط،
-      // لذا نحاول تمرير قائمة Trip إن أمكن، وإلا نمرر العناصر كما هي.
       final List<Trip> tripsFromItems = items.whereType<Trip>().toList();
       if (tripsFromItems.isNotEmpty && tripsFromItems.length == items.length) {
-        // كل العناصر هي Trip
         await exporter_service.TripExporter.exportToExcel(context, tripsFromItems);
       } else {
-        // خلي الخدمة تتعامل مع عناصر Map أو Trip؛ نمرر القائمة كما هي
         await exporter_service.TripExporter.exportToExcel(context, items);
       }
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم بدء عملية التصدير')));
-    } catch (e, st) {
-      debugPrint('TripExporterScreen._exportItems error: $e\n$st');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم بدء عملية تصدير ملف الـ Excel', style: TextStyle(fontFamily: 'Cairo'))));
+    } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = 'فشل التصدير: $e';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ خطأ في التصدير: $e')));
+      setState(() { _error = 'فشل عملية التصدير: $e'; });
     } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _exportDriverTrips(String driverId) async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    setState(() { _isLoading = true; _error = null; });
 
     try {
       final List<Trip> trips = await exporter_service.TripExporter.fetchTrips(driverId);
       if (!mounted) return;
 
       if (trips.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا توجد رحلات للتصدير لهذا السائق')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا توجد رحلات مسجلة ككابتن للتصدير', style: TextStyle(fontFamily: 'Cairo'))));
         return;
       }
 
       await exporter_service.TripExporter.exportToExcel(context, trips);
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم بدء تصدير رحلات السائق')));
-    } catch (e, st) {
-      debugPrint('TripExporterScreen._exportDriverTrips error: $e\n$st');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تصدير كشف رحلات السائق بنجاح', style: TextStyle(fontFamily: 'Cairo'))));
+    } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = 'فشل جلب/تصدير رحلات السائق: $e';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل جلب/تصدير الرحلات: $e')));
+      setState(() { _error = 'حدث خطأ أثناء المزامنة: $e'; });
     } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Widget _buildExportButtons() {
-    final items = widget.itemsToExport;
-    final driverId = widget.driverIdForFetch;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (items != null && items.isNotEmpty)
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : () => _exportItems(items),
-            icon: _isLoading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.file_download),
-            label: Text(_isLoading ? 'جاري التصدير...' : 'تصدير العناصر الممررة'),
-            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          ),
-        if (driverId != null && driverId.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : () => _exportDriverTrips(driverId),
-            icon: _isLoading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.person_search),
-            label: Text(_isLoading ? 'جاري التحميل والتصدير...' : 'تصدير رحلات السائق'),
-            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          ),
-        ],
-        if ((items == null || items.isEmpty) && (driverId == null || driverId.isEmpty))
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text(
-              'لا توجد عناصر للتصدير. مرّر قائمة العناصر أو قدّم معرف السائق لعرض زر التصدير.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-            ),
-          ),
-        if (_error != null) ...[
-          const SizedBox(height: 12),
-          Text(_error!, style: const TextStyle(color: Colors.red)),
-        ],
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('تصدير الرحلات'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          elevation: 3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
+    final items = widget.itemsToExport;
+    final driverId = widget.driverIdForFetch;
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: _baseBg,
+        appBar: AppBar(
+          title: const Text('تصدير كشوفات البيانات', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold)),
+          backgroundColor: _baseBg,
+          foregroundColor: _logoBlue,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: AppCard(
+            margin: EdgeInsets.zero,
+            padding: const EdgeInsets.all(20),
             child: _isLoading
                 ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 12),
-                      const Center(child: CircularProgressIndicator()),
-                      const SizedBox(height: 12),
-                      Text('جاري التحضير...', style: Theme.of(context).textTheme.bodyMedium),
-                    ],
-                  )
-                : _buildExportButtons(),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_logoBlue)),
+                const SizedBox(height: 16),
+                const Text('جاري معالجة وتوليد ملف كشوفات Excel...', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black54)),
+              ],
+            )
+                : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.cloud_download_rounded, size: 56, color: _logoTeal),
+                const SizedBox(height: 14),
+                const Text(
+                  'مركز تصدير التقارير الخارجية',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: _logoBlue),
+                ),
+                const SizedBox(height: 24),
+                if (items != null && items.isNotEmpty) ...[
+                  CustomButton(
+                    onPressed: () => _exportItems(items),
+                    text: 'تصدير الرحلات المحددة الحالية',
+                    icon: Icons.grid_on_rounded,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (driverId != null && driverId.isNotEmpty) ...[
+                  CustomButton(
+                    onPressed: () => _exportDriverTrips(driverId),
+                    text: 'تصدير سجل رحلات الكابتن بالكامل',
+                    icon: Icons.analytics_rounded,
+                    backgroundColor: _logoTeal,
+                  ),
+                ],
+                if ((items == null || items.isEmpty) && (driverId == null || driverId.isEmpty))
+                  const Text(
+                    'لا توجد بيانات ممررة جاهزة للتصدير حالياً.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.black45),
+                  ),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.redAccent)),
+                ],
+              ],
+            ),
           ),
         ),
       ),

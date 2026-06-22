@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../utils/constants.dart';// استيراد الثوابت لاستخدام الألوان
+import '../utils/constants.dart' hide AppColors, AppFonts;// استيراد الثوابت لاستخدام الألوان
 
 class CustomLoadingIndicator extends StatelessWidget {
   final double size;

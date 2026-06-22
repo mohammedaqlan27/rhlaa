@@ -2,14 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 
 import '../services/booking_service.dart';
 import '../screens/rating_screen.dart';
 import '../models/booking_model.dart';
 import '../models/trip.dart';
-import '../widgets/trip_card.dart';
+import '../widgets/app_card.dart';
 import 'trip_details_screen.dart';
 
 class MyBookingsScreen extends StatefulWidget {
@@ -22,7 +21,9 @@ class MyBookingsScreen extends StatefulWidget {
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
   late Future<List<Map<String, dynamic>>> _bookingsFuture;
   bool _isCancelling = false;
-  String? _errorMessage;
+
+  final Color _primaryColor = const Color(0xFF4A7DAB);
+  final Color _backgroundColor = const Color(0xFFF4F7FA);
 
   @override
   void initState() {
@@ -33,7 +34,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   Future<void> _refresh() async {
     setState(() {
       _bookingsFuture = _fetchBookings();
-      _errorMessage = null;
     });
     await _bookingsFuture;
   }
@@ -42,48 +42,87 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     if (value == null) return DateTime.now();
     try {
       if (value is DateTime) return value;
-      if (value.runtimeType.toString().contains('Timestamp')) {
-        return (value as dynamic).toDate() as DateTime;
-      }
+      if (value is Timestamp) return value.toDate();
       if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
     } catch (_) {}
     return DateTime.now();
   }
 
+  // دالة جلب مرنة تفحص الطريقتين لكتابة المعرف في Firestore لضمان استقرار البيانات
   Future<List<Map<String, dynamic>>> _fetchBookings() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return [];
 
+    final List<Map<String, dynamic>> allBookings = [];
+
     try {
-      final bookingSnapshot = await FirebaseFirestore.instance
+      // 1. محاولة جلب البيانات بأسلوب camelCase
+      final camelSnapshot = await FirebaseFirestore.instance
           .collection('bookings')
           .where('passengerId', isEqualTo: uid)
           .orderBy('createdAt', descending: true)
           .get();
 
-      final bookings = <Map<String, dynamic>>[];
+      for (var doc in camelSnapshot.docs) {
+        final bData = _parseBookingDoc(doc);
+        if (bData != null) allBookings.add(bData);
+      }
 
-      for (var doc in bookingSnapshot.docs) {
-        try {
-          final booking = Booking.fromDocument(doc);
-          final tripId = booking.tripId;
-          if (tripId == null || tripId.isEmpty) continue;
+      // 2. محاولة جلب البيانات بأسلوب snake_case للتوافق الرجعي
+      final snakeSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('passenger_id', isEqualTo: uid)
+          .orderBy('created_at', descending: true)
+          .get();
 
-          final tripSnapshot = await FirebaseFirestore.instance.collection('trips').doc(tripId).get();
-          if (!tripSnapshot.exists) continue;
-
-          final trip = Trip.fromDocument(tripSnapshot);
-          bookings.add({'booking': booking, 'trip': trip});
-        } catch (e, st) {
-          debugPrint('MyBookingsScreen._fetchBookings parse error: $e\n$st');
+      for (var doc in snakeSnapshot.docs) {
+        // تأكيد عدم تكرار الحجز إذا جُلب في الاستعلام الأول
+        if (!allBookings.any((element) => (element['booking'] as Booking).bookingId == doc.id)) {
+          final bData = _parseBookingDoc(doc);
+          if (bData != null) allBookings.add(bData);
         }
       }
 
-      return bookings;
+      return allBookings;
     } catch (e, st) {
       debugPrint('MyBookingsScreen._fetchBookings error: $e\n$st');
       return [];
     }
+  }
+
+  Map<String, dynamic>? _parseBookingDoc(DocumentSnapshot doc) {
+    try {
+      final booking = Booking.fromDocument(doc);
+      final tripId = booking.tripId;
+      if (tripId == null || tripId.isEmpty) return null;
+
+      // جلب بيانات الرحلة المتزامنة مع الحجز بشكل منفصل
+      // تنويه: في الإنتاج الفعلي يفضل عمل لدمج البيانات، لكن نعتمد هذا الهيكل تماشياً مع الكود الأصلي الحالي
+      return {'booking': booking, 'tripId': tripId};
+    } catch (e) {
+      debugPrint('Error parsing booking doc: $e');
+      return null;
+    }
+  }
+
+  // حل مشكلة تحميل تفاصيل الرحلات بالتوازي لعدم تعطيل الـ UI
+  Future<List<Map<String, dynamic>>> _populateTripsData(List<Map<String, dynamic>> partialBookings) async {
+    final List<Map<String, dynamic>> fullData = [];
+    for (var item in partialBookings) {
+      try {
+        final tripSnapshot = await FirebaseFirestore.instance.collection('trips').doc(item['tripId']).get();
+        if (tripSnapshot.exists) {
+          final trip = Trip.fromDocument(tripSnapshot);
+          fullData.add({
+            'booking': item['booking'] as Booking,
+            'trip': trip,
+          });
+        }
+      } catch (e) {
+        debugPrint('Error populating trip details: $e');
+      }
+    }
+    return fullData;
   }
 
   String _formatDateSafe(dynamic dateValue) {
@@ -91,35 +130,38 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final dt = _toDate(dateValue);
       return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
     } catch (_) {
-      return '-';
+      return 'تاريخ غير محدد';
     }
   }
 
   bool _isConfirmed(String? status) {
     if (status == null) return false;
-    final s = status.toLowerCase();
-    return s == 'مؤكد' || s == 'confirmed';
+    final s = status.toLowerCase().trim();
+    return s == 'مؤكد' || s == 'confirmed' || s == 'نشط' || s == 'active';
   }
 
   bool _isCompleted(String? status) {
     if (status == null) return false;
-    final s = status.toLowerCase();
-    return s == 'مكتملة' || s == 'completed' || s == 'complete';
+    final s = status.toLowerCase().trim();
+    return s == 'مكتملة' || s == 'completed' || s == 'complete' || s == 'مكتمل';
   }
 
   Future<void> _confirmAndCancel(BuildContext context, Booking booking) async {
-    final bookingService = Provider.of<BookingService>(context, listen: false);
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('تأكيد الإلغاء'),
-        content: const Text('هل أنت متأكد أنك تريد إلغاء هذا الحجز؟'),
+        title: const Text('تأكيد الإلغاء', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: const Text('هل أنت متأكد أنك تريد إلغاء هذا الحجز واسترداد المقاعد؟', style: TextStyle(fontFamily: 'Cairo')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('لا')),
-          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('نعم')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('تراجع', style: TextStyle(fontFamily: 'Cairo'))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('تأكيد الإلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+          ),
         ],
       ),
     );
@@ -128,7 +170,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
     setState(() => _isCancelling = true);
     try {
-      final result = await bookingService.cancelBooking(
+      final result = await BookingService().cancelBooking(
         bookingId: booking.bookingId,
         passengerId: uid,
       );
@@ -136,236 +178,255 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       if (!mounted) return;
 
       if (result == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إلغاء الحجز بنجاح')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إلغاء الحجز بنجاح', style: TextStyle(fontFamily: 'Cairo'))));
         await _refresh();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل في إلغاء الحجز: $result')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل إلغاء الحجز: $result', style: const TextStyle(fontFamily: 'Cairo'))));
       }
-    } catch (e, st) {
-      debugPrint('MyBookingsScreen.cancel error: $e\n$st');
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ حدث خطأ أثناء الإلغاء: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ حدث خطأ غير متوقع: $e')));
     } finally {
       if (mounted) setState(() => _isCancelling = false);
     }
   }
 
   Widget _buildBookingCard(BuildContext context, Booking booking, Trip trip) {
-    final theme = Theme.of(context);
     final formattedDate = _formatDateSafe(trip.date);
 
-    final statusColor = _isConfirmed(booking.bookingStatus)
-        ? Colors.orange
-        : _isCompleted(booking.bookingStatus)
-            ? Colors.green
-            : theme.colorScheme.onSurface.withOpacity(0.6);
+    Color statusColor = Colors.grey;
+    if (_isConfirmed(booking.bookingStatus)) statusColor = Colors.orange.shade700;
+    if (_isCompleted(booking.bookingStatus)) statusColor = Colors.green.shade700;
+    if ((booking.bookingStatus ?? '').contains('ملغي') || (booking.bookingStatus ?? '').contains('cancel')) statusColor = Colors.red.shade700;
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.only(bottom: 16),
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
-            children: [
-              Icon(Icons.event, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(trip.title ?? 'رحلة', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 18)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  booking.bookingStatus ?? '-',
-                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Icons.location_on, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Expanded(child: Text('الوجهة: ${trip.destination ?? '-'}', style: theme.textTheme.bodyMedium)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(Icons.calendar_today, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Text('التاريخ: $formattedDate', style: theme.textTheme.bodySmall),
-              const Spacer(),
-              Icon(Icons.event_seat, color: theme.colorScheme.secondary, size: 18),
-              const SizedBox(width: 6),
-              Text('عدد المقاعد: ${booking.bookedSeatsCount}', style: theme.textTheme.bodySmall),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-          if (booking.seatNumber != null || (booking.paymentMethod != null && booking.paymentMethod!.isNotEmpty))
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withOpacity(0.02),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.colorScheme.onSurface.withOpacity(0.04)),
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (booking.seatNumber != null)
-                  Row(
-                    children: [
-                      Icon(Icons.event_seat, color: theme.colorScheme.secondary, size: 18),
-                      const SizedBox(width: 8),
-                      Text('رقم المقعد: ${booking.seatNumber}', style: theme.textTheme.bodySmall),
-                    ],
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.directions_car_filled_outlined, color: _primaryColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'رحلة إلى ${trip.destination ?? 'وجهة غير محددة'}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo'),
                   ),
-                if (booking.paymentMethod != null && booking.paymentMethod!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.payment, color: theme.colorScheme.secondary, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text('طريقة الدفع: ${booking.paymentMethod}', style: theme.textTheme.bodySmall)),
-                      ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    booking.bookingStatus ?? 'غير محدد',
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Row(
+              children: [
+                const Icon(Icons.person_outline, size: 18, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text('🧑‍✈️ الكابتن: ${trip.driverName ?? 'غير معروف'}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey),
+                    const SizedBox(width: 6),
+                    Text('التاريخ: $formattedDate', style: TextStyle(fontSize: 12, color: Colors.black, fontFamily: 'Cairo')),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.event_seat_outlined, size: 16, color: Colors.grey),
+                    const SizedBox(width: 6),
+                    Text('المقاعد: ${booking.bookedSeatsCount ?? 1}', style: TextStyle(fontSize: 12, color: Colors.black, fontFamily: 'Cairo')),
+                  ],
+                )
+              ],
+            ),
+            if (booking.seatNumber != null || (booking.paymentMethod != null && booking.paymentMethod!.isNotEmpty)) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (booking.seatNumber != null)
+                      Text('💺 رقم المقعد المخصص: ${booking.seatNumber}', style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.black87)),
+                    if (booking.paymentMethod != null && booking.paymentMethod!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text('💳 طريقة الدفع: ${booking.paymentMethod}', style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.black54)),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      side: BorderSide(color: _primaryColor),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
+                    },
+                    child: Text('تفاصيل الرحلة', style: TextStyle(color: _primaryColor, fontFamily: 'Cairo', fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_isConfirmed(booking.bookingStatus))
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _isCancelling ? null : () => _confirmAndCancel(context, booking),
+                      child: const Text('إلغاء الحجز', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.white)),
                     ),
                   ),
-              ]),
-            ),
-
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
-                },
-                icon: Icon(Icons.info_outline, color: theme.colorScheme.primary),
-                label: Text('تفاصيل الرحلة', style: TextStyle(color: theme.colorScheme.primary)),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: theme.colorScheme.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              if (_isConfirmed(booking.bookingStatus))
-                ElevatedButton.icon(
-                  onPressed: _isCancelling ? null : () => _confirmAndCancel(context, booking),
-                  icon: const Icon(Icons.cancel),
-                  label: const Text('إلغاء الحجز'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade600,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                if (_isCompleted(booking.bookingStatus))
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
+                          tripId: trip.id ?? '',
+                          targetUserId: trip.driverId ?? '',
+                          userType: 'سائق',
+                        )));
+                      },
+                      child: const Text('تقييم السائق', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.white)),
+                    ),
                   ),
-                ),
-              if (_isCompleted(booking.bookingStatus))
-                ElevatedButton.icon(
+                const SizedBox(width: 4),
+                IconButton(
                   onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
-                      tripId: trip.id ?? '',
-                      targetUserId: trip.driverId ?? '',
-                      userType: 'سائق',
-                    )));
+                    Clipboard.setData(ClipboardData(text: booking.bookingId));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📋 تم نسخ رقم الحجز بنجاح')));
                   },
-                  icon: const Icon(Icons.star),
-                  label: const Text('تقييم السائق'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade600,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
+                  icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                  tooltip: 'نسخ رقم الحجز',
                 ),
-              const Spacer(),
-              IconButton(
-                onPressed: () {
-                  final data = 'Booking ID: ${booking.bookingId}';
-                  Clipboard.setData(ClipboardData(text: data));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ رقم الحجز')));
-                },
-                icon: Icon(Icons.copy, color: theme.colorScheme.onSurface.withOpacity(0.6)),
-                tooltip: 'نسخ رقم الحجز',
-              ),
-            ],
-          ),
-        ]),
+              ],
+            )
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text('رحلاتي'),
-        backgroundColor: theme.colorScheme.primary,
+        title: const Text('رحلاتي المحجوزة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.5,
         centerTitle: true,
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        color: theme.colorScheme.primary,
+        color: _primaryColor,
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _bookingsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return ListView(
-                children: [
-                  const SizedBox(height: 120),
-                  Center(child: CircularProgressIndicator(color: theme.colorScheme.primary)),
-                  const SizedBox(height: 12),
-                  Center(child: Text('جاري تحميل الحجوزات...', style: theme.textTheme.bodyLarge)),
-                ],
-              );
+              return Center(child: CircularProgressIndicator(color: _primaryColor));
             }
 
             if (snapshot.hasError) {
-              debugPrint('MyBookingsScreen FutureBuilder error: ${snapshot.error}');
               return ListView(
                 children: [
-                  const SizedBox(height: 120),
-                  Center(child: Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error)),
+                  const SizedBox(height: 140),
+                  const Center(child: Icon(Icons.error_outline_rounded, size: 48, color: Colors.red)),
                   const SizedBox(height: 12),
-                  Center(child: Text('حدث خطأ أثناء تحميل الحجوزات.', style: theme.textTheme.bodyLarge)),
+                  const Center(child: Text('حدث خطأ أثناء جلب تفاصيل الحجوزات', style: TextStyle(fontFamily: 'Cairo', color: Colors.red))),
                   const SizedBox(height: 8),
                   Center(
                     child: ElevatedButton(
                       onPressed: _refresh,
-                      style: ElevatedButton.styleFrom(backgroundColor: theme.colorScheme.primary),
-                      child: const Text('حاول مرة أخرى'),
+                      style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
+                      child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
                     ),
-                  ),
+                  )
                 ],
               );
             }
 
-            final bookings = snapshot.data ?? [];
-            if (bookings.isEmpty) {
+            final partialList = snapshot.data ?? [];
+            if (partialList.isEmpty) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  const SizedBox(height: 120),
-                  Center(child: Icon(Icons.event_busy, size: 60, color: theme.colorScheme.onSurface.withOpacity(0.2))),
-                  const SizedBox(height: 10),
-                  Center(child: Text('لا توجد حجوزات حتى الآن.', style: theme.textTheme.bodyLarge)),
+                  const SizedBox(height: 140),
+                  Center(child: Icon(Icons.calendar_today_outlined, size: 54, color: Colors.grey.shade400)),
+                  const SizedBox(height: 12),
+                  const Center(child: Text('لا توجد لديك أي حجوزات حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
                 ],
               );
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: bookings.length,
-              itemBuilder: (context, index) {
-                final booking = bookings[index]['booking'] as Booking;
-                final trip = bookings[index]['trip'] as Trip;
-                return _buildBookingCard(context, booking, trip);
+            // نقوم بتحميل بيانات الرحلات الكاملة متزامنة مع الحجوزات
+            return FutureBuilder<List<Map<String, dynamic>>>(
+              future: _populateTripsData(partialList),
+              builder: (context, tripSnapshot) {
+                if (tripSnapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator(color: _primaryColor));
+                }
+
+                final fullList = tripSnapshot.data ?? [];
+                if (fullList.isEmpty) {
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      const SizedBox(height: 140),
+                      Center(child: Icon(Icons.bus_alert_rounded, size: 54, color: Colors.grey.shade400)),
+                      const SizedBox(height: 12),
+                      const Center(child: Text('عذراً، لم نجد بيانات الرحلات التابعة لحجوزاتك', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
+                    ],
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: fullList.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final booking = fullList[index]['booking'] as Booking;
+                    final trip = fullList[index]['trip'] as Trip;
+                    return _buildBookingCard(context, booking, trip);
+                  },
+                );
               },
             );
           },

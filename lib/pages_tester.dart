@@ -29,22 +29,19 @@ import 'screens/driver_home_screen.dart';
 import 'screens/create_trip_screen.dart';
 import 'screens/available_trips_screen.dart';
 import 'screens/trip_details_screen.dart';
-import 'screens/trip_details_view_screen.dart';
 import 'screens/my_bookings_screen.dart';
 import 'screens/rating_screen.dart';
 import 'screens/notification_screen.dart';
 import 'screens/payment_screen.dart';
 import 'screens/driver_bookings_screen.dart';
 import 'screens/driver_trips_screen.dart';
-import 'screens/calendar_screen.dart' show CalendarScreen; // استورد فقط CalendarScreen إن كانت موجودة
 import 'screens/driver_calendar_screen.dart';
 import 'screens/edit_profile_screen.dart';
 import 'screens/edit_trip_screen.dart';
 
 // الشاشات الجديدة
 import 'screens/manage_trip_screen.dart';
-import 'screens/passenger_bookings_screen.dart' show PassengerBookingsScreen;
-import 'screens/passenger_calendar_screen.dart' show PassengerCalendarScreen;
+import 'screens/passenger_calendar_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/trip_history_screen.dart';
 import 'screens/trip_search_screen.dart';
@@ -230,10 +227,7 @@ class TestSelector extends StatelessWidget {
             title: const Text('تفاصيل الرحلة (كائن Trip تجريبي)'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip))),
           ),
-          ListTile(
-            title: const Text('عرض تفاصيل مرنة (TripDetailsView)'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsViewScreen(tripData: trip.toMap()))),
-          ),
+
           ListTile(
             title: const Text('عرض بطاقة الرحلة (TripCard)'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
@@ -253,7 +247,7 @@ class TestSelector extends StatelessWidget {
           ),
           ListTile(
             title: const Text('حجوزاتي (راكب)'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PassengerBookingsScreen())),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyBookingsScreen ())),
           ),
           ListTile(
             title: const Text('إدارة الرحلات (سائق)'),

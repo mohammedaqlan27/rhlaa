@@ -223,6 +223,8 @@ class AppUser {
     );
   }
 
+  String? get phoneNumber => null;
+
   AppUser copyWith({
     String? id,
     String? nickname,
