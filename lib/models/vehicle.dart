@@ -1,4 +1,3 @@
-// lib/models/vehicle.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Vehicle {
@@ -33,9 +32,9 @@ class Vehicle {
     this.createdAt,
   });
 
+  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
   Map<String, dynamic> toMap() {
     return {
-      // camelCase (الافتراضي في الكود)
       'driverId': driverId,
       'makeModelYear': makeModelYear,
       'vehicleType': vehicleType,
@@ -47,21 +46,10 @@ class Vehicle {
       'isVerified': isVerified,
       'notes': notes,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-      // snake_case duplicates للتوافق مع قواعد بيانات قديمة
-      'driver_id': driverId,
-      'make_model_year': makeModelYear,
-      'vehicle_type': vehicleType,
-      'color': color,
-      'max_capacity': maxCapacity,
-      'plate_number': plateNumber,
-      'license_number': licenseNumber,
-      'vehicle_owner': vehicleOwner,
-      'is_verified': isVerified,
-      'notes': notes,
-      'created_at': createdAt ?? FieldValue.serverTimestamp(),
     };
   }
 
+  /// إنشاء نموذج من مستند Firestore يدعم المرونة العالية بين صيغ الحقول
   factory Vehicle.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -116,7 +104,6 @@ class Vehicle {
     final driverId = _getString(['driverId', 'driver_id'], '');
     final makeModelYear = _getString(['makeModelYear', 'make_model_year'], 'غير محدد');
 
-    // نستخدم قيم افتراضية فارغة ثم نحولها إلى nullable إذا كانت فارغة
     final vehicleTypeRaw = _getString(['vehicleType', 'vehicle_type'], '');
     final colorRaw = _getString(['color'], '');
     final licenseNumberRaw = _getString(['licenseNumber', 'license_number'], '');
@@ -149,7 +136,10 @@ class Vehicle {
     );
   }
 
+  /// تم إصلاح الـ copyWith لتقبل تحديث الـ معرفات عند الحاجة البرمجية
   Vehicle copyWith({
+    String? id,
+    String? driverId,
     String? makeModelYear,
     String? vehicleType,
     String? color,
@@ -162,8 +152,8 @@ class Vehicle {
     Timestamp? createdAt,
   }) {
     return Vehicle(
-      id: id,
-      driverId: driverId,
+      id: id ?? this.id,
+      driverId: driverId ?? this.driverId,
       makeModelYear: makeModelYear ?? this.makeModelYear,
       vehicleType: vehicleType ?? this.vehicleType,
       color: color ?? this.color,
@@ -179,5 +169,5 @@ class Vehicle {
 
   @override
   String toString() =>
-      'Vehicle(ID: $id, Model: $makeModelYear, Plate: $plateNumber, Owner: $vehicleOwner, Verified: $isVerified)';
+      'Vehicle(ID: $id, Model: $makeModelYear, Plate: $plateNumber, Verified: $isVerified)';
 }

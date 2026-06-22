@@ -34,7 +34,7 @@ class AppScaffold extends StatelessWidget {
   void _openSettings(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent, // لإظهار استدارة الحواف بشكل صحيح
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
         return Container(
@@ -107,16 +107,13 @@ class AppScaffold extends StatelessWidget {
       ),
     );
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: _baseBg, // توحيد الخلفية النيومورفية لكافة شاشات التطبيق
-        extendBodyBehindAppBar: extendBodyBehindAppBar,
-        appBar: appBar,
-        drawer: drawer,
-        body: content,
-        floatingActionButton: floatingActionButton,
-      ),
+    return Scaffold(
+      backgroundColor: _baseBg,
+      extendBodyBehindAppBar: extendBodyBehindAppBar,
+      appBar: appBar,
+      drawer: drawer,
+      body: content,
+      floatingActionButton: floatingActionButton,
     );
   }
 }

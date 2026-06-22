@@ -3,26 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
-// استخدم ملف الثيم الموحد (AppColors / AppThemeFactory)
 import 'theme/app_colors.dart';
-
-// نماذج (قد تُستخدم في بعض الشاشات الاختبارية)
-import 'models/trip.dart';
-import 'models/booking_model.dart';
-import 'models/app_user.dart';
-import 'models/notification_model.dart';
-import 'models/rating_model.dart';
-import 'models/vehicle.dart';
-
-// حالة المصادقة
 import 'state/auth_state.dart';
-
-// شاشات رئيسية ومساعدة
 import 'screens/auth_wrapper.dart';
 import 'screens/auth_screen.dart';
-import 'screens/loading_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/passenger_home_screen.dart' hide Trip;
 import 'screens/driver_home_screen.dart';
@@ -30,79 +17,36 @@ import 'screens/create_trip_screen.dart';
 import 'screens/available_trips_screen.dart';
 import 'screens/trip_details_screen.dart';
 import 'screens/my_bookings_screen.dart';
-import 'screens/rating_screen.dart';
 import 'screens/notification_screen.dart';
-import 'screens/payment_screen.dart';
-import 'screens/driver_bookings_screen.dart';
-import 'screens/driver_trips_screen.dart';
-import 'screens/driver_calendar_screen.dart';
-import 'screens/edit_profile_screen.dart';
-import 'screens/edit_trip_screen.dart';
-import 'screens/manage_trip_screen.dart';
-import 'screens/passenger_calendar_screen.dart' ;
-import 'screens/profile_screen.dart';
-import 'screens/trip_history_screen.dart';
-import 'screens/trip_search_screen.dart';
-import 'screens/user_ratings_screen.dart';
-import 'screens/vehicle_selection_screen.dart';
 import 'screens/payment_confirmation_screen.dart';
-import 'screens/vehicle_screen.dart';
-
-// خدمات وويدجت مساعدة (يمكن تفعيل Providers لها لاحقًا)
-import 'services/booking_service.dart';
-import 'services/notification_service.dart';
-import 'services/payment_service.dart';
-import 'services/trip_service.dart';
-import 'services/rating_service.dart';
-import 'services/firebase_service.dart';
-import 'services/user_service.dart';
-import 'services/auth_service.dart';
-import 'utils/trip_exporter.dart' as exporter_service;
 import 'utils/app_localizations.dart';
-import 'utils/constants.dart' hide AppTheme;
-import 'widgets/trip_card.dart';
-import 'widgets/payment_deeplink_widget.dart';
-import 'widgets/custom_button.dart';
-import 'widgets/custom_text_field.dart';
-import 'widgets/loading_indicator.dart';
+import 'models/trip.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // تهيئة Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // التقاط الأخطاء غير المعالجة لعرضها في الـ console أثناء التطوير
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    // في بيئة الإنتاج يمكنك إرسال التفاصيل إلى خدمة تتبع الأخطاء هنا
   };
 
   runApp(
     MultiProvider(
       providers: [
-        // مزود حالة المصادقة متاح في كل التطبيق
-        ChangeNotifierProvider<AuthState>(
-          create: (_) => AuthState(),
-        ),
-
-        // أمثلة على Providers للخدمات (معلّقة/قابلة للتفعيل لاحقًا)
-        // Provider<BookingService>(create: (_) => BookingService()),
-        // Provider<TripService>(create: (_) => TripService()),
-        // Provider<NotificationService>(create: (_) => NotificationService()),
+        ChangeNotifierProvider<AuthState>(create: (_) => AuthState()),
       ],
       child: const MyApp(),
     ),
   );
 }
 
-/// MyApp: نقطة الدخول للتطبيق مع ثيم مركزي ودعم RTL واللغات
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // مسارات مساعدة (ملاحظة: لا تتضمن '/' لأننا نستخدم home)
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _uiSettingsStream() {
+    return FirebaseFirestore.instance.collection('settings').doc('ui').snapshots();
+  }
+
   Map<String, WidgetBuilder> _buildRoutes() {
     return {
       '/auth': (_) => const AuthScreen(),
@@ -120,39 +64,64 @@ class MyApp extends StatelessWidget {
         amount: 0.0,
         paymentMethod: 'mock',
       ),
-      // أضف مسارات إضافية حسب الحاجة
     };
   }
 
   @override
   Widget build(BuildContext context) {
-    // استخدم Theme مركزي من AppThemeFactory الموجود في theme/app_colors.dart
-    return MaterialApp(
-      title: 'Rhlaa App',
-      debugShowCheckedModeBanner: false,
-      theme: AppThemeFactory.light(),
-      // دعم اللغات والـ RTL
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        AppLocalizations.delegate, // إن كان لديك ملف app_localizations
-      ],
-      supportedLocales: const [
-        Locale('ar'),
-        Locale('en'),
-      ],
-      // مسارات مساعدة (بدون '/')
-      routes: _buildRoutes(),
-      // نقطة دخول التطبيق: AuthWrapper يتولى التوجيه حسب حالة المصادقة
-      home: const AuthWrapper(),
-      // إجبار اتجاه النص إلى RTL للتطبيق العربي
-      builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: child ?? const SizedBox.shrink(),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _uiSettingsStream(),
+      builder: (context, snapshot) {
+        // افتراضيات
+        bool isRTL = true;
+        Locale locale = const Locale('ar');
+
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() ?? {};
+          debugPrint('UI settings from Firestore: $data'); // طباعة للتأكد
+          if (data.containsKey('isRTL')) {
+            isRTL = data['isRTL'] == true;
+          }
+          if (data.containsKey('locale')) {
+            final loc = data['locale']?.toString();
+            if (loc != null && loc.isNotEmpty) locale = Locale(loc);
+          }
+        } else {
+          debugPrint('UI settings snapshot has no data or does not exist yet.');
+        }
+
+        return MaterialApp(
+          title: 'Rhlaa App',
+          debugShowCheckedModeBanner: false,
+          theme: AppThemeFactory.light(),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            AppLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          locale: locale,
+          localeResolutionCallback: (deviceLocale, supportedLocales) {
+            // إذا أردت إجبار RTL عند locale عربي
+            if (locale.languageCode == 'ar') return const Locale('ar');
+            return deviceLocale;
+          },
+          routes: _buildRoutes(),
+          home: const AuthWrapper(),
+          // لا تضع Directionality يدوياً هنا — Flutter يحدد الاتجاه من الـ locale.
+          builder: (context, child) {
+            // طباعة حالة الاتجاه الفعلية بعد بناء الـ MaterialApp
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              try {
+                final dir = Directionality.of(context);
+                debugPrint('Effective Directionality after MaterialApp build: $dir');
+              } catch (_) {}
+            });
+            return child ?? const SizedBox.shrink();
+          },
         );
       },
     );
   }
-}
+}}

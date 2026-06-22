@@ -1,4 +1,3 @@
-// lib/models/app_user.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AppUser {
@@ -63,8 +62,10 @@ class AppUser {
     this.createdAt,
   });
 
+  // بديل ذكي لإرجاع رقم الهاتف إذا تم طلبه بهذه التسمية في الواجهات القديمة
+  String? get phoneNumber => mobileNumber;
+
   /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
-  /// **يكتب camelCase فقط**.
   Map<String, dynamic> toMap() {
     dynamic idIssueTs;
     if (idIssueDate is DateTime) idIssueTs = Timestamp.fromDate(idIssueDate!);
@@ -96,7 +97,6 @@ class AppUser {
       'vehicleIds': vehicleIds,
       'drivingLicenseNumber': drivingLicenseNumber,
       'driverNotes': driverNotes,
-      // حقول المركبة بصيغة camelCase فقط
       'carPlateNumber': carPlateNumber,
       'carOwnerOfficialName': carOwnerOfficialName,
       'createdAt': createdAt ?? Timestamp.now(),
@@ -108,11 +108,9 @@ class AppUser {
   }
 
   /// إنشاء نموذج من مستند Firestore
-  /// يقرأ camelCase أولاً ثم يتحقق من snake_case كاحتياط أثناء الهجرة.
   factory AppUser.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // دوال مساعدة لقراءة القيم من كلتا الصيغتين (camelCase ثم snake_case)
     String? _getString(List<String> keys) {
       for (final k in keys) {
         final v = data[k];
@@ -170,7 +168,6 @@ class AppUser {
       return null;
     }
 
-    // قراءة الحقول (نستخدم camelCase أولاً ثم snake_case كاحتياط)
     final nickname = _getString(['nickname', 'name', 'displayName']) ?? '';
     final email = _getString(['email']) ?? '';
     final userType = _getString(['userType', 'user_type']) ?? 'Passenger';
@@ -222,8 +219,6 @@ class AppUser {
       createdAt: createdAt,
     );
   }
-
-  String? get phoneNumber => null;
 
   AppUser copyWith({
     String? id,

@@ -1,4 +1,3 @@
-// lib/models/notification_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AppNotification {
@@ -22,6 +21,8 @@ class AppNotification {
     this.metadata,
   });
 
+  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
+  /// تم تنظيف الحقول وحذف التكرار المزدوج لـ snake_case لضغط حجم البيانات المرفوعة
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
@@ -31,13 +32,10 @@ class AppNotification {
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
       'isRead': isRead,
       'metadata': metadata,
-      // snake_case duplicates
-      'user_id': userId,
-      'created_at': createdAt ?? FieldValue.serverTimestamp(),
-      'is_read': isRead,
     };
   }
 
+  /// إنشاء نموذج من مستند Firestore يدعم قراءة الصيغتين بأمان تام
   factory AppNotification.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -120,6 +118,6 @@ class AppNotification {
 
   @override
   String toString() {
-    return 'AppNotification(id: $id, userId: $userId, title: $title, type: $type, createdAt: $createdAt, isRead: $isRead)';
+    return 'AppNotification(id: $id, userId: $userId, title: $title, type: $type, isRead: $isRead)';
   }
 }

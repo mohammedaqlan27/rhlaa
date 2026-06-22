@@ -41,7 +41,7 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const Icon(Icons.map_rounded, size: 64, color: _logoBlue),
                 const SizedBox(height: 16),
-                const Text('أهلاً بك في تطبيق رحلاء', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: _logoBlue)),
+                const Text('أهلاً بك في تطبيق رحلة', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: _logoBlue)),
                 const SizedBox(height: 8),
                 const Text(
                   'خطوتك الأولى لتجربة تنقل ذكية واقتصادية باليمن. الرجاء تسجيل الدخول أو إنشاء حساب جديد للبدء.',
@@ -117,7 +117,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _showSettingsSheet(BuildContext context, User? firebaseUser, AuthState authState) async {
-    final String name = (firebaseUser?.displayName ?? authState.displayName)?.toString() ?? 'مستكشف رحلاء';
+    final String name = (firebaseUser?.displayName ?? authState.displayName)?.toString() ?? 'مستكشف رحلة';
     final String email = (firebaseUser?.email ?? authState.email)?.toString() ?? 'لا يوجد بريد مرتبط';
     final String phone = (firebaseUser?.phoneNumber ?? authState.mobileNumber)?.toString() ?? '';
 

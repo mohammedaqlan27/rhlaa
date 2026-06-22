@@ -1,4 +1,3 @@
-// lib/services/auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -40,7 +39,6 @@ class AuthService {
   }
 
   /// إنشاء حساب جديد
-  /// role: استخدم 'Driver' أو 'Passenger' أو أي تسمية تعتمدها في التطبيق
   Future<User?> register(String nickname, String email, String password, String role) async {
     try {
       final result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
@@ -58,35 +56,25 @@ class AuthService {
     }
   }
 
-  /// إنشاء سجل المستخدم في Firestore
+  /// إنشاء سجل المستخدم في Firestore بالصيغة الموحدة والنظيفة
   Future<void> _createUserRecord(String uid, String nickname, String email, String role) async {
     final userData = {
       'id': uid,
       'nickname': nickname,
       'email': email,
-      // نستخدم كلتا الصيغتين (snake_case و camelCase) إن أردت التوافق مع الشاشات
-      'user_type': role,
       'userType': role,
-      'average_rating': 0.0,
       'averageRating': 0.0,
-      'rating_count': 0,
       'ratingCount': 0,
-      'profile_picture_url': null,
-      'profilePictureUrl': null,
-      'mobile_number': null,
-      'mobileNumber': null,
-      'created_at': FieldValue.serverTimestamp(),
+      'profilePictureUrl': '',
+      'mobileNumber': '',
       'createdAt': FieldValue.serverTimestamp(),
     };
 
-    if (role.toLowerCase() == 'driver' || role == 'Driver') {
+    if (role.toLowerCase() == 'driver' || role == 'سائق') {
       userData.addAll({
-        'driving_license_number': null,
-        'car_plate_number': null,
-        'car_owner_official_name': null,
-        'drivingLicenseNumber': null,
-        'carPlateNumber': null,
-        'carOwnerOfficialName': null,
+        'drivingLicenseNumber': '',
+        'carPlateNumber': '',
+        'carOwnerOfficialName': '',
       });
     }
 

@@ -1,4 +1,3 @@
-// lib/services/trip_service.dart
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
@@ -16,7 +15,6 @@ class TripService {
   final String _vehiclesCollection = 'vehicles';
   final String _ratingsCollection = 'ratings';
 
-  /// التحقق من صلاحية السائق
   Future<bool> isDriverVerified(String driverId) async {
     try {
       final doc = await _firestore.collection(_usersCollection).doc(driverId).get();
@@ -25,13 +23,11 @@ class TripService {
       final type = (user.userType ?? '').toString().toLowerCase();
       final verified = user.isIdVerified == true;
       return (type == 'driver' || type == 'سائق') && verified;
-    } catch (e, st) {
-      debugPrint('TripService.isDriverVerified error: $e\n$st');
+    } catch (e) {
       return false;
     }
   }
 
-  /// التحقق من صلاحية المركبة
   Future<Vehicle?> getVerifiedVehicle(String? vehicleId) async {
     if (vehicleId == null || vehicleId.isEmpty) return null;
     try {
@@ -39,44 +35,28 @@ class TripService {
       if (!doc.exists) return null;
       final vehicle = Vehicle.fromDocument(doc);
       return vehicle.isVerified == true ? vehicle : null;
-    } catch (e, st) {
-      debugPrint('TripService.getVerifiedVehicle error: $e\n$st');
+    } catch (e) {
       return null;
     }
   }
 
-  /// إنشاء رحلة جديدة
-  /// يعيد معرف الرحلة عند النجاح أو null عند الفشل
   Future<String?> createTrip(Trip trip) async {
     try {
-      // تحقق من السائق
       final isDriverOk = await isDriverVerified(trip.driverId);
-      if (!isDriverOk) {
-        debugPrint('TripService.createTrip: driver not verified ${trip.driverId}');
-        return null;
-      }
+      if (!isDriverOk) return null;
 
-      // تحقق من المركبة (vehicleId قد تكون null) — إذا كانت مطلوبة حسب منطقك، تأكد من ذلك
       Vehicle? vehicle;
       if (trip.vehicleId != null && trip.vehicleId!.isNotEmpty) {
         vehicle = await getVerifiedVehicle(trip.vehicleId);
-        if (vehicle == null) {
-          debugPrint('TripService.createTrip: vehicle not verified or missing ${trip.vehicleId}');
-          return null;
-        }
+        if (vehicle == null) return null;
       }
 
-      // تأكد من وجود معرف نهائي للرحلة
-      final String finalId = (trip.id ?? '').isEmpty ? _uuid.v4() : trip.id!;
+      // بما أن id في الموديل الجديد أصبح String دائم غير قابل للـ null
+      final String finalId = trip.id.isEmpty ? _uuid.v4() : trip.id;
 
-      // حدد سعة المقاعد النهائية: إذا وُجدت مركبة معتمدة استخدم سعتها، وإلا استخدم totalSeats من الكائن trip إن كان > 0
       final int seats = vehicle?.maxCapacity ?? (trip.totalSeats > 0 ? trip.totalSeats : 0);
-      if (seats <= 0) {
-        debugPrint('TripService.createTrip: invalid seats count (no vehicle and trip.totalSeats not provided) for driver ${trip.driverId}');
-        return null;
-      }
+      if (seats <= 0) return null;
 
-      // افتراض أن الحالة الافتراضية للمقاعد هي true (متاحة) عند الإنشاء
       final seatStatusList = List<bool>.filled(seats, true);
 
       final finalTrip = trip.copyWith(
@@ -87,10 +67,7 @@ class TripService {
         createdAt: trip.createdAt ?? Timestamp.now(),
       );
 
-      // سجل الرحلة في Firestore
       await _firestore.collection(_tripsCollection).doc(finalId).set(finalTrip.toMap());
-      debugPrint('TripService.createTrip: trip created with id $finalId');
-
       return finalId;
     } catch (e, st) {
       debugPrint('TripService.createTrip error: $e\n$st');
@@ -98,76 +75,76 @@ class TripService {
     }
   }
 
-  /// تعديل رحلة
   Future<bool> updateTrip(String tripId, Trip updatedTrip) async {
     try {
       final data = Map<String, dynamic>.from(updatedTrip.toMap());
-      data.remove('createdAt'); // لا نسمح بتعديل createdAt عبر هذه الدالة
+      data.remove('createdAt');
       await _firestore.collection(_tripsCollection).doc(tripId).update(data);
       return true;
-    } catch (e, st) {
-      debugPrint('TripService.updateTrip error: $e\n$st');
+    } catch (e) {
       return false;
     }
   }
 
-  /// حذف رحلة
   Future<bool> deleteTrip(String tripId) async {
     try {
       await _firestore.collection(_tripsCollection).doc(tripId).delete();
       return true;
-    } catch (e, st) {
-      debugPrint('TripService.deleteTrip error: $e\n$st');
+    } catch (e) {
       return false;
     }
   }
 
-  /// جلب رحلة واحدة
   Future<Trip?> getTripById(String tripId) async {
     try {
       final doc = await _firestore.collection(_tripsCollection).doc(tripId).get();
       return doc.exists ? Trip.fromDocument(doc) : null;
-    } catch (e, st) {
-      debugPrint('TripService.getTripById error: $e\n$st');
+    } catch (e) {
       return null;
     }
   }
 
-  /// جلب الرحلات المتاحة
   Future<List<Trip>> getAvailableTrips() async {
     try {
       final snapshot = await _firestore
           .collection(_tripsCollection)
           .where('status', whereIn: ['active', 'مفعّلة'])
           .where('availableSeats', isGreaterThan: 0)
-          .orderBy('availableSeats', descending: true)
-          .orderBy('departureTime')
           .get();
 
-      return snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList();
+      // الترتيب محلياً لتجنب مشاكل عدم بناء الفهارس (Indexes) المركبة في Firestore لكل الحقول
+      final list = snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList();
+      list.sort((a, b) {
+        final timeA = a.departureTime ?? DateTime.now();
+        final timeB = b.departureTime ?? DateTime.now();
+        return timeA.compareTo(timeB);
+      });
+      return list;
     } catch (e, st) {
       debugPrint('TripService.getAvailableTrips error: $e\n$st');
       return [];
     }
   }
 
-  /// جلب رحلات السائق
   Future<List<Trip>> getTripsByDriver(String driverId) async {
     try {
       final snapshot = await _firestore
           .collection(_tripsCollection)
           .where('driverId', isEqualTo: driverId)
-          .orderBy('departureTime')
           .get();
 
-      return snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList();
-    } catch (e, st) {
-      debugPrint('TripService.getTripsByDriver error: $e\n$st');
+      final list = snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList();
+      list.sort((a, b) {
+        final timeA = a.departureTime ?? DateTime.now();
+        final timeB = b.departureTime ?? DateTime.now();
+        return timeA.compareTo(timeB);
+      });
+      return list;
+    } catch (e) {
       return [];
     }
   }
 
-  /// تحديث المقاعد
   Future<bool> updateSeatStatus(String tripId, List<bool> seatStatus, int availableSeats) async {
     try {
       await _firestore.collection(_tripsCollection).doc(tripId).update({
@@ -175,61 +152,40 @@ class TripService {
         'availableSeats': availableSeats,
       });
       return true;
-    } catch (e, st) {
-      debugPrint('TripService.updateSeatStatus error: $e\n$st');
+    } catch (e) {
       return false;
     }
   }
 
-  /// تحديث تقييم السائق
-  /// يحسب المتوسط من الحقول الممكنة في مجموعة ratings (rating أو score)
   Future<void> updateDriverRating(String driverId) async {
     try {
       final snapshot = await _firestore.collection(_ratingsCollection).get();
-
       final List<double> values = [];
+
       for (final doc in snapshot.docs) {
         final data = doc.data();
         final toUser = (data['toUserId'] ?? data['to_user_id'] ?? data['driverId'] ?? data['driver_id'])?.toString();
         if (toUser == driverId) {
-          double? val;
-          if (data['rating'] != null) {
-            final r = data['rating'];
-            if (r is num) val = r.toDouble();
-            else if (r is String) val = double.tryParse(r);
-          } else if (data['score'] != null) {
-            final s = data['score'];
-            if (s is num) val = s.toDouble();
-            else if (s is String) val = double.tryParse(s);
-          }
-          if (val != null) values.add(val);
+          final r = data['rating'] ?? data['score'];
+          if (r is num) values.add(r.toDouble());
         }
       }
 
       final average = values.isEmpty ? 0.0 : values.reduce((a, b) => a + b) / values.length;
-      final ratingCount = values.length;
 
       await _firestore.collection(_usersCollection).doc(driverId).update({
         'averageRating': average,
-        'average_rating': average,
-        'ratingCount': ratingCount,
-        'rating_count': ratingCount,
+        'ratingCount': values.length,
       });
-    } catch (e, st) {
-      debugPrint('TripService.updateDriverRating error: $e\n$st');
-    }
+    } catch (_) {}
   }
 
-  /// تغيير حالة الرحلة
   Future<void> changeTripStatus(String tripId, String newStatus) async {
     try {
       await _firestore.collection(_tripsCollection).doc(tripId).update({'status': newStatus});
-    } catch (e, st) {
-      debugPrint('TripService.changeTripStatus error: $e\n$st');
-    }
+    } catch (_) {}
   }
 
-  /// إرسال إشعار (موحّد التوقيع)
   Future<void> notifyUserAboutTrip(String userId, String title, String body, String type) async {
     try {
       await NotificationService().sendNotification(
@@ -238,8 +194,6 @@ class TripService {
         body: body,
         type: type,
       );
-    } catch (e, st) {
-      debugPrint('TripService.notifyUserAboutTrip error: $e\n$st');
-    }
+    } catch (_) {}
   }
 }

@@ -1,8 +1,7 @@
-// lib/models/trip.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Trip {
-  final String? id;
+  final String id; // تم جعله غير اختياري لضمان استقرار شاشات العرض والـ UI
   final String title;
   final String description;
   final String driverId;
@@ -32,7 +31,7 @@ class Trip {
   final Timestamp? createdAt;
 
   Trip({
-    this.id,
+    this.id = '',
     this.title = '',
     this.description = '',
     this.driverId = '',
@@ -57,6 +56,7 @@ class Trip {
     this.createdAt,
   }) : seatStatus = seatStatus ?? List<bool>.filled(totalSeats > 0 ? totalSeats : 0, true);
 
+  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> map = <String, dynamic>{};
 
@@ -82,17 +82,12 @@ class Trip {
     map['carPlateNumber'] = carPlateNumber;
     map['carOwnerOfficialName'] = carOwnerOfficialName;
 
-    // createdAt: if provided use it, otherwise server timestamp
     map['createdAt'] = createdAt ?? FieldValue.serverTimestamp();
-
-    // snake_case duplicates for backward compatibility
-    map['car_plate_number'] = carPlateNumber;
-    map['car_owner_official_name'] = carOwnerOfficialName;
-    map['created_at'] = createdAt ?? FieldValue.serverTimestamp();
 
     return map;
   }
 
+  /// إنشاء نموذج من مستند Firestore مع تسوية وحماية متكاملة لمصفوفة المقاعد
   factory Trip.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
 
@@ -282,6 +277,6 @@ class Trip {
 
   @override
   String toString() {
-    return 'Trip(id: ${id ?? '—'}, title: $title, driver: $driverName, origin: $origin → $destination, price: $price)';
+    return 'Trip(id: $id, title: $title, driver: $driverName, price: $price)';
   }
 }

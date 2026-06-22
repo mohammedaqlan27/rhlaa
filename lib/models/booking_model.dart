@@ -1,4 +1,3 @@
-// lib/models/booking_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Booking {
@@ -14,7 +13,6 @@ class Booking {
   final bool isFamilyBooking;
   final int childrenCount;
 
-  // الحقول الاختيارية (camelCase only)
   final int? seatNumber;
   final String? paymentMethod;
 
@@ -45,7 +43,6 @@ class Booking {
   });
 
   /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
-  /// يكتب الحقول بصيغة camelCase فقط
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
       'tripId': tripId,
@@ -58,14 +55,12 @@ class Booking {
       'childrenCount': childrenCount,
       'bookingStatus': bookingStatus,
       'paymentStatus': paymentStatus,
-      // createdAt: if provided use it, otherwise server timestamp
+      // يقبل الـ Timestamp المباشر أو يعتمد ختم السيرفر الافتراضي
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
     };
 
     if (canceledAt != null) map['canceledAt'] = canceledAt;
     if (updatedAt != null) map['updatedAt'] = updatedAt;
-
-    // الحقول الاختيارية بصيغة camelCase فقط
     if (seatNumber != null) map['seatNumber'] = seatNumber;
     if (paymentMethod != null) map['paymentMethod'] = paymentMethod;
 
@@ -73,7 +68,6 @@ class Booking {
   }
 
   /// إنشاء نموذج من مستند Firestore
-  /// يقرأ الحقول بصيغة camelCase مع دعم آمن لبعض legacy snake_case كاحتياط
   factory Booking.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -142,7 +136,6 @@ class Booking {
       return null;
     }
 
-    // قراءة الحقول بصيغة camelCase أولاً، ثم بعض البدائل snake_case كاحتياط
     final tripId = getString(['tripId', 'trip_id']);
     final passengerId = getString(['passengerId', 'passenger_id']);
     final driverId = getString(['driverId', 'driver_id']);
@@ -158,7 +151,6 @@ class Booking {
     final canceledAt = getTimestampNullable(['canceledAt', 'canceled_at']);
     final updatedAt = getTimestampNullable(['updatedAt', 'updated_at']);
 
-    // الحقول الاختيارية (camelCase) مع دعم بدائل
     int? seatNumber;
     final seatVal = data['seatNumber'] ?? data['seat_number'];
     if (seatVal != null) {
@@ -204,7 +196,7 @@ class Booking {
     bool? isFamilyBooking,
     int? seatNumber,
     String? paymentMethod,
-    Timestamp? createdAt,
+    dynamic createdAt, // تم تعديل النوع هنا لتفادي أخطاء الـ Cast مع الـ FieldValue
     Timestamp? canceledAt,
     Timestamp? updatedAt,
   }) {
@@ -222,7 +214,7 @@ class Booking {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       bookingStatus: bookingStatus ?? this.bookingStatus,
       paymentStatus: paymentStatus ?? this.paymentStatus,
-      createdAt: createdAt ?? this.createdAt,
+      createdAt: createdAt is Timestamp ? createdAt : this.createdAt,
       canceledAt: canceledAt ?? this.canceledAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -230,5 +222,5 @@ class Booking {
 
   @override
   String toString() =>
-      'Booking(ID: $bookingId, Trip: $tripId, Seats: $bookedSeatsCount, Seat#: ${seatNumber ?? '-'}, Payment: ${paymentMethod ?? '-'}, Status: $bookingStatus)';
+      'Booking(ID: $bookingId, Trip: $tripId, Seats: $bookedSeatsCount, Status: $bookingStatus)';
 }

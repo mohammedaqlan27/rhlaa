@@ -19,10 +19,9 @@ class TripDetailsScreen extends StatelessWidget {
   factory TripDetailsScreen.fromMap({required Map<String, dynamic> map, String? docId}) {
     return TripDetailsScreen(
       trip: Trip(
-        id: docId ?? map['id']?.toString(),
+        driverId: map['driverId']?.toString() ?? map['driver_id']?.toString() ?? '',
         title: map['title']?.toString() ?? 'رحلة مشتركة',
         description: map['description']?.toString() ?? '',
-        driverId: map['driverId'] ?? map['driver_id']?.toString() ?? '',
         driverName: map['driverName'] ?? map['driver_name']?.toString() ?? 'كابتن غير محدد',
         tripCategory: map['tripCategory'] ?? map['trip_category']?.toString() ?? 'داخلية',
         origin: map['origin']?.toString() ?? 'غير محدد',

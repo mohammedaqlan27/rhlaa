@@ -1,4 +1,3 @@
-// lib/services/notification_service.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -10,8 +9,6 @@ class NotificationService {
 
   NotificationService();
 
-  /// إرسال إشعار وكتابة المستند في Firestore
-  /// يكتب الحقول بصيغة camelCase فقط
   Future<void> sendNotification({
     required String userId,
     required String title,
@@ -20,14 +17,12 @@ class NotificationService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      final now = FieldValue.serverTimestamp();
       final data = <String, dynamic>{
-        // camelCase only
         'userId': userId,
         'title': title,
         'body': body,
         'type': type,
-        'createdAt': now,
+        'createdAt': FieldValue.serverTimestamp(),
         'isRead': false,
         'metadata': metadata,
       };
@@ -39,8 +34,6 @@ class NotificationService {
     }
   }
 
-  /// جلب إشعارات لمرة واحدة (غير متدفقة)
-  /// يستخدم camelCase فقط
   Future<List<AppNotification>> getNotificationsOnce({
     required String userId,
     int limit = 50,
@@ -57,7 +50,6 @@ class NotificationService {
         try {
           return AppNotification.fromDocument(d);
         } catch (e) {
-          debugPrint('NotificationService.getNotificationsOnce parse error: $e');
           return null;
         }
       }).whereType<AppNotification>().toList();
@@ -67,8 +59,6 @@ class NotificationService {
     }
   }
 
-  /// تيار موحّد يجلب إشعارات للمستخدم (camelCase)
-  /// يعيد Stream<List<AppNotification>> مدمجًا ومُرتبًا حسب createdAt (الأحدث أولاً)
   Stream<List<AppNotification>> streamNotificationsForUser(String userId, {int limit = 100}) {
     final stream = _firestore
         .collection(collectionName)
@@ -86,41 +76,27 @@ class NotificationService {
           try {
             return AppNotification.fromDocument(d);
           } catch (err) {
-            debugPrint('NotificationService.parse doc error: $err');
             return null;
           }
         }).whereType<AppNotification>().toList();
 
-        // already ordered by createdAt descending from query
         controller.add(list);
-      } catch (e) {
-        debugPrint('NotificationService.controller.add error: $e');
-      }
-    }, onError: (e, st) {
-      debugPrint('NotificationService.stream error: $e\n$st');
+      } catch (_) {}
+    }, onError: (e) {
+      debugPrint('NotificationService.stream error: $e');
     });
 
     controller.onCancel = () async {
-      try {
-        await sub?.cancel();
-      } catch (e) {
-        debugPrint('NotificationService.cancel sub error: $e');
-      }
-      try {
-        await controller.close();
-      } catch (e) {
-        debugPrint('NotificationService.controller.close error: $e');
-      }
+      await sub?.cancel();
+      await controller.close();
     };
 
     return controller.stream;
   }
 
-  /// تعليم إشعار كمقروء (camelCase only)
   Future<void> markAsRead(String notificationId) async {
-    final docRef = _firestore.collection(collectionName).doc(notificationId);
     try {
-      await docRef.update({
+      await _firestore.collection(collectionName).doc(notificationId).update({
         'isRead': true,
       });
     } catch (e, st) {
@@ -129,7 +105,6 @@ class NotificationService {
     }
   }
 
-  /// تعليم مجموعة إشعارات كمقروءة في عملية واحدة (batch) - camelCase only
   Future<void> markAsReadBatch(List<String> notificationIds) async {
     if (notificationIds.isEmpty) return;
     final batch = _firestore.batch();
@@ -145,7 +120,6 @@ class NotificationService {
     }
   }
 
-  /// حذف إشعار
   Future<void> deleteNotification(String notificationId) async {
     try {
       await _firestore.collection(collectionName).doc(notificationId).delete();
@@ -155,7 +129,6 @@ class NotificationService {
     }
   }
 
-  /// عدّ الإشعارات غير المقروءة للمستخدم (camelCase queries only)
   Future<int> getUnreadCount(String userId) async {
     try {
       final q = await _firestore
@@ -165,8 +138,7 @@ class NotificationService {
           .get();
 
       return q.docs.length;
-    } catch (e, st) {
-      debugPrint('NotificationService.getUnreadCount error: $e\n$st');
+    } catch (e) {
       return 0;
     }
   }

@@ -1,4 +1,3 @@
-// lib/models/rating.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Rating {
@@ -26,6 +25,8 @@ class Rating {
     this.createdAt,
   });
 
+  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
+  /// تم تنظيف التكرار المزدوج لـ snake_case والاعتماد على camelCase
   Map<String, dynamic> toMap() {
     return {
       if (tripId != null) 'tripId': tripId,
@@ -37,15 +38,10 @@ class Rating {
       if (note != null) 'note': note,
       if (comment != null) 'comment': comment,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-      // snake_case duplicates
-      if (tripId != null) 'trip_id': tripId,
-      if (bookingId != null) 'booking_id': bookingId,
-      'from_user_id': fromUserId,
-      'to_user_id': toUserId,
-      'created_at': createdAt ?? FieldValue.serverTimestamp(),
     };
   }
 
+  /// إنشاء نموذج من مستند Firestore يدعم قراءة كافة البدائل الممكنة
   factory Rating.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -148,6 +144,6 @@ class Rating {
 
   @override
   String toString() {
-    return 'Rating(id: $id, from: $fromUserId, to: $toUserId, rating: $rating, score: ${score ?? '—'})';
+    return 'Rating(id: $id, from: $fromUserId, to: $toUserId, rating: $rating)';
   }
 }
