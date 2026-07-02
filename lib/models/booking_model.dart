@@ -1,226 +1,186 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Booking {
-  final String bookingId;
+  final String id; // معرف الحجز
   final String tripId;
   final String passengerId;
   final String driverId;
-
-  final int bookedSeatsCount;
-  final double totalPrice;
   final String passengerNickname;
 
-  final bool isFamilyBooking;
+  final int bookedSeatsCount;
   final int childrenCount;
-
   final int? seatNumber;
-  final String? paymentMethod;
 
+  final double totalPrice;
+  final String amount; // الحقل الجديد (نصي حسب طلبك)
+
+  final bool isFamilyBooking;
   final String bookingStatus;
   final String paymentStatus;
+  final String? paymentMethod;
+  final String? paymentService; // الحقل الجديد
+  final String? schemeHost;     // الحقل الجديد
+  final String? notes;          // الحقل الجديد
 
   final Timestamp? createdAt;
   final Timestamp? canceledAt;
   final Timestamp? updatedAt;
 
   Booking({
-    required this.bookingId,
+    required this.id,
     required this.tripId,
     required this.passengerId,
     required this.driverId,
-    required this.bookedSeatsCount,
-    required this.totalPrice,
     required this.passengerNickname,
-    required this.isFamilyBooking,
+    required this.bookedSeatsCount,
     required this.childrenCount,
     this.seatNumber,
-    this.paymentMethod,
+    required this.totalPrice,
+    this.amount = "",
+    required this.isFamilyBooking,
     required this.bookingStatus,
     required this.paymentStatus,
+    this.paymentMethod,
+    this.paymentService,
+    this.schemeHost,
+    this.notes,
     this.createdAt,
     this.canceledAt,
     this.updatedAt,
   });
 
-  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
+  /// تحويل النموذج إلى Map للكتابة إلى Firestore
   Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
+    return {
       'tripId': tripId,
       'driverId': driverId,
       'passengerId': passengerId,
-      'bookedSeatsCount': bookedSeatsCount,
-      'totalPrice': totalPrice,
       'passengerNickname': passengerNickname,
-      'isFamilyBooking': isFamilyBooking,
+      'bookedSeatsCount': bookedSeatsCount,
       'childrenCount': childrenCount,
+      'seatNumber': seatNumber,
+      'totalPrice': totalPrice,
+      'amount': amount,
+      'isFamilyBooking': isFamilyBooking,
       'bookingStatus': bookingStatus,
       'paymentStatus': paymentStatus,
-      // يقبل الـ Timestamp المباشر أو يعتمد ختم السيرفر الافتراضي
+      'paymentMethod': paymentMethod,
+      'paymentService': paymentService,
+      'schemeHost': schemeHost,
+      'notes': notes,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-    };
-
-    if (canceledAt != null) map['canceledAt'] = canceledAt;
-    if (updatedAt != null) map['updatedAt'] = updatedAt;
-    if (seatNumber != null) map['seatNumber'] = seatNumber;
-    if (paymentMethod != null) map['paymentMethod'] = paymentMethod;
-
-    return map;
+      'canceledAt': canceledAt,
+      'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
+    }..removeWhere((key, value) => value == null);
   }
 
-  /// إنشاء نموذج من مستند Firestore
+  /// إنشاء نموذج من مستند Firestore مع معالجة ذكية
   factory Booking.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String getString(List<String> keys, [String fallback = '']) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v != null) return v.toString();
+    // دوال مساعدة لمنع الـ Crash
+    String _s(List<String> keys, [String fallback = '']) {
+      for (var k in keys) {
+        if (data[k] != null) return data[k].toString();
       }
       return fallback;
     }
 
-    int getInt(List<String> keys, [int fallback = 0]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v == null) continue;
-        if (v is int) return v;
+    int _i(List<String> keys, [int fallback = 0]) {
+      for (var k in keys) {
+        var v = data[k];
         if (v is num) return v.toInt();
-        if (v is String) {
-          final parsed = int.tryParse(v);
-          if (parsed != null) return parsed;
-        }
+        if (v is String) return int.tryParse(v) ?? fallback;
       }
       return fallback;
     }
 
-    double getDouble(List<String> keys, [double fallback = 0.0]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v == null) continue;
-        if (v is double) return v;
-        if (v is num) return (v as num).toDouble();
-        if (v is String) {
-          final parsed = double.tryParse(v.replaceAll(',', ''));
-          if (parsed != null) return parsed;
-        }
+    double _d(List<String> keys, [double fallback = 0.0]) {
+      for (var k in keys) {
+        var v = data[k];
+        if (v is num) return v.toDouble();
+        if (v is String) return double.tryParse(v) ?? fallback;
       }
       return fallback;
     }
 
-    bool getBool(List<String> keys, [bool fallback = false]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v == null) continue;
+    bool _b(List<String> keys, [bool fallback = false]) {
+      for (var k in keys) {
+        var v = data[k];
         if (v is bool) return v;
-        if (v is int) return v != 0;
-        if (v is String) {
-          final s = v.toLowerCase();
-          if (s == 'true' || s == '1') return true;
-          if (s == 'false' || s == '0') return false;
-        }
+        if (v is String) return v.toLowerCase() == 'true';
+        if (v is num) return v == 1;
       }
       return fallback;
     }
 
-    Timestamp? getTimestampNullable(List<String> keys) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v == null) continue;
+    Timestamp? _t(List<String> keys) {
+      for (var k in keys) {
+        var v = data[k];
         if (v is Timestamp) return v;
         if (v is DateTime) return Timestamp.fromDate(v);
-        if (v is String) {
-          final parsed = DateTime.tryParse(v);
-          if (parsed != null) return Timestamp.fromDate(parsed);
-        }
       }
       return null;
     }
 
-    final tripId = getString(['tripId', 'trip_id']);
-    final passengerId = getString(['passengerId', 'passenger_id']);
-    final driverId = getString(['driverId', 'driver_id']);
-    final bookedSeatsCount = getInt(['bookedSeatsCount', 'booked_seats_count'], 1);
-    final totalPrice = getDouble(['totalPrice', 'total_price'], 0.0);
-    final passengerNickname = getString(['passengerNickname', 'passenger_nickname'], 'راكب');
-    final isFamilyBooking = getBool(['isFamilyBooking', 'is_family_booking'], false);
-    final childrenCount = getInt(['childrenCount', 'children_count'], 0);
-    final bookingStatus = getString(['bookingStatus', 'booking_status'], 'pending');
-    final paymentStatus = getString(['paymentStatus', 'payment_status'], 'unpaid');
-
-    final createdAt = getTimestampNullable(['createdAt', 'created_at']);
-    final canceledAt = getTimestampNullable(['canceledAt', 'canceled_at']);
-    final updatedAt = getTimestampNullable(['updatedAt', 'updated_at']);
-
-    int? seatNumber;
-    final seatVal = data['seatNumber'] ?? data['seat_number'];
-    if (seatVal != null) {
-      if (seatVal is int) seatNumber = seatVal;
-      else if (seatVal is num) seatNumber = seatVal.toInt();
-      else if (seatVal is String) seatNumber = int.tryParse(seatVal);
-    }
-
-    String? paymentMethod;
-    final pm = data['paymentMethod'] ?? data['payment_method'];
-    if (pm != null) {
-      paymentMethod = pm.toString();
-      if (paymentMethod.isEmpty) paymentMethod = null;
-    }
-
     return Booking(
-      bookingId: doc.id,
-      tripId: tripId,
-      passengerId: passengerId,
-      driverId: driverId,
-      bookedSeatsCount: bookedSeatsCount,
-      totalPrice: totalPrice,
-      passengerNickname: passengerNickname,
-      isFamilyBooking: isFamilyBooking,
-      childrenCount: childrenCount,
-      seatNumber: seatNumber,
-      paymentMethod: paymentMethod,
-      bookingStatus: bookingStatus,
-      paymentStatus: paymentStatus,
-      createdAt: createdAt,
-      canceledAt: canceledAt,
-      updatedAt: updatedAt,
+      id: _s(['id', 'bookingId']) ?? doc.id,
+      tripId: _s(['tripId', 'trip_id']),
+      passengerId: _s(['passengerId', 'passenger_id']),
+      driverId: _s(['driverId', 'driver_id']),
+      passengerNickname: _s(['passengerNickname', 'passenger_nickname'], 'راكب'),
+      bookedSeatsCount: _i(['bookedSeatsCount', 'booked_seats_count']),
+      childrenCount: _i(['childrenCount', 'children_count']),
+      seatNumber: data['seatNumber'] != null ? _i(['seatNumber']) : null,
+      totalPrice: _d(['totalPrice', 'total_price']),
+      amount: _s(['amount']),
+      isFamilyBooking: _b(['isFamilyBooking', 'is_family_booking']),
+      bookingStatus: _s(['bookingStatus', 'booking_status'], 'pending'),
+      paymentStatus: _s(['paymentStatus', 'payment_status'], 'unpaid'),
+      paymentMethod: _s(['paymentMethod', 'payment_method']),
+      paymentService: _s(['paymentService']),
+      schemeHost: _s(['schemeHost']),
+      notes: _s(['notes']),
+      createdAt: _t(['createdAt', 'created_at']),
+      canceledAt: _t(['canceledAt', 'canceled_at']),
+      updatedAt: _t(['updatedAt', 'updated_at']),
     );
   }
 
+  get bookingId => null;
+
   Booking copyWith({
-    int? bookedSeatsCount,
-    double? totalPrice,
-    String? passengerNickname,
     String? bookingStatus,
     String? paymentStatus,
-    int? childrenCount,
-    bool? isFamilyBooking,
+    String? notes,
     int? seatNumber,
-    String? paymentMethod,
-    dynamic createdAt, // تم تعديل النوع هنا لتفادي أخطاء الـ Cast مع الـ FieldValue
-    Timestamp? canceledAt,
     Timestamp? updatedAt,
+    Timestamp? canceledAt,
   }) {
     return Booking(
-      bookingId: bookingId,
+      id: id,
       tripId: tripId,
       passengerId: passengerId,
       driverId: driverId,
-      bookedSeatsCount: bookedSeatsCount ?? this.bookedSeatsCount,
-      totalPrice: totalPrice ?? this.totalPrice,
-      passengerNickname: passengerNickname ?? this.passengerNickname,
-      isFamilyBooking: isFamilyBooking ?? this.isFamilyBooking,
-      childrenCount: childrenCount ?? this.childrenCount,
+      passengerNickname: passengerNickname,
+      bookedSeatsCount: bookedSeatsCount,
+      childrenCount: childrenCount,
       seatNumber: seatNumber ?? this.seatNumber,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
+      totalPrice: totalPrice,
+      amount: amount,
+      isFamilyBooking: isFamilyBooking,
       bookingStatus: bookingStatus ?? this.bookingStatus,
       paymentStatus: paymentStatus ?? this.paymentStatus,
-      createdAt: createdAt is Timestamp ? createdAt : this.createdAt,
+      paymentMethod: paymentMethod,
+      paymentService: paymentService,
+      schemeHost: schemeHost,
+      notes: notes ?? this.notes,
+      createdAt: createdAt,
       canceledAt: canceledAt ?? this.canceledAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   @override
-  String toString() =>
-      'Booking(ID: $bookingId, Trip: $tripId, Seats: $bookedSeatsCount, Status: $bookingStatus)';
+  String toString() => 'Booking(ID: $id, Status: $bookingStatus, Price: $totalPrice)';
 }

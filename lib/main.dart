@@ -3,125 +3,152 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
-import 'theme/app_colors.dart';
+// Providers
+import 'providers/user_provider.dart';
+import 'providers/trip_provider.dart';
+import 'providers/booking_provider.dart';
+import 'providers/payment_provider.dart';
+import 'providers/rating_provider.dart';
+import 'providers/vehicle_provider.dart';
 import 'state/auth_state.dart';
-import 'screens/auth_wrapper.dart';
+
+// Screens
 import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/passenger_home_screen.dart' hide Trip;
-import 'screens/driver_home_screen.dart';
+import 'screens/auth_wrapper.dart';
+import 'screens/available_trips_screen.dart' hide TripProvider;
 import 'screens/create_trip_screen.dart';
-import 'screens/available_trips_screen.dart';
-import 'screens/trip_details_screen.dart';
+import 'screens/debug_trips_screen.dart';
+import 'screens/driver_bookings_screen.dart';
+import 'screens/driver_calendar_screen.dart';
+import 'screens/driver_home_screen.dart';
+import 'screens/driver_trips_screen.dart';
+import 'screens/edit_profile_screen.dart';
+import 'screens/edit_trip_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/loading_screen.dart';
+import 'screens/manage_trip_screen.dart';
 import 'screens/my_bookings_screen.dart';
 import 'screens/notification_screen.dart';
+import 'screens/passenger_calendar_screen.dart';
+import 'screens/passenger_home_screen.dart';
 import 'screens/payment_confirmation_screen.dart';
-import 'utils/app_localizations.dart';
+import 'screens/payment_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/rating_screen.dart';
+import 'screens/trip_details_screen.dart';
+import 'screens/trip_exporter.dart';
+import 'screens/trip_history_screen.dart';
+import 'screens/trip_search_screen.dart';
+import 'screens/user_ratings_screen.dart';
+import 'screens/vehicle_screen.dart';
+import 'screens/vehicle_selection_screen.dart';
+
 import 'models/trip.dart';
+import 'utils/app_localizations.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-  };
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AuthState>(create: (_) => AuthState()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+  runApp(const RootApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  Stream<DocumentSnapshot<Map<String, dynamic>>> _uiSettingsStream() {
-    return FirebaseFirestore.instance.collection('settings').doc('ui').snapshots();
-  }
-
-  Map<String, WidgetBuilder> _buildRoutes() {
-    return {
-      '/auth': (_) => const AuthScreen(),
-      '/home': (_) => const HomeScreen(),
-      '/passenger_home': (_) => const PassengerHomeScreen(),
-      '/driver_home': (_) => const DriverHomeScreen(),
-      '/create_trip': (_) => const CreateTripScreen(),
-      '/available_trips': (_) => const AvailableTripsScreen(destination: ''),
-      '/trip_details': (_) => TripDetailsScreen(trip: Trip(id: 'mock', title: 'Mock Trip')),
-      '/my_bookings': (_) => const MyBookingsScreen(),
-      '/notifications': (_) => const NotificationScreen(),
-      '/payment_confirmation': (_) => const PaymentConfirmationScreen(
-        bookingId: 'mock-booking-id',
-        transactionId: 'mock-transaction-id',
-        amount: 0.0,
-        paymentMethod: 'mock',
-      ),
-    };
-  }
+class RootApp extends StatelessWidget {
+  const RootApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _uiSettingsStream(),
-      builder: (context, snapshot) {
-        // افتراضيات
-        bool isRTL = true;
-        Locale locale = const Locale('ar');
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthState()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => BookingProvider()),
+        ChangeNotifierProvider(create: (_) => PaymentProvider()),
+        ChangeNotifierProvider(create: (_) => RatingProvider()),
 
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() ?? {};
-          debugPrint('UI settings from Firestore: $data'); // طباعة للتأكد
-          if (data.containsKey('isRTL')) {
-            isRTL = data['isRTL'] == true;
-          }
-          if (data.containsKey('locale')) {
-            final loc = data['locale']?.toString();
-            if (loc != null && loc.isNotEmpty) locale = Locale(loc);
-          }
-        } else {
-          debugPrint('UI settings snapshot has no data or does not exist yet.');
-        }
-
-        return MaterialApp(
-          title: 'Rhlaa App',
-          debugShowCheckedModeBanner: false,
-          theme: AppThemeFactory.light(),
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            AppLocalizations.delegate,
-          ],
-          supportedLocales: const [Locale('ar'), Locale('en')],
-          locale: locale,
-          localeResolutionCallback: (deviceLocale, supportedLocales) {
-            // إذا أردت إجبار RTL عند locale عربي
-            if (locale.languageCode == 'ar') return const Locale('ar');
-            return deviceLocale;
-          },
-          routes: _buildRoutes(),
-          home: const AuthWrapper(),
-          // لا تضع Directionality يدوياً هنا — Flutter يحدد الاتجاه من الـ locale.
-          builder: (context, child) {
-            // طباعة حالة الاتجاه الفعلية بعد بناء الـ MaterialApp
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              try {
-                final dir = Directionality.of(context);
-                debugPrint('Effective Directionality after MaterialApp build: $dir');
-              } catch (_) {}
-            });
-            return child ?? const SizedBox.shrink();
-          },
-        );
-      },
+        ChangeNotifierProvider(create: (_) => TripProvider()),
+        ChangeNotifierProvider(create: (_) => VehicleProvider()),// مزود المركبات
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          AppLocalizations.delegate,
+        ],
+        home: const TestMenuScreen(),
+      ),
     );
   }
-}}
+}
+
+class TestMenuScreen extends StatelessWidget {
+  const TestMenuScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // بيانات تجريبية للرحلة
+    final sampleTrip = Trip(
+      id: 'trip123',
+      title: 'رحلة تجريبية إلى صنعاء',
+      seatStatus: [true, false, true, true],
+      totalSeats: 4,
+      availableSeats: 2,
+      departureTime: DateTime.now().add(const Duration(days: 1)),
+      driverId: 'driver001',
+    );
+
+    final Map<String, Widget> screens = {
+      'AuthWrapper': const AuthWrapper(),
+      'AuthScreen': const AuthScreen(),
+      'AvailableTrips': const AvailableTripsScreen(destination: 'تعز'),
+      'CreateTrip': const CreateTripScreen(),
+      'DebugTrips': const DebugTripsScreen(),
+      'DriverBookings': DriverBookingsScreen(tripId: 'trip123'),
+      'DriverCalendar': const DriverCalendarScreen(),
+      'DriverHome': const DriverHomeScreen(),
+      'DriverTrips': const DriverTripsScreen(),
+      'EditProfile': const EditProfileScreen(),
+      'EditTrip': EditTripScreen(tripId: 'trip123', trip: sampleTrip),
+      'Home': const HomeScreen(),
+      'Loading': const LoadingScreen(),
+      'ManageTrip': ManageTripScreen(trip: sampleTrip),
+      'MyBookings': const MyBookingsScreen(),
+      'Notification': const NotificationScreen(),
+      'PassengerCalendar': const PassengerCalendarScreen(),
+      'PassengerHome': const PassengerHomeScreen(),
+      'PaymentConfirmation': const PaymentConfirmationScreen(bookingId: '', transactionId: '', amount: 0, paymentMethod: ''),
+      'Payment': const PaymentScreen(amount: "", bookingId: 'booking001', tripId: '', seatNumber: 1),
+      'Profile': const ProfileScreen(),
+      'Rating': const RatingScreen(),
+      'TripDetails': TripDetailsScreen(trip: sampleTrip),
+      'TripExporter': const TripExporterScreen(),
+      'TripHistory': const TripHistoryScreen(),
+      'TripSearch': const TripSearchScreen(),
+      'UserRatings': const UserRatingsScreen(userId: 'user001'),
+      'Vehicle': const VehicleScreen(),
+      'VehicleSelection': const VehicleSelectionScreen(),
+    };
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('قائمة الاختبار')),
+      body: ListView(
+        children: screens.entries.map((entry) {
+          return ListTile(
+            title: Text(entry.key, style: const TextStyle(fontFamily: 'Cairo')),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => entry.value),
+              );
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
+}

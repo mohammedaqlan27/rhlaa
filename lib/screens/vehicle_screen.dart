@@ -1,13 +1,13 @@
 // lib/screens/vehicle_screen.dart
-// شاشة لإضافة / تعديل بيانات المركبة وربطها بالمستخدم
-// تحفظ الحقول بصيغة camelCase وتتحقق من الحقول الإلزامية قبل الحفظ.
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+
+import '../models/vehicle.dart';
+import '../providers/vehicle_provider.dart';
 
 class VehicleScreen extends StatefulWidget {
-  /// عند التعديل يمكن تمرير vehicleId عبر constructor أو عبر Navigator arguments
   final String? vehicleId;
   const VehicleScreen({super.key, this.vehicleId});
 
@@ -18,13 +18,11 @@ class VehicleScreen extends StatefulWidget {
 class _VehicleScreenState extends State<VehicleScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // الحقول الأساسية
   final _plateController = TextEditingController();
   final _vehicleTypeController = TextEditingController();
   final _makeModelYearController = TextEditingController();
   final _maxCapacityController = TextEditingController();
 
-  // الحقول الاختيارية
   final _colorController = TextEditingController();
   final _notesController = TextEditingController();
   final _vehicleOwnerController = TextEditingController();
@@ -33,7 +31,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
   bool _isVerified = false;
   bool _isLoading = false;
   bool _isSaving = false;
-  String? _vehicleId; // المعرف الحالي (للتعديل)
+  String? _vehicleId;
 
   @override
   void initState() {
@@ -41,7 +39,20 @@ class _VehicleScreenState extends State<VehicleScreen> {
     _vehicleId = widget.vehicleId;
     if (_vehicleId != null && _vehicleId!.isNotEmpty) {
       _loadVehicle(_vehicleId!);
+    } else {
+      _fillOwnerFromUser();
     }
+  }
+
+  Future<void> _fillOwnerFromUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final data = doc.data() as Map<String, dynamic>? ?? {};
+      _vehicleOwnerController.text = (data['vehicle_owner'] ?? data['vehicleOwner'] ?? '') as String;
+      setState(() {});
+    } catch (_) {}
   }
 
   @override
@@ -66,15 +77,15 @@ class _VehicleScreenState extends State<VehicleScreen> {
         return;
       }
       final data = doc.data() as Map<String, dynamic>? ?? {};
-      _plateController.text = (data['plateNumber'] as String?) ?? '';
+      _plateController.text = (data['plateNumber'] as String?) ?? (data['plate_number'] as String?) ?? '';
       _vehicleTypeController.text = (data['vehicleType'] as String?) ?? '';
       _makeModelYearController.text = (data['makeModelYear'] as String?) ?? '';
       _maxCapacityController.text = (data['maxCapacity']?.toString()) ?? '';
       _colorController.text = (data['color'] as String?) ?? '';
       _notesController.text = (data['notes'] as String?) ?? '';
-      _vehicleOwnerController.text = (data['vehicleOwner'] as String?) ?? '';
-      _licenseNumberController.text = (data['licenseNumber']?.toString()) ?? '';
-      _isVerified = (data['isVerified'] as bool?) ?? false;
+      _vehicleOwnerController.text = (data['vehicleOwner'] as String?) ?? (data['vehicle_owner'] as String?) ?? '';
+      _licenseNumberController.text = (data['licenseNumber']?.toString()) ?? (data['license_number']?.toString()) ?? '';
+      _isVerified = (data['isverified'] as bool?) ?? (data['isVerified'] as bool?) ?? false;
       setState(() {});
     } catch (e) {
       debugPrint('VehicleScreen._loadVehicle error: $e');
@@ -110,44 +121,44 @@ class _VehicleScreenState extends State<VehicleScreen> {
       final vehicleOwner = _vehicleOwnerController.text.trim();
       final licenseNumber = _licenseNumberController.text.trim();
 
-      final data = <String, dynamic>{
-        'plateNumber': plate,
-        'vehicleType': vehicleType,
-        'makeModelYear': makeModelYear,
-        'maxCapacity': maxCapacity,
-        'color': color,
-        'notes': notes,
-        'vehicleOwner': vehicleOwner,
-        'licenseNumber': licenseNumber,
-        'isVerified': _isVerified,
-        'ownerUserId': uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+      final vehicle = Vehicle(
+        id: _vehicleId ?? '',
+        driverId: uid,
+        makeModelYear: makeModelYear,
+        maxCapacity: maxCapacity,
+        plateNumber: plate,
+        vehicleOwner: vehicleOwner,
+        vehicleType: vehicleType.isNotEmpty ? vehicleType : null,
+        color: color.isNotEmpty ? color : null,
+        licenseNumber: licenseNumber.isNotEmpty ? licenseNumber : null,
+        isVerified: _isVerified,
+        notes: notes.isNotEmpty ? notes : null,
+      );
 
-      // إزالة الحقول الفارغة لتجنّب الكتابة بقيم فارغة غير مرغوبة
-      data.removeWhere((k, v) => v == null || (v is String && v.isEmpty));
-
-      final vehiclesRef = FirebaseFirestore.instance.collection('vehicles');
+      final vehicleProvider = context.read<VehicleProvider>();
 
       if (_vehicleId != null && _vehicleId!.isNotEmpty) {
-        // تحديث مركبة موجودة
-        await vehiclesRef.doc(_vehicleId).update(data);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث بيانات المركبة')));
+        final ok = await vehicleProvider.updateVehicle(_vehicleId!, vehicle);
+        if (ok) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث بيانات المركبة')));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في تحديث المركبة')));
+        }
       } else {
-        // إنشاء مركبة جديدة
-        final docRef = await vehiclesRef.add({
-          ...data,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        _vehicleId = docRef.id;
-
-        // ربط المركبة بمستخدم (إضافة المعرف إلى مصفوفة vehicleIds في مستند المستخدم)
-        final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-        await userRef.set({
-          'vehicleIds': FieldValue.arrayUnion([docRef.id])
-        }, SetOptions(merge: true));
-
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إضافة المركبة بنجاح')));
+        final id = await vehicleProvider.addVehicle(vehicle);
+        if (id != null) {
+          _vehicleId = id;
+          await FirebaseFirestore.instance.collection('users').doc(uid).set({
+            'vehicleIds': FieldValue.arrayUnion([id]),
+            'plate_number': plate,
+            'vehicle_owner': vehicleOwner,
+            'carPlateNumber': plate,
+            'vehicleOwner': vehicleOwner,
+          }, SetOptions(merge: true));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إضافة المركبة بنجاح')));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في إضافة المركبة')));
+        }
       }
 
       if (mounted) Navigator.of(context).pop(true);
@@ -183,17 +194,20 @@ class _VehicleScreenState extends State<VehicleScreen> {
         return;
       }
 
-      await FirebaseFirestore.instance.collection('vehicles').doc(_vehicleId).delete();
+      final vehicleProvider = context.read<VehicleProvider>();
+      final ok = await vehicleProvider.removeVehicle(_vehicleId!, uid);
+      if (ok) {
+        final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+        await userRef.set({
+          'vehicleIds': FieldValue.arrayRemove([_vehicleId])
+        }, SetOptions(merge: true));
 
-      // إزالة المعرف من مصفوفة vehicleIds في مستند المستخدم
-      final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-      await userRef.set({
-        'vehicleIds': FieldValue.arrayRemove([_vehicleId])
-      }, SetOptions(merge: true));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم حذف المركبة')));
-        Navigator.of(context).pop(true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم حذف المركبة')));
+          Navigator.of(context).pop(true);
+        }
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في حذف المركبة')));
       }
     } catch (e) {
       debugPrint('VehicleScreen._deleteVehicle error: $e');
@@ -224,118 +238,119 @@ class _VehicleScreenState extends State<VehicleScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
-                      child: ListView(
-                        children: [
-                          TextFormField(
-                            controller: _plateController,
-                            decoration: const InputDecoration(
-                              labelText: 'رقم لوحة السيارة',
-                              prefixIcon: Icon(Icons.confirmation_number),
-                            ),
-                            validator: (v) => _requiredValidator('رقم لوحة السيارة', v),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _vehicleTypeController,
-                            decoration: const InputDecoration(
-                              labelText: 'نوع المركبة (مثال: حافلة، فان، سيدان)',
-                              prefixIcon: Icon(Icons.directions_car),
-                            ),
-                            validator: (v) => _requiredValidator('نوع المركبة', v),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _makeModelYearController,
-                            decoration: const InputDecoration(
-                              labelText: 'موديل / سنة الصنع',
-                              prefixIcon: Icon(Icons.calendar_month),
-                            ),
-                            validator: (v) => _requiredValidator('موديل المركبة', v),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _maxCapacityController,
-                            decoration: const InputDecoration(
-                              labelText: 'الحد الأقصى للركاب (عدد المقاعد)',
-                              prefixIcon: Icon(Icons.event_seat),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (v) {
-                              final err = _requiredValidator('عدد المقاعد', v);
-                              if (err != null) return err;
-                              final n = int.tryParse(v!.trim());
-                              if (n == null || n <= 0) return 'يرجى إدخال عدد مقاعد صالح';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _colorController,
-                            decoration: const InputDecoration(
-                              labelText: 'اللون (اختياري)',
-                              prefixIcon: Icon(Icons.color_lens),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _vehicleOwnerController,
-                            decoration: const InputDecoration(
-                              labelText: 'اسم مالك المركبة الرسمي (اختياري)',
-                              prefixIcon: Icon(Icons.badge),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _licenseNumberController,
-                            decoration: const InputDecoration(
-                              labelText: 'رقم رخصة المركبة / ترخيص (اختياري)',
-                              prefixIcon: Icon(Icons.card_membership),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _notesController,
-                            decoration: const InputDecoration(
-                              labelText: 'ملاحظات إضافية (اختياري)',
-                              prefixIcon: Icon(Icons.note),
-                            ),
-                            maxLines: 3,
-                          ),
-                          const SizedBox(height: 12),
-                          SwitchListTile(
-                            title: const Text('موثوقة / تم التحقق منها'),
-                            value: _isVerified,
-                            onChanged: (val) => setState(() => _isVerified = val),
-                            secondary: const Icon(Icons.verified),
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton.icon(
-                            onPressed: _isSaving ? null : _saveVehicle,
-                            icon: _isSaving
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Icon(Icons.save),
-                            label: Text(_isSaving ? 'جاري الحفظ...' : (_vehicleId != null ? 'حفظ التغييرات' : 'إضافة المركبة')),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              minimumSize: const Size.fromHeight(50),
-                            ),
-                          ),
-                        ],
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  children: [
+                    TextFormField(
+                      controller: _plateController,
+                      decoration: const InputDecoration(
+                        labelText: 'رقم لوحة السيارة',
+                        prefixIcon: Icon(Icons.confirmation_number),
+                      ),
+                      validator: (v) => _requiredValidator('رقم لوحة السيارة', v),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _vehicleTypeController,
+                      decoration: const InputDecoration(
+                        labelText: 'نوع المركبة (مثال: حافلة، فان، سيدان)',
+                        prefixIcon: Icon(Icons.directions_car),
+                      ),
+                      validator: (v) => _requiredValidator('نوع المركبة', v),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _makeModelYearController,
+                      decoration: const InputDecoration(
+                        labelText: 'موديل / سنة الصنع',
+                        prefixIcon: Icon(Icons.calendar_month),
+                      ),
+                      validator: (v) => _requiredValidator('موديل المركبة', v),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _maxCapacityController,
+                      decoration: const InputDecoration(
+                        labelText: 'الحد الأقصى للركاب (عدد المقاعد)',
+                        prefixIcon: Icon(Icons.event_seat),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        final err = _requiredValidator('عدد المقاعد', v);
+                        if (err != null) return err;
+                        final n = int.tryParse(v!.trim());
+                        if (n == null || n <= 0) return 'يرجى إدخال عدد مقاعد صالح';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _colorController,
+                      decoration: const InputDecoration(
+                        labelText: 'اللون (اختياري)',
+                        prefixIcon: Icon(Icons.color_lens),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _vehicleOwnerController,
+                      decoration: const InputDecoration(
+                        labelText: 'اسم مالك المركبة الرسمي (اختياري)',
+                        prefixIcon: Icon(Icons.badge),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _licenseNumberController,
+                      decoration: const InputDecoration(
+                        labelText: 'رقم رخصة المركبة / ترخيص (اختياري)',
+                        prefixIcon: Icon(Icons.card_membership),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'ملاحظات إضافية (اختياري)',
+                        prefixIcon: Icon(Icons.note),
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      title: const Text('موثوقة / تم التحقق منها'),
+                      value: _isVerified,
+                      onChanged: (val) => setState(() => _isVerified = val),
+                      secondary: const Icon(Icons.verified),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: _isSaving ? null : _saveVehicle,
+                      icon: _isSaving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.save),
+                      label: Text(_isSaving ? 'جاري الحفظ...' : (_vehicleId != null ? 'حفظ التغييرات' : 'إضافة المركبة')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }

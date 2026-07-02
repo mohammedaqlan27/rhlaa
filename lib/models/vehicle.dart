@@ -1,20 +1,18 @@
+// lib/models/vehicle.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Vehicle {
   final String id;
   final String driverId;
-
   final String makeModelYear;
   final String? vehicleType;
   final String? color;
   final int maxCapacity;
-
   final String plateNumber;
   final String? licenseNumber;
   final String vehicleOwner;
   final bool isVerified;
   final String? notes;
-
   final Timestamp? createdAt;
 
   Vehicle({
@@ -32,24 +30,29 @@ class Vehicle {
     this.createdAt,
   });
 
-  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
+  /// توافقية: بعض الأكواد قد تستخدم ownerUserId
+  String get ownerUserId => driverId;
+
   Map<String, dynamic> toMap() {
     return {
       'driverId': driverId,
+      'ownerUserId': driverId,
       'makeModelYear': makeModelYear,
       'vehicleType': vehicleType,
       'color': color,
       'maxCapacity': maxCapacity,
       'plateNumber': plateNumber,
+      'plate_number': plateNumber,
       'licenseNumber': licenseNumber,
       'vehicleOwner': vehicleOwner,
+      'vehicle_owner': vehicleOwner,
+      'isverified': isVerified,
       'isVerified': isVerified,
       'notes': notes,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-    };
+    }..removeWhere((k, v) => v == null);
   }
 
-  /// إنشاء نموذج من مستند Firestore يدعم المرونة العالية بين صيغ الحقول
   factory Vehicle.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -67,7 +70,7 @@ class Vehicle {
         if (v is int) return v;
         if (v is num) return v.toInt();
         if (v is String) {
-          final parsed = int.tryParse(v.replaceAll(',', ''));
+          final parsed = int.tryParse(v.replaceAll(RegExp(r'[^\d]'), ''));
           if (parsed != null) return parsed;
         }
       }
@@ -101,42 +104,34 @@ class Vehicle {
       return null;
     }
 
-    final driverId = _getString(['driverId', 'driver_id'], '');
-    final makeModelYear = _getString(['makeModelYear', 'make_model_year'], 'غير محدد');
-
-    final vehicleTypeRaw = _getString(['vehicleType', 'vehicle_type'], '');
-    final colorRaw = _getString(['color'], '');
-    final licenseNumberRaw = _getString(['licenseNumber', 'license_number'], '');
-    final notesRaw = _getString(['notes'], '');
-
-    final vehicleType = vehicleTypeRaw.isNotEmpty ? vehicleTypeRaw : null;
-    final color = colorRaw.isNotEmpty ? colorRaw : null;
-    final licenseNumber = licenseNumberRaw.isNotEmpty ? licenseNumberRaw : null;
-    final notes = notesRaw.isNotEmpty ? notesRaw : null;
-
+    final driverId = _getString(['driverId', 'ownerUserId', 'driver_id'], '');
+    final makeModelYear = _getString(['makeModelYear', 'make_model_year', 'makeModel'], 'غير محدد');
+    final vehicleType = _getString(['vehicleType', 'vehicle_type'], '');
+    final color = _getString(['color'], '');
+    final licenseNumber = _getString(['licenseNumber', 'license_number'], '');
+    final notes = _getString(['notes'], '');
     final maxCapacity = _getInt(['maxCapacity', 'max_capacity'], 0);
-    final plateNumber = _getString(['plateNumber', 'plate_number'], '');
+    final plateNumber = _getString(['plateNumber', 'plate_number', 'plate'], '');
     final vehicleOwner = _getString(['vehicleOwner', 'vehicle_owner'], 'غير محدد');
-    final isVerified = _getBool(['isVerified', 'is_verified'], false);
-    final createdAt = _getTimestampNullable(['createdAt', 'created_at']);
+    final isVerified = _getBool(['isverified', 'isVerified'], false);
+    final createdAt = _getTimestampNullable(['createdAt', 'created_at', 'created']);
 
     return Vehicle(
       id: doc.id,
       driverId: driverId,
       makeModelYear: makeModelYear,
-      vehicleType: vehicleType,
-      color: color,
+      vehicleType: vehicleType.isNotEmpty ? vehicleType : null,
+      color: color.isNotEmpty ? color : null,
       maxCapacity: maxCapacity,
       plateNumber: plateNumber,
-      licenseNumber: licenseNumber,
+      licenseNumber: licenseNumber.isNotEmpty ? licenseNumber : null,
       vehicleOwner: vehicleOwner,
       isVerified: isVerified,
-      notes: notes,
+      notes: notes.isNotEmpty ? notes : null,
       createdAt: createdAt,
     );
   }
 
-  /// تم إصلاح الـ copyWith لتقبل تحديث الـ معرفات عند الحاجة البرمجية
   Vehicle copyWith({
     String? id,
     String? driverId,
@@ -169,5 +164,5 @@ class Vehicle {
 
   @override
   String toString() =>
-      'Vehicle(ID: $id, Model: $makeModelYear, Plate: $plateNumber, Verified: $isVerified)';
+      'Vehicle(ID: $id, Model: $makeModelYear, Plate: $plateNumber, Owner: $vehicleOwner, Verified: $isVerified)';
 }

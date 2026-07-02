@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Trip {
-  final String id; // تم جعله غير اختياري لضمان استقرار شاشات العرض والـ UI
+  final String id;
   final String title;
   final String description;
   final String driverId;
@@ -14,14 +14,14 @@ class Trip {
 
   final int totalSeats;
   final int availableSeats;
-  final List<bool> seatStatus;
+  final List<bool> seatStatus; // مصفوفة حالة المقاعد
 
   final DateTime? departureTime;
   final DateTime? date;
   final String time;
   final String flexibleWindow;
 
-  final String status;
+  final String status; // (active, cancelled, completed)
   final double price;
   final double driverRating;
 
@@ -31,195 +31,167 @@ class Trip {
   final Timestamp? createdAt;
 
   Trip({
-    this.id = '',
+    required this.id,
     this.title = '',
     this.description = '',
     this.driverId = '',
     this.driverName = '',
-    this.tripCategory = 'داخلية',
+    this.tripCategory = '',
     this.origin = '',
     this.destination = '',
     this.vehicleType = '',
     this.vehicleId,
     this.totalSeats = 0,
     this.availableSeats = 0,
-    List<bool>? seatStatus,
+    required this.seatStatus,
     this.departureTime,
     this.date,
-    this.time = 'صباحًا',
+    this.time = '',
     this.flexibleWindow = '',
     this.status = 'active',
     this.price = 0.0,
     this.driverRating = 0.0,
-    this.carPlateNumber = 'غير متوفر',
-    this.carOwnerOfficialName = 'غير متوفر',
+    this.carPlateNumber = '',
+    this.carOwnerOfficialName = '',
     this.createdAt,
-  }) : seatStatus = seatStatus ?? List<bool>.filled(totalSeats > 0 ? totalSeats : 0, true);
+  });
 
-  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
-  Map<String, dynamic> toMap() {
-    final Map<String, dynamic> map = <String, dynamic>{};
+  /// --- الإضافة الجديدة: معالجة البيانات القادمة من Provider ---
+  factory Trip.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>? ?? {};
 
-    if (title.isNotEmpty) map['title'] = title;
-    if (description.isNotEmpty) map['description'] = description;
-    if (driverId.isNotEmpty) map['driverId'] = driverId;
-    if (driverName.isNotEmpty) map['driverName'] = driverName;
-    map['tripCategory'] = tripCategory;
-    if (origin.isNotEmpty) map['origin'] = origin;
-    if (destination.isNotEmpty) map['destination'] = destination;
-    if (vehicleType.isNotEmpty) map['vehicleType'] = vehicleType;
-    if (vehicleId != null && vehicleId!.isNotEmpty) map['vehicleId'] = vehicleId;
-    map['totalSeats'] = totalSeats;
-    map['availableSeats'] = availableSeats;
-    map['seatStatus'] = seatStatus;
-    if (departureTime != null) map['departureTime'] = Timestamp.fromDate(departureTime!);
-    if (date != null) map['date'] = Timestamp.fromDate(date!);
-    map['time'] = time;
-    map['flexibleWindow'] = flexibleWindow;
-    map['status'] = status;
-    map['price'] = price;
-    map['driverRating'] = driverRating;
-    map['carPlateNumber'] = carPlateNumber;
-    map['carOwnerOfficialName'] = carOwnerOfficialName;
+    int total = data['totalSeats'] ?? data['total_seats'] ?? 0;
 
-    map['createdAt'] = createdAt ?? FieldValue.serverTimestamp();
-
-    return map;
+    return Trip(
+      id: doc.id,
+      title: data['title'] ?? data['tripTitle'] ?? 'رحلة مجدولة',
+      description: data['description'] ?? '',
+      driverId: data['driverId'] ?? '',
+      driverName: data['driverName'] ?? 'سائق رحلاء',
+      tripCategory: data['tripCategory'] ?? '',
+      origin: data['origin'] ?? 'غير محدد',
+      destination: data['destination'] ?? 'غير محدد',
+      vehicleType: data['vehicleType'] ?? 'سيارة سيدان',
+      totalSeats: total,
+      availableSeats: data['availableSeats'] ?? data['available_seats'] ?? 0,
+      // معالجة ذكية للمقاعد لضمان عدم حدوث Crash
+      seatStatus: data['seatStatus'] != null
+          ? List<bool>.from(data['seatStatus'])
+          : List<bool>.filled(total > 0 ? total : 4, true),
+      departureTime: data['departureTime'] is Timestamp
+          ? (data['departureTime'] as Timestamp).toDate()
+          : (data['date'] is Timestamp ? (data['date'] as Timestamp).toDate() : DateTime.now()),
+      status: data['status'] ?? 'active',
+      price: (data['price'] ?? 0).toDouble(),
+      carPlateNumber: data['carPlateNumber'] ?? '',
+      carOwnerOfficialName: data['carOwnerOfficialName'] ?? '',
+    );
   }
 
-  /// إنشاء نموذج من مستند Firestore مع تسوية وحماية متكاملة لمصفوفة المقاعد
+  /// تحويل النموذج إلى Map للكتابة إلى Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'driverId': driverId,
+      'driverName': driverName,
+      'tripCategory': tripCategory,
+      'origin': origin,
+      'destination': destination,
+      'vehicleType': vehicleType,
+      'vehicleId': vehicleId,
+      'totalSeats': totalSeats,
+      'availableSeats': availableSeats,
+      'seatStatus': seatStatus,
+      'departureTime': departureTime != null ? Timestamp.fromDate(departureTime!) : null,
+      'date': date != null ? Timestamp.fromDate(date!) : null,
+      'time': time,
+      'flexibleWindow': flexibleWindow,
+      'status': status,
+      'price': price,
+      'driverRating': driverRating,
+      'carPlateNumber': carPlateNumber,
+      'carOwnerOfficialName': carOwnerOfficialName,
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+    }..removeWhere((key, value) => value == null);
+  }
+
+  /// إنشاء نموذج من مستند Firestore (الطريقة القديمة - تم الإبقاء عليها لضمان التوافق)
   factory Trip.fromDocument(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
+    final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String? getString(List<String> keys, [String? fallback]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v != null) return v.toString();
+    String _s(List<String> keys, [String fallback = '']) {
+      for (var k in keys) {
+        if (data[k] != null && data[k].toString().isNotEmpty) return data[k].toString();
       }
       return fallback;
     }
 
-    int getInt(List<String> keys, [int fallback = 0]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v is int) return v;
+    int _i(List<String> keys, [int fallback = 0]) {
+      for (var k in keys) {
+        var v = data[k];
         if (v is num) return v.toInt();
-        if (v is String) {
-          final parsed = int.tryParse(v);
-          if (parsed != null) return parsed;
-        }
+        if (v is String) return int.tryParse(v) ?? fallback;
       }
       return fallback;
     }
 
-    double getDouble(List<String> keys, [double fallback = 0.0]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v is double) return v;
-        if (v is num) return (v as num).toDouble();
-        if (v is String) {
-          final parsed = double.tryParse(v.replaceAll(',', ''));
-          if (parsed != null) return parsed;
-        }
+    double _d(List<String> keys, [double fallback = 0.0]) {
+      for (var k in keys) {
+        var v = data[k];
+        if (v is num) return v.toDouble();
+        if (v is String) return double.tryParse(v) ?? fallback;
       }
       return fallback;
     }
 
-    Timestamp? getTimestamp(List<String> keys) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v is Timestamp) return v;
-        if (v is DateTime) return Timestamp.fromDate(v);
-        if (v is String) {
-          final parsed = DateTime.tryParse(v);
-          if (parsed != null) return Timestamp.fromDate(parsed);
-        }
+    DateTime? _dt(List<String> keys) {
+      for (var k in keys) {
+        var v = data[k];
+        if (v is Timestamp) return v.toDate();
+        if (v is DateTime) return v;
+        if (v is String) return DateTime.tryParse(v);
       }
       return null;
     }
 
-    List<bool> getSeatStatus(List<String> keys, int seatsFallback) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v is List) {
-          try {
-            final list = v.map<bool>((e) {
-              if (e is bool) return e;
-              if (e is num) return e != 0;
-              if (e is String) {
-                final s = e.toLowerCase();
-                return s == 'true' || s == '1';
-              }
-              return false;
-            }).toList();
-            if (list.isNotEmpty) return list;
-          } catch (_) {}
-        }
+    List<bool> _lsB(String key, int total) {
+      var v = data[key];
+      if (v is List) {
+        return v.map((e) => e is bool ? e : (e.toString().toLowerCase() == 'true')).toList();
+      } else if (v is bool) {
+        return List<bool>.filled(total > 0 ? total : 1, v);
       }
-      return List<bool>.filled(seatsFallback > 0 ? seatsFallback : 0, true);
+      return List<bool>.filled(total > 0 ? total : 0, true);
     }
 
-    final title = getString(['title']) ?? '';
-    final description = getString(['description']) ?? '';
-    final driverId = getString(['driverId', 'driver_id']) ?? '';
-    final driverName = getString(['driverName', 'driver_name']) ?? '';
-    final tripCategory = getString(['tripCategory', 'trip_category']) ?? 'داخلية';
-    final origin = getString(['origin']) ?? '';
-    final destination = getString(['destination']) ?? '';
-    final vehicleType = getString(['vehicleType', 'vehicle_type']) ?? '';
-    final vehicleId = getString(['vehicleId', 'vehicle_id']);
-    final totalSeats = getInt(['totalSeats', 'total_seats'], 0);
-    final availableSeats = getInt(['availableSeats', 'available_seats'], totalSeats);
-    final seatStatus = getSeatStatus(['seatStatus', 'seat_status'], totalSeats);
-
-    final departureTs = getTimestamp(['departureTime', 'departure_time']);
-    final dateTs = getTimestamp(['date', 'trip_date', 'travel_date']);
-
-    final time = getString(['time']) ?? 'صباحًا';
-    final flexibleWindow = getString(['flexibleWindow', 'flexible_window']) ?? '';
-    final status = getString(['status']) ?? 'active';
-    final price = getDouble(['price']) ?? 0.0;
-    final driverRating = getDouble(['driverRating', 'driver_rating']) ?? 0.0;
-
-    final carPlateNumber = getString(['carPlateNumber', 'car_plate_number', 'plateNumber', 'plate_number']) ?? 'غير متوفر';
-    final carOwnerOfficialName = getString(['carOwnerOfficialName', 'car_owner_official_name', 'vehicleOwner', 'vehicle_owner']) ?? 'غير متوفر';
-
-    final createdAt = getTimestamp(['createdAt', 'created_at']);
-
-    final normalizedSeatStatus = List<bool>.from(seatStatus);
-    if (normalizedSeatStatus.isEmpty && totalSeats > 0) {
-      for (int i = 0; i < totalSeats; i++) normalizedSeatStatus.add(true);
-    } else if (normalizedSeatStatus.length < totalSeats) {
-      final diff = totalSeats - normalizedSeatStatus.length;
-      for (int i = 0; i < diff; i++) normalizedSeatStatus.add(true);
-    } else if (normalizedSeatStatus.length > totalSeats && totalSeats > 0) {
-      normalizedSeatStatus.removeRange(totalSeats, normalizedSeatStatus.length);
-    }
+    final totalSeatsCount = _i(['totalSeats', 'total_seats']);
 
     return Trip(
       id: doc.id,
-      title: title,
-      description: description,
-      driverId: driverId,
-      driverName: driverName,
-      tripCategory: tripCategory,
-      origin: origin,
-      destination: destination,
-      vehicleType: vehicleType,
-      vehicleId: vehicleId,
-      totalSeats: totalSeats,
-      availableSeats: availableSeats,
-      seatStatus: normalizedSeatStatus,
-      departureTime: departureTs?.toDate(),
-      date: dateTs?.toDate(),
-      time: time,
-      flexibleWindow: flexibleWindow,
-      status: status,
-      price: price,
-      driverRating: driverRating,
-      carPlateNumber: carPlateNumber,
-      carOwnerOfficialName: carOwnerOfficialName,
-      createdAt: createdAt,
+      title: _s(['title']),
+      description: _s(['description']),
+      driverId: _s(['driverId', 'driver_id']),
+      driverName: _s(['driverName', 'driver_name']),
+      tripCategory: _s(['tripCategory', 'trip_category']),
+      origin: _s(['origin']),
+      destination: _s(['destination']),
+      vehicleType: _s(['vehicleType', 'vehicle_type']),
+      vehicleId: _s(['vehicleId', 'vehicle_id']),
+      totalSeats: totalSeatsCount,
+      availableSeats: _i(['availableSeats', 'available_seats']),
+      seatStatus: _lsB('seatStatus', totalSeatsCount),
+      departureTime: _dt(['departureTime', 'departure_time']),
+      date: _dt(['date', 'trip_date']),
+      time: _s(['time']),
+      flexibleWindow: _s(['flexibleWindow', 'flexible_window']),
+      status: _s(['status'], 'active'),
+      price: _d(['price']),
+      driverRating: _d(['driverRating', 'driver_rating']),
+      carPlateNumber: _s(['carPlateNumber', 'plateNumber', 'car_plate_number']),
+      carOwnerOfficialName: _s(['carOwnerOfficialName', 'car_owner_official_name']),
+      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] : null,
     );
   }
 
@@ -276,7 +248,5 @@ class Trip {
   }
 
   @override
-  String toString() {
-    return 'Trip(id: $id, title: $title, driver: $driverName, price: $price)';
-  }
+  String toString() => 'Trip(ID: $id, From: $origin, To: $destination, Price: $price)';
 }

@@ -1,136 +1,63 @@
-// lib/screens/auth_wrapper.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 import '../models/trip.dart';
 
-// استيراد الشاشات المستخدمة للاختبار
+// استيراد الشاشات
 import 'auth_screen.dart';
-import 'loading_screen.dart';
 import 'home_screen.dart';
 import 'passenger_home_screen.dart' hide Trip;
 import 'driver_home_screen.dart';
-import 'create_trip_screen.dart';
-import 'available_trips_screen.dart';
-import 'trip_details_screen.dart';
-import 'my_bookings_screen.dart';
-import 'rating_screen.dart';
-import 'notification_screen.dart';
-import 'payment_screen.dart';
-import 'driver_bookings_screen.dart';
-import 'driver_trips_screen.dart';
-import 'driver_calendar_screen.dart';
-import 'edit_profile_screen.dart';
-import 'edit_trip_screen.dart';
-import 'manage_trip_screen.dart';
-import 'passenger_calendar_screen.dart';
-import 'profile_screen.dart';
-import 'trip_history_screen.dart';
-import 'trip_search_screen.dart';
-import 'user_ratings_screen.dart';
-import 'vehicle_selection_screen.dart';
-import 'payment_confirmation_screen.dart';
-import 'vehicle_screen.dart';
+import 'loading_screen.dart';
 
-/// AuthWrapper مخصص للاختبار: يعرض قائمة شاشات يمكن فتحها للتأكد من عمل كل شاشة.
-/// ملاحظة: هذا الملف للاختبار فقط — لا تتركه بهذا الشكل في بيئة الإنتاج.
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const TestAllScreens();
+    // مراقبة حالة تسجيل الدخول من Firebase
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // 1. إذا كان التطبيق يتصل بـ Firebase
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingScreen();
+        }
+
+        // 2. إذا كان المستخدم مسجل الدخول
+        if (snapshot.hasData && snapshot.data != null) {
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+          // جلب بيانات المستخدم من Firestore فوراً إذا لم تكن موجودة
+          if (userProvider.currentUser == null) {
+            userProvider.fetchUserById(snapshot.data!.uid);
+          }
+
+          // توجيه المستخدم للشاشة الرئيسية العامة (التي تفرز بين السائق والراكب)
+          return const HomeScreen();
+
+          // ملاحظة: إذا أردت العودة لشاشة الاختبار، استبدل السطر أعلاه بـ:
+          // return const TestAllScreens();
+        }
+
+        // 3. إذا لم يكن مسجلاً، اذهب لشاشة الدخول
+        return const AuthScreen();
+      },
+    );
   }
 }
 
+// شاشة الاختبار (اختيارية، يمكنك الوصول إليها من القائمة الجانبية لاحقاً)
 class TestAllScreens extends StatelessWidget {
   const TestAllScreens({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // بيانات Mock لاستخدامها في الشاشات التي تتطلب معطيات
-    final mockTrip = Trip(
-      id: 'mock-trip-id',
-      title: 'رحلة تجريبية',
-      origin: 'صنعاء',
-      destination: 'عدن',
-      departureTime: DateTime.now(),
-      availableSeats: 3,
-      totalSeats: 4,
-      price: 25.0,
-      status: 'مفعّلة',
-      driverName: 'سائق تجريبي',
-      vehicleType: 'سيارة سيدان',
-      carPlateNumber: 'ABC-123',
-      carOwnerOfficialName: 'معرض تجريبي',
-    );
-
+    // ... (كود شاشة الاختبار الذي أرسلته يبقى كما هو هنا) ...
     return Scaffold(
-      appBar: AppBar(title: const Text("اختبار جميع الصفحات")),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          _buildTile(context, "Auth Screen", const AuthScreen()),
-          _buildTile(context, "Loading Screen", const LoadingScreen()),
-          _buildTile(context, "Home Screen", const HomeScreen()),
-          _buildTile(context, "Passenger Home Screen", const PassengerHomeScreen()),
-          _buildTile(context, "Driver Home Screen", const DriverHomeScreen()),
-          _buildTile(context, "Create Trip Screen", const CreateTripScreen()),
-          _buildTile(context, "Available Trips Screen", const AvailableTripsScreen(destination: 'TestDestination')),
-          _buildTile(context, "Trip Details Screen", TripDetailsScreen(trip: mockTrip)),
-          _buildTile(context, "My Bookings Screen", const MyBookingsScreen()),
-          _buildTile(context, "Rating Screen", const RatingScreen()),
-          _buildTile(context, "Notification Screen", const NotificationScreen()),
-          _buildTile(context, "Payment Screen", const PaymentScreen(tripId: 'mock-trip-id', seatNumber: 1, bookingId: 'mock-booking-id')),
-          _buildTile(context, "Driver Bookings Screen", const DriverBookingsScreen(tripId: 'mock-trip-id')),
-          _buildTile(context, "Driver Trips Screen", const DriverTripsScreen()),
-          _buildTile(context, "Driver Calendar Screen", const DriverCalendarScreen()),
-          _buildTile(context, "Edit Profile Screen", const EditProfileScreen()),
-          _buildTile(context, "Edit Trip Screen", const EditTripScreen(tripId: 'mock-trip-id')),
-          _buildTile(context, "Manage Trip Screen", const ManageTripScreen()),
-          _buildTile(context, "Passenger Calendar Screen", const PassengerCalendarScreen()),
-          _buildTile(context, "Profile Screen", const ProfileScreen()),
-          _buildTile(context, "Trip History Screen", const TripHistoryScreen()),
-          _buildTile(context, "Trip Search Screen", const TripSearchScreen()),
-          _buildTile(context, "User Ratings Screen", const UserRatingsScreen(userId: 'mock-user-id')),
-          _buildTile(context, "Vehicle Selection Screen", const VehicleSelectionScreen()),
-          _buildTile(
-            context,
-            "Payment Confirmation Screen",
-            const PaymentConfirmationScreen(
-              bookingId: 'mock-booking-id',
-              transactionId: 'mock-transaction-id',
-              amount: 100.0,
-              paymentMethod: 'MockMethod',
-            ),
-          ),
-          _buildTile(context, "Vehicle Screen", const VehicleScreen()),
-        ],
-      ),
-    );
-  }
-
-  /// يبني ListTile يفتح الصفحة المعطاة عند الضغط مع زر رجوع للقائمة الرئيسية.
-  ListTile _buildTile(BuildContext context, String title, Widget page) {
-    return ListTile(
-      title: Text(title),
-      trailing: const Icon(Icons.open_in_new),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => Scaffold(
-            appBar: AppBar(
-              title: Text(title),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  // العودة مباشرة إلى القائمة الرئيسية
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                },
-              ),
-            ),
-            body: page,
-          ),
-        ),
-      ),
+      appBar: AppBar(title: const Text("قائمة الاختبار")),
+      body: const Center(child: Text("شاشة الاختبار جاهزة")),
     );
   }
 }

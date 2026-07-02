@@ -83,8 +83,7 @@ class RatingProvider with ChangeNotifier {
   /// جلب المتوسط الحسابي لتقييمات السائق لتحديث الـ Profile
   Future<void> fetchAverageRating(String userId) async {
     try {
-      _averageRating = await _ratingService.getAverageRating(userId);
-      notifyListeners();
+      _averageRating = await _ratingService.getAverageRatingFromUserDoc(userId);      notifyListeners();
     } catch (e) {
       debugPrint('Error fetching average rating: $e');
     }

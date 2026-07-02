@@ -191,7 +191,7 @@ class HomeScreen extends StatelessWidget {
                     builder: (dctx) => AlertDialog(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       title: const Text('تسجيل الخروج', style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold)),
-                      content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من نظام رحلاء حالياً؟', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+                      content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من نظام رحلة حالياً؟', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
                       actions: [
                         TextButton(onPressed: () => Navigator.of(dctx).pop(false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
                         TextButton(onPressed: () => Navigator.of(dctx).pop(true), child: const Text('خروج', style: TextStyle(fontFamily: 'Cairo', color: Colors.redAccent, fontWeight: FontWeight.bold))),
@@ -263,13 +263,13 @@ class HomeScreen extends StatelessWidget {
 
           if (role.contains('driver') || role.contains('سائق')) {
             return AppScaffold(
-              title: 'كابتن رحلاء',
+              title: 'كابتن الرحلة',
               actions: actions,
               body: const DriverHomeScreen(),
             );
           } else {
             return AppScaffold(
-              title: 'رحلاء تنقل للركاب',
+              title: 'رحلة تنقل للركاب',
               actions: actions,
               body: const PassengerHomeScreen(),
             );

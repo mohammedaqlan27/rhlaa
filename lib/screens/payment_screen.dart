@@ -16,7 +16,7 @@ class PaymentScreen extends StatefulWidget {
     super.key,
     required this.tripId,
     required this.seatNumber,
-    required this.bookingId,
+    required this.bookingId, required String amount,
   });
 
   @override

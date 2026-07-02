@@ -2,16 +2,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
 import '../widgets/app_card.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/custom_button.dart';
 
 import '../models/trip.dart';
+import '../providers/vehicle_provider.dart';
 import 'notification_screen.dart';
 import 'user_ratings_screen.dart';
 import 'create_trip_screen.dart';
 import 'trip_details_screen.dart';
+import 'vehicle_screen.dart';
+import 'edit_profile_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
@@ -22,6 +26,9 @@ class DriverHomeScreen extends StatefulWidget {
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
   String? userId;
+  String? _selectedVehicleId;
+  Map<String, dynamic>? _selectedVehicleData;
+  bool _isRefreshing = false;
 
   final Color _logoBlue = const Color(0xFF1E70B8);
   final Color _logoTeal = const Color(0xFF17A5A3);
@@ -32,6 +39,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   void initState() {
     super.initState();
     userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<VehicleProvider>().fetchDriverVehicles(userId!);
+      });
+    }
   }
 
   Stream<List<Trip>> _driverTripsStream() {
@@ -45,18 +57,47 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         .map((snapshot) => snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList());
   }
 
+  Future<void> _refreshAll() async {
+    setState(() => _isRefreshing = true);
+    if (userId != null) {
+      await context.read<VehicleProvider>().fetchDriverVehicles(userId!);
+    }
+    await Future.delayed(const Duration(milliseconds: 600));
+    setState(() => _isRefreshing = false);
+  }
+
   Future<void> _goToCreateTrip() async {
     final uid = userId;
     if (uid == null) return;
 
     try {
+      final vehicleProvider = context.read<VehicleProvider>();
+      final selected = vehicleProvider.selectedVehicle;
+      if (selected != null) {
+        final plate = selected.plateNumber.trim();
+        final owner = selected.vehicleOwner.trim();
+        if (plate.isEmpty || owner.isEmpty) {
+          _showSnack('🚨 بيانات المركبة المختارة ناقصة: تأكد من وجود رقم اللوحة واسم المالك');
+          return;
+        }
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'plate_number': plate,
+          'vehicle_owner': owner,
+          'carPlateNumber': plate,
+          'vehicleOwner': owner,
+        }, SetOptions(merge: true));
+        if (!mounted) return;
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTripScreen()));
+        return;
+      }
+
       final snapshot = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final data = snapshot.data() as Map<String, dynamic>? ?? {};
 
-      final plateNumber = (data['plate_number'] as String?)?.trim();
-      final vehicleOwner = (data['vehicle_owner'] as String?)?.trim();
+      final plateNumber = (data['plate_number'] as String?)?.trim() ?? (data['carPlateNumber'] as String?)?.trim() ?? '';
+      final vehicleOwner = (data['vehicle_owner'] as String?)?.trim() ?? (data['vehicleOwner'] as String?)?.trim() ?? '';
 
-      if (plateNumber == null || plateNumber.isEmpty || vehicleOwner == null || vehicleOwner.isEmpty) {
+      if (plateNumber.isEmpty || vehicleOwner.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -76,6 +117,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         const SnackBar(content: Text('❌ حدث خطأ أثناء التحقق من بيانات مركبتك', style: TextStyle(fontFamily: 'Cairo'))),
       );
     }
+  }
+
+  void _showSnack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text, style: const TextStyle(fontFamily: 'Cairo'))));
   }
 
   Widget _buildDriverCard() {
@@ -107,8 +153,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
         final name = (data['nickname'] as String?) ?? 'سائق رحلاء المتميز';
         final rating = (data['average_rating'] as num?)?.toDouble() ?? 5.0;
-        final plateNumber = (data['plate_number'] as String?) ?? 'غير محددة';
-        final vehicleOwner = (data['vehicle_owner'] as String?) ?? 'غير محدد';
+        final plateNumber = (data['plate_number'] as String?) ?? (data['carPlateNumber'] as String?) ?? 'غير محددة';
+        final vehicleOwner = (data['vehicle_owner'] as String?) ?? (data['vehicleOwner'] as String?) ?? 'غير محدد';
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -204,46 +250,181 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  Widget _buildTripList() {
-    return StreamBuilder<List<Trip>>(
-      stream: _driverTripsStream(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: _logoBlue));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.directions_car_rounded, size: 64, color: Colors.grey.shade400),
-                const SizedBox(height: 12),
-                Text(
-                  'لم تقم بإنشاء أي رحلات كسائق حتى الآن.',
-                  style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600, fontSize: 14),
-                ),
-              ],
-            ),
+  Widget _buildVehiclesSection() {
+    return Consumer<VehicleProvider>(
+      builder: (context, vehicleProvider, _) {
+        final vehicles = vehicleProvider.vehicles;
+        final isLoading = vehicleProvider.isLoading;
+
+        if (isLoading) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: LinearProgressIndicator(color: _logoTeal, backgroundColor: _logoTeal.withOpacity(0.1)),
           );
         }
 
-        final trips = snapshot.data!;
-        return ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          itemCount: trips.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final trip = trips[index];
-            return TripCard(
-              trip: trip,
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
-              },
-              showPrice: true,
-            );
-          },
+        return AppCard(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('مركباتي المسجلة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              if (vehicles.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.directions_car_outlined, size: 28, color: Colors.grey),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text('لم تقم بإضافة مركبات بعد. أضف مركبة لتسهيل إنشاء الرحلات.', style: TextStyle(color: Colors.grey.shade700, fontFamily: 'Cairo')),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VehicleScreen())).then((_) {
+                          if (userId != null) context.read<VehicleProvider>().fetchDriverVehicles(userId!);
+                        }),
+                        icon: const Icon(Icons.add),
+                        label: const Text('أضف مركبة'),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Column(
+                  children: vehicles.map((v) {
+                    final id = v.id;
+                    final plate = v.plateNumber.isNotEmpty ? v.plateNumber : '—';
+                    final owner = v.vehicleOwner;
+                    final type = v.vehicleType ?? '';
+                    final capacity = v.maxCapacity.toString();
+
+                    final selected = _selectedVehicleId == id;
+
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          if (selected) {
+                            _selectedVehicleId = null;
+                            _selectedVehicleData = null;
+                            vehicleProvider.selectVehicleById(null);
+                          } else {
+                            _selectedVehicleId = id;
+                            _selectedVehicleData = {
+                              'id': v.id,
+                              'plateNumber': v.plateNumber,
+                              'vehicleOwner': v.vehicleOwner,
+                              'vehicleType': v.vehicleType,
+                              'maxCapacity': v.maxCapacity,
+                            };
+                            vehicleProvider.selectVehicleById(id);
+                          }
+                        });
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: selected ? _logoTeal.withOpacity(0.08) : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: selected ? _logoTeal : Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 22,
+                              backgroundColor: _logoBlue.withOpacity(0.12),
+                              child: const Icon(Icons.directions_car, color: Colors.black54),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('$type • $plate', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  Text('المالك: $owner • المقاعد: $capacity', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade700, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => VehicleScreen(vehicleId: id))).then((value) {
+                                  if (userId != null) context.read<VehicleProvider>().fetchDriverVehicles(userId!);
+                                });
+                              },
+                              icon: const Icon(Icons.edit_outlined),
+                              tooltip: 'تعديل المركبة',
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VehicleScreen())).then((_) {
+                      if (userId != null) context.read<VehicleProvider>().fetchDriverVehicles(userId!);
+                    }),
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('إضافة مركبة جديدة'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildTripList() {
+    return SizedBox(
+      height: 420,
+      child: StreamBuilder<List<Trip>>(
+        stream: _driverTripsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator(color: _logoBlue));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.directions_car_rounded, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text(
+                    'لم تقم بإنشاء أي رحلات كسائق حتى الآن.',
+                    style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final trips = snapshot.data!;
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            itemCount: trips.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final trip = trips[index];
+              return TripCard(
+                trip: trip,
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
+                },
+                showPrice: true,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -277,28 +458,65 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView( // الحماية الكبرى لواجهة المستخدم من أي تضارب مساحات
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDriverCard(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.history_toggle_off_rounded, size: 18, color: _logoBlue),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'رحلاتي المضافة حالياً',
-                      style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-                    ),
-                  ],
+        child: RefreshIndicator(
+          onRefresh: _refreshAll,
+          color: _logoTeal,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDriverCard(),
+                const SizedBox(height: 6),
+                _buildVehiclesSection(),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.history_toggle_off_rounded, size: 18, color: _logoBlue),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'رحلاتي المضافة حالياً',
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+                      ),
+                      const Spacer(),
+                      if (_selectedVehicleData != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(color: _logoTeal.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.directions_car, size: 16, color: Colors.black54),
+                              const SizedBox(width: 6),
+                              Text('المركبة المختارة', style: TextStyle(fontFamily: 'Cairo', color: Colors.black87, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              _buildTripList(), // تم إزالته من الـ Expanded لحمايته داخل الـ SingleChildScrollView
-            ],
+                _buildTripList(),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0,
+        onTap: (i) {
+          if (i == 1) {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const VehicleScreen()));
+          } else if (i == 2) {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+          }
+        },
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.home, color: _logoBlue), label: 'لوحة'),
+          BottomNavigationBarItem(icon: Icon(Icons.directions_car, color: _logoTeal), label: 'مركباتي'),
+          BottomNavigationBarItem(icon: Icon(Icons.person, color: _logoGreen), label: 'ملفي'),
+        ],
       ),
     );
   }

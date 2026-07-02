@@ -188,7 +188,7 @@ class _RatingScreenState extends State<RatingScreen> {
   @override
   Widget build(BuildContext context) {
     _readRouteArgsIfNeeded();
-    final displayName = targetUserName.isNotEmpty ? targetUserName : 'مستخدم رحلاء';
+    final displayName = targetUserName.isNotEmpty ? targetUserName : 'مستخدم رحلة';
 
     return Scaffold(
       backgroundColor: _backgroundColor,
@@ -226,7 +226,7 @@ class _RatingScreenState extends State<RatingScreen> {
                     style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                   Text(
-                    'رأيك يساعدنا في الحفاظ على أمان وموثوقية مجتمع رحلاء',
+                    'رأيك يساعدنا في الحفاظ على أمان وموثوقية مجتمع رحلة',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey.shade500),
                   ),

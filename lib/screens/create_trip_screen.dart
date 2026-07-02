@@ -1,13 +1,16 @@
+// lib/screens/create_trip_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../services/user_service.dart';
+import '../widgets/app_scaffold.dart';
+import '../widgets/app_card.dart';
+import '../widgets/custom_button.dart';
+import '../providers/vehicle_provider.dart';
 import 'edit_profile_screen.dart';
-import '../services/trip_service.dart';
-import '../models/trip.dart';
+import 'vehicle_screen.dart';
 
 class CreateTripScreen extends StatefulWidget {
   const CreateTripScreen({super.key});
@@ -20,52 +23,49 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-  final _flexibleWindowController = TextEditingController();
 
   String? _driverCarPlateNumber;
   String? _driverCarOwnerOfficialName;
   bool _isLoadingUserData = true;
   bool _isSubmitting = false;
 
-  // مستخلص ألوان اللوجو لتطبيق رحلاء
   final Color _logoBlue = const Color(0xFF1E70B8);
-  final Color _logoTeal = const Color(0xFF17A5A3);
   final Color _logoGreen = const Color(0xFF4EBF64);
-  final Color _backgroundColor = const Color(0xFFF8FAFC);
 
-  final List<String> origins = ['صنعاء', 'عدن', 'تعز', 'الحديدة'];
-  final List<String> titles = ['رحلة صنعاء إلى عدن', 'رحلة عدن إلى تعز', 'رحلة تعز إلى صنعاء', 'رحلة خاصة'];
-  final List<String> times = ['صباحًا', 'مساءً'];
-  final List<String> currencies = ['ريال يمني', 'ريال سعودي'];
-  final List<String> carTypes = ['سيارة سيدان', 'سيارة دفع رباعي', 'سيارة فان'];
-  final List<String> tripCategories = ['داخلية', 'خارجية'];
+  final List<String> origins = ['صنعاء', 'عدن', 'تعز', 'الحديدة', 'إب', 'حضرموت', 'مأرب'];
+  final List<String> carTypes = ['سيارة سيدان', 'سيارة دفع رباعي', 'سيارة فان', 'حافلة صغيرة'];
 
   String _selectedOrigin = 'صنعاء';
   String _selectedDestination = 'عدن';
-  String _selectedTitle = 'رحلة صنعاء إلى عدن';
-  String _selectedTime = 'صباحًا';
-  String _selectedCurrency = 'ريال يمني';
   String _carType = 'سيارة سيدان';
   String _tripCategory = 'داخلية';
   int _totalSeats = 4;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
 
   @override
   void initState() {
     super.initState();
     _fetchDriverData();
+    // استمع لمزود المركبات لاستخدام المركبة المختارة إن وُجدت
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final vp = context.read<VehicleProvider>();
+      final sel = vp.selectedVehicle;
+      if (sel != null) {
+        _driverCarPlateNumber = sel.plateNumber;
+        _driverCarOwnerOfficialName = sel.vehicleOwner;
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
     _descriptionController.dispose();
     _priceController.dispose();
-    _flexibleWindowController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchDriverData() async {
-    if (!mounted) return;
     setState(() => _isLoadingUserData = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -74,322 +74,265 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     }
 
     try {
-      UserService? userService;
-      try {
-        userService = Provider.of<UserService>(context, listen: false);
-      } catch (_) {}
-
-      if (userService != null) {
-        final appUser = await userService.getUserById(user.uid);
-        if (appUser != null) {
-          _driverCarPlateNumber = appUser.carPlateNumber;
-          _driverCarOwnerOfficialName = appUser.carOwnerOfficialName;
-          setState(() => _isLoadingUserData = false);
-          return;
-        }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        _driverCarPlateNumber = (data['carPlateNumber'] ?? data['plateNumber'] ?? data['plate_number'] ?? '') as String?;
+        _driverCarOwnerOfficialName = (data['carOwnerOfficialName'] ?? data['vehicle_owner'] ?? data['vehicleOwner'] ?? '') as String?;
+      } else {
+        _driverCarPlateNumber = null;
+        _driverCarOwnerOfficialName = null;
       }
 
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final data = doc.data();
-
-      if (data != null) {
-        setState(() {
-          _driverCarPlateNumber = (data['plate_number'] ?? data['carPlateNumber']) as String?;
-          _driverCarOwnerOfficialName = (data['vehicle_owner'] ?? data['carOwnerOfficialName']) as String?;
-        });
+      // إذا كان هناك مركبة مختارة في الـ Provider، استخدمها لتجاوز بيانات الملف
+      final vp = context.read<VehicleProvider>();
+      final sel = vp.selectedVehicle;
+      if (sel != null) {
+        _driverCarPlateNumber = sel.plateNumber;
+        _driverCarOwnerOfficialName = sel.vehicleOwner;
       }
     } catch (e) {
-      _showSnackBar('❌ فشل في جلب بيانات السائق: $e');
+      debugPrint("CreateTripScreen._fetchDriverData error: $e");
     } finally {
       if (mounted) setState(() => _isLoadingUserData = false);
     }
   }
 
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo'))),
-    );
-  }
-
-  bool _validatePrice() {
-    final price = double.tryParse(_priceController.text.trim()) ?? 0;
-    if (_selectedTitle == 'رحلة صنعاء إلى عدن' && _selectedCurrency == 'ريال يمني') {
-      if (price < 8000 || price > 14000) {
-        _showSnackBar('❌ السعر خارج النطاق المسموح (8000–14000 ريال يمني)');
-        return false;
-      }
+  Future<void> _openVehicleScreenAndRefresh() async {
+    final result = await Navigator.push<bool?>(context, MaterialPageRoute(builder: (_) => const VehicleScreen()));
+    // بعد العودة نعيد جلب بيانات المستخدم ونحدث مزود المركبات
+    await _fetchDriverData();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await context.read<VehicleProvider>().fetchDriverVehicles(uid);
     }
-    if (price <= 0) {
-      _showSnackBar('❌ يرجى إدخال سعر صالح للرحلة');
-      return false;
+    if (result == true) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات المركبة', style: TextStyle(fontFamily: 'Cairo'))));
     }
-    return true;
-  }
-
-  Future<bool> _ensureProfileCompleteForDriver() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return false;
-
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final data = doc.data() ?? {};
-
-    final userType = (data['user_type'] ?? data['userType'] ?? '').toString().toLowerCase();
-    if (userType != 'driver' && userType != 'سائق') {
-      _showSnackBar('❌ عذراً، الحسابات المعرفة كمسافرين لا يمكنها إنشاء رحلات');
-      return false;
-    }
-
-    final plate = (data['plate_number'] ?? data['carPlateNumber'] ?? '') as String;
-    final owner = (data['vehicle_owner'] ?? data['carOwnerOfficialName'] ?? '') as String;
-
-    if (plate.trim().isEmpty || owner.trim().isEmpty) {
-      if (!mounted) return false;
-      final goToProfile = await showModalBottomSheet<bool>(
-        context: context,
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-        builder: (ctx) => Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 20),
-              Icon(Icons.directions_car_filled_outlined, size: 50, color: _logoBlue),
-              const SizedBox(height: 16),
-              const Text('إكمال بيانات المركبة مطلوب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
-              const SizedBox(height: 8),
-              const Text('يتطلب نظام رحلاء إدخال رقم اللوحة والمستندات الرسمية لضمان سلامة الركاب.', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')))),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: _logoBlue, foregroundColor: Colors.white),
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('تعديل الملف الشخصي', style: TextStyle(fontFamily: 'Cairo')),
-                    ),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
-      );
-
-      if (goToProfile == true) {
-        if (!mounted) return false;
-        await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-        await _fetchDriverData();
-        return await _ensureProfileCompleteForDriver();
-      }
-      return false;
-    }
-    return true;
   }
 
   Future<void> _submitTrip() async {
-    if (_isSubmitting) return;
-    if (!_formKey.currentState!.validate() || _isLoadingUserData) return;
-    if (!_validatePrice()) return;
+    if (!_formKey.currentState!.validate()) return;
+
+    // إلزامية بيانات المركبة: اسم المالك ورقم اللوحة
+    if ((_driverCarOwnerOfficialName ?? '').trim().isEmpty) {
+      _showCompleteProfileDialog(message: 'يرجى إدخال اسم مالك المركبة');
+      return;
+    }
+    if ((_driverCarPlateNumber ?? '').trim().isEmpty) {
+      _showCompleteProfileDialog(message: 'يرجى إدخال رقم لوحة المركبة');
+      return;
+    }
 
     setState(() => _isSubmitting = true);
 
     try {
-      final ok = await _ensureProfileCompleteForDriver();
-      if (!ok) {
-        setState(() => _isSubmitting = false);
-        return;
-      }
-
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) throw 'يجب تسجيل الدخول أولاً';
 
-      final price = double.tryParse(_priceController.text.trim()) ?? 0;
-      final plate = _driverCarPlateNumber ?? 'غير متوفر';
-      final owner = _driverCarOwnerOfficialName ?? 'غير متوفر';
+      final price = double.tryParse(_priceController.text.trim()) ?? 0.0;
 
-      final Map<String, dynamic> tripMap = {
-        'title': _selectedTitle,
+      final tripData = {
+        'title': 'رحلة من $_selectedOrigin إلى $_selectedDestination',
         'description': _descriptionController.text.trim(),
         'driverId': user.uid,
-        'driverName': user.displayName ?? 'سائق رحلاء',
-        'tripCategory': _tripCategory,
+        'driverName': user.displayName ?? 'سائق موثق',
         'origin': _selectedOrigin,
         'destination': _selectedDestination,
+        'tripCategory': _tripCategory,
         'vehicleType': _carType,
         'totalSeats': _totalSeats,
         'availableSeats': _totalSeats,
         'seatStatus': List<bool>.filled(_totalSeats, true),
         'departureTime': Timestamp.fromDate(_selectedDate),
-        'date': Timestamp.fromDate(_selectedDate),
-        'time': _selectedTime,
-        'flexibleWindow': _flexibleWindowController.text.trim(),
         'status': 'active',
         'price': price,
-        'carPlateNumber': plate,
-        'carOwnerOfficialName': owner,
+        // نستخدم أسماء الحقول المتوافقة مع قاعدة البيانات لديك
+        'plateNumber': _driverCarPlateNumber,
+        'plate_number': _driverCarPlateNumber,
+        'carPlateNumber': _driverCarPlateNumber,
+        'vehicleOwner': _driverCarOwnerOfficialName,
+        'vehicle_owner': _driverCarOwnerOfficialName,
+        'carOwnerOfficialName': _driverCarOwnerOfficialName,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance.collection('trips').add(tripMap);
-      _showSnackBar('✅ تم إدراج رحلتك بنجاح في نظام رحلاء');
-      if (!mounted) return;
-      Navigator.of(context).pop();
+      await FirebaseFirestore.instance.collection('trips').add(tripData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم نشر الرحلة بنجاح', style: TextStyle(fontFamily: 'Cairo'))),
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
-      _showSnackBar('❌ خطأ في الحفظ المباشر: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        title: const Text('جدولة رحلة جديدة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: _logoBlue,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        elevation: 0,
+  void _showCompleteProfileDialog({String message = 'يرجى إكمال بيانات السيارة'}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('بيانات ناقصة', style: TextStyle(fontFamily: 'Cairo')),
+        content: Text(message, style: const TextStyle(fontFamily: 'Cairo')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())).then((_) => _fetchDriverData());
+            },
+            child: const Text('تعديل الملف'),
+          ),
+        ],
       ),
-      body: _isLoadingUserData
-          ? Center(child: CircularProgressIndicator(color: _logoBlue))
-          : SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
+    );
+  }
+
+  Widget _buildRouteSection() {
+    return AppCard(
+      child: Column(
+        children: [
+          _buildDropdown<String>('نقطة الانطلاق', _selectedOrigin, origins, (val) => setState(() => _selectedOrigin = val!)),
+          const Icon(Icons.arrow_downward, color: Colors.grey),
+          _buildDropdown<String>('وجهة الوصول', _selectedDestination, origins, (val) => setState(() => _selectedDestination = val!)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsSection() {
+    return AppCard(
+      child: Column(
+        children: [
+          _buildTextField(_priceController, 'سعر المقعد (ر.ي)', Icons.money, TextInputType.number, validator: (v) {
+            if (v == null || v.trim().isEmpty) return 'يرجى إدخال السعر';
+            final n = double.tryParse(v.trim());
+            if (n == null || n < 0) return 'السعر غير صالح';
+            return null;
+          }),
+          const SizedBox(height: 12),
+          _buildDropdown<String>('نوع المركبة', _carType, carTypes, (val) => setState(() => _carType = val!)),
+          const SizedBox(height: 12),
+          _buildDropdown<int>('عدد المقاعد', _totalSeats, [1, 2, 3, 4, 5, 6, 7], (val) => setState(() => _totalSeats = val!)),
+          const SizedBox(height: 12),
+          ListTile(
+            title: Text('تاريخ الرحلة: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}', style: const TextStyle(fontFamily: 'Cairo')),
+            trailing: const Icon(Icons.calendar_today, color: Colors.blue),
+            onTap: () async {
+              final date = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 30)),
+              );
+              if (date != null) setState(() => _selectedDate = date);
+            },
+          ),
+          const SizedBox(height: 12),
+          if (_isLoadingUserData)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('📍 مسار وجهة الرحلة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _logoBlue)),
-                        const Divider(),
-                        _buildDropdown('عنوان الرحلة', _selectedTitle, titles, (val) => setState(() => _selectedTitle = val)),
-                        Row(
-                          children: [
-                            Expanded(child: _buildDropdown('نقطة الانطلاق', _selectedOrigin, origins, (val) => setState(() => _selectedOrigin = val))),
-                            const SizedBox(width: 8),
-                            Expanded(child: _buildDropdown('الوجهة النهائية', _selectedDestination, origins, (val) => setState(() => _selectedDestination = val))),
-                          ],
-                        ),
-                      ],
+                const SizedBox(height: 6),
+                const Text('معلومات المركبة المستخدمة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('اللوحة: ${_driverCarPlateNumber ?? 'غير محددة'}', style: const TextStyle(fontFamily: 'Cairo')),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('💰 التسعير والركاب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _logoTeal)),
-                        const Divider(),
-                        Row(
-                          children: [
-                            Expanded(child: _buildTextField(_priceController, 'السعر', keyboardType: TextInputType.number, icon: Icons.monetization_on_outlined)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _buildDropdown('العملة', _selectedCurrency, currencies, (val) => setState(() => _selectedCurrency = val))),
-                          ],
-                        ),
-                        _buildDropdown('توقيت الحركة العام', _selectedTime, times, (val) => setState(() => _selectedTime = val)),
-                        _buildDropdown('فئة نوع السيارة وطرازها', _carType, carTypes, (val) => setState(() => _carType = val)),
-                        _buildDropdown('عدد المقاعد المتاحة بالمركبة', _totalSeats, List.generate(10, (i) => i + 1), (val) => setState(() => _totalSeats = val)),
-                      ],
+                    Expanded(
+                      child: Text('المالك: ${_driverCarOwnerOfficialName ?? 'غير محدد'}', style: const TextStyle(fontFamily: 'Cairo')),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    title: Text('📅 تاريخ الانطلاق: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 14)),
-                    trailing: Icon(Icons.calendar_month_outlined, color: _logoBlue),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) setState(() => _selectedDate = picked);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _isSubmitting ? null : _submitTrip,
-                  icon: _isSubmitting
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.add_road_rounded, color: Colors.white),
-                  label: Text(_isSubmitting ? 'جاري بث الرحلة للمسافرين...' : 'تأكيد ونشر الرحلة الآن', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _logoGreen,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 54),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _openVehicleScreenAndRefresh,
+                      icon: const Icon(Icons.directions_car),
+                      label: const Text('اختيار/إضافة مركبة أخرى'),
+                      style: ElevatedButton.styleFrom(backgroundColor: _logoGreen),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())).then((_) => _fetchDriverData()),
+                      child: const Text('تعديل بيانات المركبة في الملف'),
+                    ),
+                  ],
                 ),
               ],
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdown<T>(String label, T value, List<T> items, ValueChanged<T?> onChanged) {
+    return DropdownButtonFormField<T>(
+      value: value,
+      decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(fontFamily: 'Cairo')),
+      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i.toString(), style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildTextField(
+      TextEditingController controller,
+      String label,
+      IconData icon,
+      TextInputType type, {
+        String? Function(String?)? validator,
+      }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: type,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      validator: validator ?? (v) => (v == null || v.trim().isEmpty) ? 'حقل مطلوب' : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppScaffold(
+      title: 'إنشاء رحلة جديدة',
+      isLoading: _isSubmitting,
+      body: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildRouteSection(),
+              const SizedBox(height: 16),
+              _buildDetailsSection(),
+              const SizedBox(height: 24),
+              CustomButton(
+                onPressed: _submitTrip,
+                text: 'نشر الرحلة الآن',
+                icon: Icons.publish,
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDropdown<T>(String label, T currentValue, List<T> items, void Function(T) onChanged) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: DropdownButtonFormField<T>(
-        value: currentValue,
-        items: items.map((item) => DropdownMenuItem(value: item, child: Text(item.toString(), style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)))).toList(),
-        onChanged: (val) { if (val != null) onChanged(val); },
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey[600]),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade200)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _logoBlue)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(TextEditingController controller, String label, {TextInputType keyboardType = TextInputType.text, required IconData icon}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        style: const TextStyle(fontSize: 14),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey[600]),
-          prefixIcon: Icon(icon, size: 20, color: _logoTeal),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _logoBlue)),
-        ),
-        validator: (val) => val == null || val.trim().isEmpty ? 'حقل مطلوب' : null,
       ),
     );
   }

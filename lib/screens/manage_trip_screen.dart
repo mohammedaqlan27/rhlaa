@@ -7,7 +7,7 @@ import '../widgets/app_card.dart';
 import '../widgets/custom_button.dart';
 
 class ManageTripScreen extends StatefulWidget {
-  const ManageTripScreen({super.key});
+  const ManageTripScreen({super.key, required Trip trip});
 
   @override
   State<ManageTripScreen> createState() => _ManageTripScreenState();

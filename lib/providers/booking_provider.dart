@@ -1,6 +1,5 @@
-// lib/providers/booking_provider.dart
 import 'package:flutter/material.dart';
-import '../models/booking_model.dart'; // تم توحيد مسار الاستيراد للموديل الصحيح
+import '../models/booking_model.dart';
 import '../services/booking_service.dart';
 import '../services/payment_service.dart';
 
@@ -25,9 +24,10 @@ class BookingProvider with ChangeNotifier {
     required double pricePerSeat,
     bool isFamily = false,
     int children = 0,
+    String? notes,
   }) async {
     _setLoading(true);
-    _errorMessage = null; // تصفير الخطأ عند بدء عملية جديدة
+    _errorMessage = null;
 
     try {
       final result = await _bookingService.createBooking(
@@ -37,14 +37,16 @@ class BookingProvider with ChangeNotifier {
         tripPricePerSeat: pricePerSeat,
         isFamilyBooking: isFamily,
         childrenCount: children,
+        notes: notes,
       );
 
-      // التحقق من النجاح: إذا كان الـ result ليس خطأ نصياً ومعرفاً طويلًا (UUID)
-      if (result != null && !result.contains(' ') && result.length > 20) {
-        await fetchUserBookings(passengerId); // تحديث القائمة من السيرفر
+      // التحقق من النجاح: إذا كان الـ result هو معرف UUID (طوله عادة > 30)
+      if (result != null && result.length > 20 && !result.contains(' ')) {
+        await fetchUserBookings(passengerId); // تحديث القائمة
         _setLoading(false);
-        return result; // نجاح العملية وإرجاع معرّف الحجز
+        return result;
       } else {
+        // إذا كان الـ result نصاً عربياً فهو رسالة خطأ من السيرفر
         _errorMessage = result ?? 'فشلت عملية الحجز';
         _setLoading(false);
         return null;
@@ -56,14 +58,14 @@ class BookingProvider with ChangeNotifier {
     }
   }
 
-  /// معالجة عملية الدفع لحجز معين وتحديث الحالة فورياً
+  /// معالجة عملية الدفع وتحديث الحالة
   Future<bool> payForBooking({
     required String bookingId,
     required double amount,
     required String method,
   }) async {
     _setLoading(true);
-    _errorMessage = null; // تصفير الخطأ قبل العملية
+    _errorMessage = null;
 
     try {
       final result = await _paymentService.processPayment(
@@ -73,13 +75,12 @@ class BookingProvider with ChangeNotifier {
       );
 
       if (result.success) {
-        // تحديث الحقل الموحد 'id' بدلاً من 'bookingId' المسبب للخطأ
+        // تحديث الحالة محلياً فوراً (Optimistic UI)
         final index = _userBookings.indexWhere((b) => b.id == bookingId);
         if (index != -1) {
-          // تحديث الحالة محلياً للتفاعل الفوري فائق السرعة في الواجهة (Optimistic UI)
           _userBookings[index] = _userBookings[index].copyWith(
             paymentStatus: 'paid',
-            bookingStatus: 'confirmed', // الدفع يؤكد الحجز تلقائياً
+            bookingStatus: 'confirmed',
           );
           notifyListeners();
         }
@@ -97,10 +98,10 @@ class BookingProvider with ChangeNotifier {
     }
   }
 
-  /// جلب حجوزات المستخدم (الراكب) من السيرفر
+  /// جلب حجوزات المستخدم (الراكب)
   Future<void> fetchUserBookings(String userId) async {
     _setLoading(true);
-    _errorMessage = null; // تصفير الخطأ لتحديث حالة الواجهة
+    _errorMessage = null;
 
     try {
       _userBookings = await _bookingService.getBookingsForPassenger(userId);
@@ -111,7 +112,7 @@ class BookingProvider with ChangeNotifier {
     }
   }
 
-  /// إلغاء حجز وتحديث الواجهة برمجياً ومحلياً
+  /// إلغاء حجز وتحديث الواجهة
   Future<bool> cancelUserBooking(String bookingId, String userId) async {
     _setLoading(true);
     _errorMessage = null;
@@ -123,16 +124,17 @@ class BookingProvider with ChangeNotifier {
       );
 
       if (error == null) {
-        // تحديث محلي سريع للحجز المستهدف دون انتظار رد الشبكة بالكامل لإعطاء تجربة سلسة
+        // تحديث محلي سريع
         final index = _userBookings.indexWhere((b) => b.id == bookingId);
         if (index != -1) {
           _userBookings[index] = _userBookings[index].copyWith(
             bookingStatus: 'cancelled',
-            paymentStatus: _userBookings[index].paymentStatus == 'paid' ? 'refund_pending' : 'unpaid',
+            updatedAt: null, // سيتم تحديثه من السيرفر لاحقاً
           );
+          notifyListeners();
         }
 
-        // إعادة جلب خفيفة للتأكيد والمزامنة النهائية مع السيرفر
+        // مزامنة نهائية مع السيرفر
         _userBookings = await _bookingService.getBookingsForPassenger(userId);
         _setLoading(false);
         return true;
@@ -148,19 +150,13 @@ class BookingProvider with ChangeNotifier {
     }
   }
 
-  // ميثود داخلي موحد لإدارة حالة التحميل وإشعار الواجهات
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
   }
 
-  // تنظيف يدوي للأخطاء عند مغادرة الشاشات
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
-}
-
-extension on Booking {
-  get id => null;
 }

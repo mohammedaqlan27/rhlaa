@@ -8,6 +8,7 @@ class RatingService {
   final _uuid = const Uuid();
   final String _collection = 'ratings';
 
+  /// إضافة أو تحديث تقييم مع تحديث إحصائيات المستخدم (السائق/الراكب) تلقائياً
   Future<bool> addOrUpdateRating({
     required String tripId,
     required String bookingId,
@@ -15,9 +16,10 @@ class RatingService {
     required String driverId,
     required int score,
     String? comment,
+    String? note,
   }) async {
     try {
-      // البحث بفلترة دقيقة وسريعة لمنع استهلاك الموارد
+      // 1. التحقق من وجود تقييم سابق من هذا الراكب لهذه الرحلة وهذا الحجز
       QuerySnapshot existing = await _firestore
           .collection(_collection)
           .where('tripId', isEqualTo: tripId)
@@ -27,30 +29,38 @@ class RatingService {
           .get();
 
       if (existing.docs.isNotEmpty) {
+        // تحديث التقييم الموجود
         final docRef = existing.docs.first.reference;
         await docRef.update({
           'score': score,
-          'comment': comment,
           'rating': score.toDouble(),
+          'comment': comment,
+          'note': note,
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        return true;
+      } else {
+        // إضافة تقييم جديد باستخدام الموديل المحدث
+        final ratingId = _uuid.v4();
+        final rating = Rating(
+          id: ratingId,
+          tripId: tripId,
+          bookingId: bookingId,
+          fromUserId: passengerId,
+          toUserId: driverId,
+          passengerId: passengerId, // الحقل الجديد
+          driverId: driverId,       // الحقل الجديد
+          rating: score.toDouble(),
+          score: score,
+          comment: comment,
+          note: note,
+          createdAt: Timestamp.now(),
+        );
+        await _firestore.collection(_collection).doc(ratingId).set(rating.toMap());
       }
 
-      final ratingId = _uuid.v4();
-      final rating = Rating(
-        id: ratingId,
-        fromUserId: passengerId,
-        toUserId: driverId,
-        rating: score.toDouble(),
-        tripId: tripId,
-        bookingId: bookingId,
-        score: score,
-        comment: comment,
-        createdAt: Timestamp.now(), // تخزين كـ Timestamp مباشرة
-      );
+      // 2. تحديث إحصائيات المستخدم (المُقيَّم) في مجموعة users
+      await _updateUserRatingStats(driverId);
 
-      await _firestore.collection(_collection).doc(ratingId).set(rating.toMap());
       return true;
     } catch (e, st) {
       debugPrint('RatingService.addOrUpdateRating error: $e\n$st');
@@ -58,11 +68,53 @@ class RatingService {
     }
   }
 
-  /// جلب التقييمات الموجهة للمستخدم مع فلترة مباشرة من السيرفر (Server-side Filter)
+  /// دالة داخلية لحساب وتحديث متوسط التقييم وعدد التقييمات في مستند المستخدم
+  Future<void> _updateUserRatingStats(String userId) async {
+    if (userId.isEmpty) return;
+    try {
+      // جلب جميع تقييمات هذا المستخدم (التي وجهت إليه)
+      final snapshot = await _firestore
+          .collection(_collection)
+          .where('toUserId', isEqualTo: userId)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        // إذا لم توجد تقييمات، نصفر الإحصائيات
+        await _firestore.collection('users').doc(userId).update({
+          'averageRating': 0.0,
+          'ratingCount': 0,
+        });
+        return;
+      }
+
+      int count = snapshot.docs.length;
+      double totalScore = 0;
+
+      for (var doc in snapshot.docs) {
+        // استخدام الموديل لضمان قراءة البيانات بشكل آمن (Smart Parsing)
+        final ratingObj = Rating.fromDocument(doc);
+        totalScore += ratingObj.rating;
+      }
+
+      double average = totalScore / count;
+
+      // تحديث مستند المستخدم بالحقول الموحدة
+      await _firestore.collection('users').doc(userId).update({
+        'averageRating': double.parse(average.toStringAsFixed(1)), // تقريب لمنزلة واحدة (مثلاً 4.7)
+        'ratingCount': count,
+      });
+
+      debugPrint('Stats updated for $userId: Avg $average, Count $count');
+    } catch (e) {
+      debugPrint('Error updating user rating stats: $e');
+    }
+  }
+
+  /// جلب التقييمات الموجهة للمستخدم (Stream) لعرضها في الملف الشخصي
   Stream<List<Rating>> getRatingsForUser(String userId) {
     return _firestore
         .collection(_collection)
-        .where('toUserId', isEqualTo: userId) // تحسين ضخم لمنع جلب بيانات التطبيق بالكامل
+        .where('toUserId', isEqualTo: userId)
         .snapshots()
         .map((snapshot) {
       final List<Rating> list = [];
@@ -74,47 +126,28 @@ class RatingService {
         }
       }
 
-      // الترتيب بحسب التاريخ الأحدث باستخدام Timestamp
+      // الترتيب يدوياً حسب التاريخ الأحدث (من الأحدث إلى الأقدم)
       list.sort((a, b) {
-        final Timestamp? ta = a.createdAt is Timestamp ? a.createdAt as Timestamp : null;
-        final Timestamp? tb = b.createdAt is Timestamp ? b.createdAt as Timestamp : null;
-
-        final DateTime? taDate = ta?.toDate();
-        final DateTime? tbDate = tb?.toDate();
-
-        if (taDate == null && tbDate == null) return 0;
-        if (taDate == null) return 1;
-        if (tbDate == null) return -1;
-        return tbDate.compareTo(taDate);
+        final DateTime? dateA = a.createdAt?.toDate();
+        final DateTime? dateB = b.createdAt?.toDate();
+        if (dateA == null || dateB == null) return 0;
+        return dateB.compareTo(dateA);
       });
 
       return list;
     });
   }
 
-  /// حساب المتوسط الحسابي بكفاءة عالية ومباشرة عبر السيرفر لتخفيف التكلفة والاكتفاء بقراءات محددة
-  Future<double> getAverageRating(String userId) async {
+  /// جلب متوسط التقييم الحالي من مستند المستخدم مباشرة (للسرعة)
+  Future<double> getAverageRatingFromUserDoc(String userId) async {
     try {
-      final snapshot = await _firestore
-          .collection(_collection)
-          .where('toUserId', isEqualTo: userId)
-          .get();
-
-      if (snapshot.docs.isEmpty) return 0.0;
-
-      final List<double> values = [];
-      for (final doc in snapshot.docs) {
-        try {
-          final rating = Rating.fromDocument(doc);
-          values.add(rating.rating);
-        } catch (_) {}
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        return (data?['averageRating'] ?? 0.0).toDouble();
       }
-
-      if (values.isEmpty) return 0.0;
-      final total = values.reduce((a, b) => a + b);
-      return total / values.length;
+      return 0.0;
     } catch (e) {
-      debugPrint('RatingService.getAverageRating error: $e');
       return 0.0;
     }
   }

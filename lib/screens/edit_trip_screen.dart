@@ -5,7 +5,7 @@ import '../models/trip.dart';
 
 class EditTripScreen extends StatefulWidget {
   final String tripId;
-  const EditTripScreen({super.key, required this.tripId});
+  const EditTripScreen({super.key, required this.tripId, required Trip trip});
 
   @override
   State<EditTripScreen> createState() => _EditTripScreenState();
