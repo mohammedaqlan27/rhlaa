@@ -139,7 +139,7 @@ class UserService {
           return;
         }
 
-        final data = snap.data() as Map<String, dynamic>? ?? {};
+        final data = snap.data() ?? {};
         final Map<String, dynamic> docs = data['documents'] != null
             ? Map<String, dynamic>.from(data['documents'])
             : <String, dynamic>{};
@@ -180,7 +180,7 @@ class UserService {
         await _firestore.runTransaction((tx) async {
           final snap = await tx.get(userRef);
           if (!snap.exists) return;
-          final data = snap.data() as Map<String, dynamic>? ?? {};
+          final data = snap.data() ?? {};
           final Map<String, dynamic> docs = data['documents'] != null
               ? Map<String, dynamic>.from(data['documents'])
               : <String, dynamic>{};

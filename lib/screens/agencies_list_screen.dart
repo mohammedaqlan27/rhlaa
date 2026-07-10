@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/agencies_provider.dart';
 import 'agency_form_screen.dart';
 import '../models/agency.dart';
+import 'agency_detail_screen.dart';
 
 class AgenciesListScreen extends StatefulWidget {
   const AgenciesListScreen({Key? key}) : super(key: key);

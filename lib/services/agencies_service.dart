@@ -13,6 +13,16 @@ class AgenciesService {
   CollectionReference get _col => _firestore.collection('agencies');
   CollectionReference get _transactionsCol => _firestore.collection('agency_transactions');
 
+  // Helper محلي لتحويل القيم إلى double بأمان (يحل محل استدعاءات Agency.toDoubleSafe إن لم تكن متاحة)
+  double _toDoubleSafe(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
   /// إنشاء مكتب جديد
   Future<String> createAgency({
     required String agencyName,
@@ -101,7 +111,7 @@ class AgenciesService {
       final snapshot = await tx.get(docRef);
       if (!snapshot.exists) throw Exception('Agency not found');
       final current = (snapshot.data() as Map<String, dynamic>?)?['walletBalance'];
-      final currentBalance = Agency._toDoubleSafe(current);
+      final currentBalance = _toDoubleSafe(current);
       final newBalance = currentBalance + amount;
       tx.update(docRef, {
         'walletBalance': newBalance,
@@ -111,15 +121,18 @@ class AgenciesService {
       // سجل المعاملة
       final txDoc = _transactionsCol.doc();
       final now = Timestamp.now();
-      tx.set(txDoc, AgencyTransaction(
-        id: txDoc.id,
-        agencyId: agencyId,
-        amount: amount,
-        type: 'credit',
-        reason: reason ?? 'manual_credit',
-        performedBy: performedBy,
-        createdAt: now,
-      ).toMap());
+      tx.set(
+        txDoc,
+        AgencyTransaction(
+          id: txDoc.id,
+          agencyId: agencyId,
+          amount: amount,
+          type: 'credit',
+          reason: reason ?? 'manual_credit',
+          performedBy: performedBy,
+          createdAt: now,
+        ).toMap(),
+      );
     });
   }
 
@@ -131,7 +144,7 @@ class AgenciesService {
       final snapshot = await tx.get(docRef);
       if (!snapshot.exists) throw Exception('Agency not found');
       final current = (snapshot.data() as Map<String, dynamic>?)?['walletBalance'];
-      final currentBalance = Agency._toDoubleSafe(current);
+      final currentBalance = _toDoubleSafe(current);
       if (currentBalance < amount) throw Exception('Insufficient agency wallet balance');
       final newBalance = currentBalance - amount;
       tx.update(docRef, {
@@ -142,15 +155,18 @@ class AgenciesService {
       // سجل المعاملة
       final txDoc = _transactionsCol.doc();
       final now = Timestamp.now();
-      tx.set(txDoc, AgencyTransaction(
-        id: txDoc.id,
-        agencyId: agencyId,
-        amount: amount,
-        type: 'debit',
-        reason: reason ?? 'manual_debit',
-        performedBy: performedBy,
-        createdAt: now,
-      ).toMap());
+      tx.set(
+        txDoc,
+        AgencyTransaction(
+          id: txDoc.id,
+          agencyId: agencyId,
+          amount: amount,
+          type: 'debit',
+          reason: reason ?? 'manual_debit',
+          performedBy: performedBy,
+          createdAt: now,
+        ).toMap(),
+      );
     });
   }
 

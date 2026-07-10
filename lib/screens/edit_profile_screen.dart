@@ -60,7 +60,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (!doc.exists) return;
 
-      final data = doc.data() as Map<String, dynamic>? ?? {};
+      final data = doc.data() ?? {};
 
       String? readString(List<String> keys) {
         for (final k in keys) {

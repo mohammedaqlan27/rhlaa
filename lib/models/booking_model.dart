@@ -63,7 +63,7 @@ class Booking {
   factory Booking.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String _s(List<String> keys, [String fallback = '']) {
+    String s(List<String> keys, [String fallback = '']) {
       for (var k in keys) {
         final v = data[k];
         if (v != null && v.toString().isNotEmpty) return v.toString();
@@ -71,7 +71,7 @@ class Booking {
       return fallback;
     }
 
-    int _i(List<String> keys, [int fallback = 0]) {
+    int i(List<String> keys, [int fallback = 0]) {
       for (var k in keys) {
         final v = data[k];
         if (v is int) return v;
@@ -81,7 +81,7 @@ class Booking {
       return fallback;
     }
 
-    double _d(List<String> keys, [double fallback = 0.0]) {
+    double d(List<String> keys, [double fallback = 0.0]) {
       for (var k in keys) {
         final v = data[k];
         if (v is num) return v.toDouble();
@@ -90,7 +90,7 @@ class Booking {
       return fallback;
     }
 
-    bool _b(List<String> keys, [bool fallback = false]) {
+    bool b(List<String> keys, [bool fallback = false]) {
       for (var k in keys) {
         final v = data[k];
         if (v is bool) return v;
@@ -100,7 +100,7 @@ class Booking {
       return fallback;
     }
 
-    Timestamp? _ts(String key) {
+    Timestamp? ts(String key) {
       final v = data[key];
       if (v is Timestamp) return v;
       if (v is String) {
@@ -112,20 +112,20 @@ class Booking {
 
     return Booking(
       id: doc.id,
-      tripId: _s(['tripId', 'trip_id']),
-      passengerId: _s(['passengerId', 'passenger_id']),
-      passengerNickname: _s(['passengerNickname', 'passenger_nickname', 'passengerName']),
-      driverId: _s(['driverId', 'driver_id']),
-      bookedSeatsCount: _i(['bookedSeatsCount', 'seatsCount', 'seats_count'], 1),
-      totalPrice: _d(['totalPrice', 'total_price', 'price']),
-      isFamilyBooking: _b(['isFamilyBooking', 'is_family_booking']),
-      childrenCount: _i(['childrenCount', 'children_count']),
-      bookingStatus: _s(['bookingStatus', 'status'], 'pending'),
-      paymentStatus: _s(['paymentStatus', 'payment_status'], 'unpaid'),
+      tripId: s(['tripId', 'trip_id']),
+      passengerId: s(['passengerId', 'passenger_id']),
+      passengerNickname: s(['passengerNickname', 'passenger_nickname', 'passengerName']),
+      driverId: s(['driverId', 'driver_id']),
+      bookedSeatsCount: i(['bookedSeatsCount', 'seatsCount', 'seats_count'], 1),
+      totalPrice: d(['totalPrice', 'total_price', 'price']),
+      isFamilyBooking: b(['isFamilyBooking', 'is_family_booking']),
+      childrenCount: i(['childrenCount', 'children_count']),
+      bookingStatus: s(['bookingStatus', 'status'], 'pending'),
+      paymentStatus: s(['paymentStatus', 'payment_status'], 'unpaid'),
       notes: data['notes']?.toString(),
-      canceledAt: _ts('canceledAt'),
-      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : _ts('createdAt'),
-      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] as Timestamp : _ts('updatedAt'),
+      canceledAt: ts('canceledAt'),
+      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : ts('createdAt'),
+      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] as Timestamp : ts('updatedAt'),
     );
   }
 

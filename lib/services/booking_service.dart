@@ -55,7 +55,7 @@ class BookingService {
       final Map<String, Map<String, dynamic>> tripsToUpdate = {};
 
       for (final doc in bookingSnapshot.docs) {
-        final bookingData = doc.data() as Map<String, dynamic>;
+        final bookingData = doc.data();
         final String bookingId = doc.id;
         final String? tripId = bookingData['tripId'] as String?;
         final List<dynamic> seatIndexes = bookingData['seatIndexes'] ?? [];
@@ -275,7 +275,7 @@ class BookingService {
 
       if (booking.passengerId != payerId) return 'غير مصرح لك بتأكيد هذا الحجز.';
 
-      final raw = bookingSnap.data() as Map<String, dynamic>? ?? {};
+      final raw = bookingSnap.data() ?? {};
       final reservedUntilRaw = raw['reservedUntil'];
       Timestamp? reservedUntil;
       if (reservedUntilRaw is Timestamp) reservedUntil = reservedUntilRaw;
@@ -371,7 +371,7 @@ class BookingService {
       final booking = Booking.fromDocument(bookingSnap);
       if (booking.bookingStatus.toLowerCase() != 'pending') return;
 
-      final raw = bookingSnap.data() as Map<String, dynamic>? ?? {};
+      final raw = bookingSnap.data() ?? {};
       final reservedUntilRaw = raw['reservedUntil'];
       Timestamp? reservedUntil;
       if (reservedUntilRaw is Timestamp) reservedUntil = reservedUntilRaw;

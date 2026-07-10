@@ -39,7 +39,7 @@ class AppNotification {
   factory AppNotification.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String _s(List<String> keys, [String fallback = '']) {
+    String s(List<String> keys, [String fallback = '']) {
       for (var k in keys) {
         final v = data[k];
         if (v != null && v.toString().isNotEmpty) return v.toString();
@@ -47,7 +47,7 @@ class AppNotification {
       return fallback;
     }
 
-    bool _b(List<String> keys, [bool fallback = false]) {
+    bool b(List<String> keys, [bool fallback = false]) {
       for (var k in keys) {
         final v = data[k];
         if (v is bool) return v;
@@ -57,7 +57,7 @@ class AppNotification {
       return fallback;
     }
 
-    Map<String, dynamic>? _m(List<String> keys) {
+    Map<String, dynamic>? m(List<String> keys) {
       for (var k in keys) {
         final v = data[k];
         if (v is Map<String, dynamic>) return v;
@@ -74,7 +74,7 @@ class AppNotification {
       return null;
     }
 
-    Timestamp? _ts(List<String> keys) {
+    Timestamp? ts(List<String> keys) {
       for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
@@ -88,13 +88,13 @@ class AppNotification {
 
     return AppNotification(
       id: doc.id,
-      userId: _s(['userId', 'user_id']),
-      title: _s(['title']),
-      body: _s(['body', 'message']),
-      type: _s(['type'], 'general'),
-      metadata: _m(['metadata', 'meta', 'data']),
-      isRead: _b(['isRead', 'is_read', 'read']),
-      createdAt: _ts(['createdAt', 'created_at', 'timestamp']),
+      userId: s(['userId', 'user_id']),
+      title: s(['title']),
+      body: s(['body', 'message']),
+      type: s(['type'], 'general'),
+      metadata: m(['metadata', 'meta', 'data']),
+      isRead: b(['isRead', 'is_read', 'read']),
+      createdAt: ts(['createdAt', 'created_at', 'timestamp']),
     );
   }
 

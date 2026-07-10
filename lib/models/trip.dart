@@ -71,11 +71,12 @@ class Trip {
   factory Trip.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String _s(List<String> keys, [String fallback = '']) {
+    // _s الآن يقبل fallback قابل لأن يكون null
+    String _s(List<String> keys, [String? fallback]) {
       for (var k in keys) {
         if (data[k] != null && data[k].toString().isNotEmpty) return data[k].toString();
       }
-      return fallback;
+      return fallback ?? '';
     }
 
     int _i(List<String> keys, [int fallback = 0]) {
@@ -157,7 +158,8 @@ class Trip {
       else if (v is String) distance = double.tryParse(v);
     }
 
-    final agencyId = _s(['agencyId', 'agency_id'], null);
+    final agencyIdRaw = _s(['agencyId', 'agency_id'], null);
+    final agencyId = agencyIdRaw.isNotEmpty ? agencyIdRaw : null;
 
     return Trip(
       id: doc.id,
@@ -165,7 +167,7 @@ class Trip {
       description: _s(['description']),
       driverId: _s(['driverId', 'driver_id']),
       driverName: _s(['driverName', 'driver_name']),
-      agencyId: agencyId.isNotEmpty ? agencyId : null,
+      agencyId: agencyId,
       tripCategory: _s(['tripCategory', 'category']),
       origin: _s(['origin']),
       destination: _s(['destination']),

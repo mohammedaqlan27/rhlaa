@@ -52,7 +52,7 @@ class Rating {
   factory Rating.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String _s(List<String> keys, [String fallback = '']) {
+    String s(List<String> keys, [String fallback = '']) {
       for (var k in keys) {
         final v = data[k];
         if (v != null && v.toString().isNotEmpty) return v.toString();
@@ -60,7 +60,7 @@ class Rating {
       return fallback;
     }
 
-    double _d(List<String> keys, [double fallback = 0.0]) {
+    double d(List<String> keys, [double fallback = 0.0]) {
       for (var k in keys) {
         final v = data[k];
         if (v is num) return v.toDouble();
@@ -72,7 +72,7 @@ class Rating {
       return fallback;
     }
 
-    Timestamp? _ts(List<String> keys) {
+    Timestamp? ts(List<String> keys) {
       for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
@@ -86,15 +86,15 @@ class Rating {
 
     return Rating(
       id: doc.id,
-      tripId: _s(['tripId', 'trip_id']),
-      bookingId: _s(['bookingId', 'booking_id']),
-      fromUserId: _s(['fromUserId', 'from_user_id', 'fromId']),
-      toUserId: _s(['toUserId', 'to_user_id', 'toId']),
-      rating: _s(['rating', 'ratingLabel', 'rate']),
-      score: _d(['score', 'ratingScore', 'rate_value']),
-      note: _s(['note', 'notes']),
-      comment: _s(['comment', 'comments']),
-      createdAt: _ts(['createdAt', 'created_at', 'timestamp']),
+      tripId: s(['tripId', 'trip_id']),
+      bookingId: s(['bookingId', 'booking_id']),
+      fromUserId: s(['fromUserId', 'from_user_id', 'fromId']),
+      toUserId: s(['toUserId', 'to_user_id', 'toId']),
+      rating: s(['rating', 'ratingLabel', 'rate']),
+      score: d(['score', 'ratingScore', 'rate_value']),
+      note: s(['note', 'notes']),
+      comment: s(['comment', 'comments']),
+      createdAt: ts(['createdAt', 'created_at', 'timestamp']),
     );
   }
 

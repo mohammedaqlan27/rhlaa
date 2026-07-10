@@ -96,7 +96,7 @@ class BookingProvider with ChangeNotifier {
       // 3) نجاح الدفع -> تأكيد الحجز
       final confirmError = await _bookingService.confirmBookingAfterPayment(
         bookingId: bookingId,
-        paymentIntentId: paymentResult.paymentIntentId ?? '',
+        paymentIntentId: paymentResult.transactionId ?? '',
         payerId: passengerId,
       );
 

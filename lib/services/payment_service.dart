@@ -7,11 +7,6 @@
 // - تستخدم CommissionService لحساب تقسيم المبالغ (عمولة التطبيق، عمولة المكتب، صافي السائق).
 // - تؤكد الحجز عبر BookingService بعد نجاح الدفع.
 // - ترسل إشعارات عبر NotificationService.
-//
-// ملاحظات:
-// - تأكد من وجود الحقول المناسبة في مستندات Firestore (bookings, users, agencies, payments).
-// - هذا الملف يفترض وجود الخدمات: BookingService, NotificationService, AgenciesService, CommissionService.
-// - MockProviderAdapter موجود هنا كموفر افتراضي للاختبار. استبدله بمزود حقيقي عند التكامل.
 
 import 'dart:math';
 import 'dart:convert';
@@ -39,6 +34,9 @@ class PaymentResult {
     this.amount,
     this.raw,
   });
+
+  /// بعض الأكواد كانت تتوقع paymentIntentId؛ نعيد transactionId كقيمة افتراضية
+  String? get paymentIntentId => transactionId;
 
   @override
   String toString() => 'PaymentResult(success:$success, transactionId:$transactionId, message:$message)';
@@ -132,7 +130,7 @@ class PaymentService {
   final FirebaseFirestore _firestore;
   final NotificationService _notificationService;
   final BookingService _bookingService;
-  final AgenciesService _agenciesService;
+  final AgenciesService _agenciesService; // اسم موحّد ومهيأ في الـ ctor
   final Uuid _uuid = const Uuid();
 
   /// اسماء المجموعات
@@ -154,22 +152,30 @@ class PaymentService {
         _agenciesService = agenciesService ?? AgenciesService();
 
   // ============================
+  // Helpers
+  // ============================
+
+  double _toDoubleSafe(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  // ============================
   // معالجة الدفع العامّة
   // ============================
-  /// processPayment:
-  /// - يدعم طرق دفع خارجية (paymentMethod != 'wallet') و الدفع من المحفظة (wallet).
-  /// - يسجل عملية الدفع في مجموعة payments.
-  /// - يؤكد الحجز عبر BookingService.confirmBookingAfterPayment.
-  /// - يوزع الأموال (app commission, agency commission, driver net) ويحدّث محافظ الجهات المعنية.
   Future<PaymentResult> processPayment({
     required String bookingId,
     required double amount,
     required String paymentMethod, // 'wallet' أو اسم مزود/deeplink
     String currency = 'YER',
-    bool useWalletFirst = false, // إن أردت محاولة خصم المحفظة أولاً
+    bool useWalletFirst = false,
     double appRateIfDriverFree = 0.04,
     double appRateIfAgencyDriver = 0.08,
-    double? agencyRate, // إن وُجد
+    double? agencyRate,
     double govFee = 0.0,
     bool deductGovFeeBeforeCommission = false,
   }) async {
@@ -182,6 +188,11 @@ class PaymentService {
       }
 
       final booking = Booking.fromDocument(bookingSnap);
+
+      // حاول استخراج agencyId من بيانات المستند مباشرة (لأن نموذج Booking قد لا يحتوي عليه)
+      final bookingData = bookingSnap.data() as Map<String, dynamic>? ?? {};
+      final agencyIdFromDoc = bookingData['agencyId'] ?? bookingData['agency_id'];
+      final String? agencyId = agencyIdFromDoc != null ? agencyIdFromDoc.toString() : null;
 
       // تحقق مبسط للمبلغ
       if (booking.totalPrice > 0 && (booking.totalPrice - amount).abs() > 0.01) {
@@ -199,17 +210,17 @@ class PaymentService {
           agencyRate: agencyRate,
           govFee: govFee,
           deductGovFeeBeforeCommission: deductGovFeeBeforeCommission,
+          agencyId: agencyId,
         );
         return walletResult;
       }
 
-      // خيار: استخدام المحفظة أولاً ثم الباقي عبر مزود خارجي (غير مفعل افتراضياً)
+      // خيار: استخدام المحفظة أولاً ثم الباقي عبر مزود خارجي
       if (useWalletFirst) {
         final userDoc = await _firestore.collection(_usersCollection).doc(booking.passengerId).get();
         final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-        final walletBalance = (userData['walletBalance'] ?? 0).toDouble();
+        final walletBalance = _toDoubleSafe(userData['walletBalance']);
         if (walletBalance >= amount) {
-          // خصم كامل من المحفظة
           final walletResult = await _processWalletPayment(
             booking: booking,
             amount: amount,
@@ -219,10 +230,10 @@ class PaymentService {
             agencyRate: agencyRate,
             govFee: govFee,
             deductGovFeeBeforeCommission: deductGovFeeBeforeCommission,
+            agencyId: agencyId,
           );
           return walletResult;
         }
-        // خلاف ذلك، ندفع جزء من المحفظة ثم نكمل عبر المزود الخارجي (غير مفصل هنا)
       }
 
       // معالجة الدفع عبر مزود خارجي
@@ -252,10 +263,10 @@ class PaymentService {
         agencyRate: agencyRate,
         govFee: govFee,
         deductGovFeeBeforeCommission: deductGovFeeBeforeCommission,
+        agencyId: agencyId,
       );
 
       if (!recordResult.success) {
-        // إذا فشل التسجيل/التوزيع، حاول إلغاء الحجز لاسترجاع المقاعد
         try {
           await _bookingService.cancelBooking(bookingId: booking.id, passengerId: booking.passengerId);
         } catch (e) {
@@ -272,7 +283,6 @@ class PaymentService {
       );
 
       if (confirmError != null) {
-        // إذا فشل التأكيد، نحاول التراجع (لا نعيد الأموال هنا تلقائياً)
         return PaymentResult(success: false, message: confirmError);
       }
 
@@ -323,29 +333,26 @@ class PaymentService {
     double? agencyRate,
     double govFee = 0.0,
     bool deductGovFeeBeforeCommission = false,
+    String? agencyId,
   }) async {
     final passengerRef = _firestore.collection(_usersCollection).doc(booking.passengerId);
     final driverRef = _firestore.collection(_usersCollection).doc(booking.driverId);
-    final agencyId = booking.agencyId;
 
     final txId = 'wallet-${_uuid.v4()}';
 
     try {
-      // معاملة Firestore لضمان التزامن
       await _firestore.runTransaction((tx) async {
         final passengerSnap = await tx.get(passengerRef);
         if (!passengerSnap.exists) throw Exception('المستخدم غير موجود');
 
         final passengerData = passengerSnap.data() as Map<String, dynamic>? ?? {};
-        final passengerBalance = (passengerData['walletBalance'] ?? 0).toDouble();
+        final passengerBalance = _toDoubleSafe(passengerData['walletBalance']);
 
         if (passengerBalance < amount) throw Exception('رصيد المحفظة غير كافٍ');
 
-        // خصم من رصيد الراكب
         final newPassengerBalance = passengerBalance - amount;
         tx.update(passengerRef, {'walletBalance': newPassengerBalance, 'updatedAt': FieldValue.serverTimestamp()});
 
-        // حساب التقسيم
         final commission = CommissionService.calculateSplit(
           totalAmount: amount,
           govFee: govFee,
@@ -356,7 +363,6 @@ class PaymentService {
           deductGovFeeBeforeCommission: deductGovFeeBeforeCommission,
         );
 
-        // سجل الدفع في مجموعة payments
         final paymentDocRef = _firestore.collection(_paymentsCollection).doc();
         final paymentRecord = {
           'bookingId': booking.id,
@@ -375,30 +381,23 @@ class PaymentService {
         };
         tx.set(paymentDocRef, paymentRecord);
 
-        // تحديث رصيد المكتب (إن وُجد) أو رصيد السائق مباشرة
         if (agencyId != null && agencyId.trim().isNotEmpty) {
-          // خصم/إضافة إلى رصيد المكتب: عادة المكتب يستلم حصته ثم يدفع للسائق لاحقاً
           final agencyRef = _firestore.collection('agencies').doc(agencyId);
           final agencySnap = await tx.get(agencyRef);
           if (!agencySnap.exists) throw Exception('المكتب غير موجود');
           final agencyData = agencySnap.data() as Map<String, dynamic>? ?? {};
-          final currentAgencyBalance = (agencyData['walletBalance'] ?? 0).toDouble();
+          final currentAgencyBalance = _toDoubleSafe(agencyData['walletBalance']);
           final newAgencyBalance = currentAgencyBalance + commission.agencyCommissionAmount;
           tx.update(agencyRef, {'walletBalance': newAgencyBalance, 'updatedAt': FieldValue.serverTimestamp()});
         } else {
-          // سائق حر: نضيف صافي المبلغ إلى رصيد السائق مباشرة
           final driverSnap = await tx.get(driverRef);
           if (!driverSnap.exists) throw Exception('السائق غير موجود');
           final driverData = driverSnap.data() as Map<String, dynamic>? ?? {};
-          final currentDriverBalance = (driverData['walletBalance'] ?? 0).toDouble();
+          final currentDriverBalance = _toDoubleSafe(driverData['walletBalance']);
           final newDriverBalance = currentDriverBalance + commission.driverNetAmount;
           tx.update(driverRef, {'walletBalance': newDriverBalance, 'updatedAt': FieldValue.serverTimestamp()});
         }
 
-        // التطبيق يستلم عمولته (يمكن تسجيلها في وثيقة منفصلة أو تركها في حساب خارجي)
-        // هنا نكتفي بتسجيل الحقول في payment record فقط.
-
-        // تحديث حالة الحجز (مؤقت) - التأكيد النهائي يتم بعد الخروج من المعاملة
         tx.update(_firestore.collection(_bookingsCollection).doc(booking.id), {
           'paymentStatus': 'paid',
           'transactionId': txId,
@@ -407,7 +406,6 @@ class PaymentService {
         });
       });
 
-      // بعد نجاح المعاملة، تأكيد الحجز عبر BookingService
       final confirmError = await _booking_service_confirmSafe(
         bookingId: booking.id,
         paymentIntentId: txId,
@@ -415,11 +413,9 @@ class PaymentService {
       );
 
       if (confirmError != null) {
-        // حاول التراجع إن لزم (غير مفصل هنا)
         return PaymentResult(success: false, message: confirmError);
       }
 
-      // إشعار الراكب
       try {
         await _notificationService.sendNotification(
           userId: booking.passengerId,
@@ -453,19 +449,17 @@ class PaymentService {
     double? agencyRate,
     double govFee = 0.0,
     bool deductGovFeeBeforeCommission = false,
+    String? agencyId,
   }) async {
     final bookingRef = _firestore.collection(_bookingsCollection).doc(booking.id);
     final driverRef = _firestore.collection(_usersCollection).doc(booking.driverId);
-    final agencyId = booking.agencyId;
     final agencyRef = agencyId != null ? _firestore.collection('agencies').doc(agencyId) : null;
 
     try {
       await _firestore.runTransaction((tx) async {
-        // إعادة جلب الحجز داخل المعاملة للتأكد من الحالة
         final bookingSnap = await tx.get(bookingRef);
         if (!bookingSnap.exists) throw Exception('الحجز غير موجود داخل المعاملة');
 
-        // حساب التقسيم
         final commission = CommissionService.calculateSplit(
           totalAmount: amount,
           govFee: govFee,
@@ -476,7 +470,6 @@ class PaymentService {
           deductGovFeeBeforeCommission: deductGovFeeBeforeCommission,
         );
 
-        // سجل الدفع
         final paymentDocRef = _firestore.collection(_paymentsCollection).doc();
         final paymentRecord = {
           'bookingId': booking.id,
@@ -495,29 +488,22 @@ class PaymentService {
         };
         tx.set(paymentDocRef, paymentRecord);
 
-        // توزيع الأموال:
-        // 1) إضافة عمولة المكتب إلى رصيد المكتب (إن وُجد)
         if (agencyRef != null) {
           final agencySnap = await tx.get(agencyRef);
           if (!agencySnap.exists) throw Exception('المكتب غير موجود');
           final agencyData = agencySnap.data() as Map<String, dynamic>? ?? {};
-          final currentAgencyBalance = (agencyData['walletBalance'] ?? 0).toDouble();
+          final currentAgencyBalance = _toDoubleSafe(agencyData['walletBalance']);
           final newAgencyBalance = currentAgencyBalance + commission.agencyCommissionAmount;
           tx.update(agencyRef, {'walletBalance': newAgencyBalance, 'updatedAt': FieldValue.serverTimestamp()});
         }
 
-        // 2) إضافة صافي السائق إلى رصيد السائق (أو تركه لدفعات لاحقة عبر المكتب)
         final driverSnap = await tx.get(driverRef);
         if (!driverSnap.exists) throw Exception('السائق غير موجود');
         final driverData = driverSnap.data() as Map<String, dynamic>? ?? {};
-        final currentDriverBalance = (driverData['walletBalance'] ?? 0).toDouble();
-
-        // إذا كان هناك مكتب، قد يكون منطقك أن المكتب يدفع للسائق لاحقاً.
-        // هنا سنضيف صافي السائق مباشرة إلى رصيد السائق (يمكن تغييره حسب سياسة العمل).
+        final currentDriverBalance = _toDoubleSafe(driverData['walletBalance']);
         final newDriverBalance = currentDriverBalance + commission.driverNetAmount;
         tx.update(driverRef, {'walletBalance': newDriverBalance, 'updatedAt': FieldValue.serverTimestamp()});
 
-        // 3) تحديث حالة الحجز
         tx.update(bookingRef, {
           'paymentStatus': 'paid',
           'transactionId': transactionId,
@@ -536,10 +522,6 @@ class PaymentService {
   // ============================
   // استرجاع الأموال (Refund) - مبسّط
   // ============================
-  /// refundPayment: محاولة استرجاع دفعة مسجلة.
-  /// - يبحث عن سجل الدفع في payments حسب transactionId أو bookingId.
-  /// - إذا كان الدفع من المحفظة، يعيد المبلغ إلى محفظة الراكب ويخصم من رصيد السائق/المكتب إن أمكن.
-  /// - إذا كان الدفع عبر مزود خارجي، يجب استدعاء واجهة المزود (غير مفعّل هنا).
   Future<PaymentResult> refundPayment({
     String? transactionId,
     String? bookingId,
@@ -567,43 +549,38 @@ class PaymentService {
       final passengerId = data['passengerId'] as String?;
       final driverId = data['driverId'] as String?;
       final agencyId = data['agencyId'] as String?;
-      final amount = (data['amount'] ?? 0).toDouble();
+      final amount = _toDoubleSafe(data['amount']);
       final paymentMethod = (data['paymentMethod'] ?? 'unknown') as String;
 
-      // إذا كانت المحفظة
       if (paymentMethod == 'wallet') {
-        // إجراء معاملة لإعادة الأموال
         await _firestore.runTransaction((tx) async {
           final paymentRef = _firestore.collection(_paymentsCollection).doc(paymentId);
           final passengerRef = _firestore.collection(_usersCollection).doc(passengerId);
           final driverRef = _firestore.collection(_usersCollection).doc(driverId);
           final agencyRef = agencyId != null ? _firestore.collection('agencies').doc(agencyId) : null;
 
-          // إعادة رصيد الراكب
           final passengerSnap = await tx.get(passengerRef);
           if (!passengerSnap.exists) throw Exception('المستخدم غير موجود');
           final passengerData = passengerSnap.data() as Map<String, dynamic>? ?? {};
-          final passengerBalance = (passengerData['walletBalance'] ?? 0).toDouble();
+          final passengerBalance = _toDoubleSafe(passengerData['walletBalance']);
           tx.update(passengerRef, {'walletBalance': passengerBalance + amount, 'updatedAt': FieldValue.serverTimestamp()});
 
-          // خصم من رصيد السائق أو المكتب إن أمكن
           if (agencyRef != null) {
             final agencySnap = await tx.get(agencyRef);
             if (!agencySnap.exists) throw Exception('المكتب غير موجود');
             final agencyData = agencySnap.data() as Map<String, dynamic>? ?? {};
-            final agencyBalance = (agencyData['walletBalance'] ?? 0).toDouble();
-            final agencyNew = max(0.0, agencyBalance - amount);
+            final agencyBalance = _toDoubleSafe(agencyData['walletBalance']);
+            final agencyNew = max<double>(0.0, agencyBalance - amount);
             tx.update(agencyRef, {'walletBalance': agencyNew, 'updatedAt': FieldValue.serverTimestamp()});
           } else {
             final driverSnap = await tx.get(driverRef);
             if (!driverSnap.exists) throw Exception('السائق غير موجود');
             final driverData = driverSnap.data() as Map<String, dynamic>? ?? {};
-            final driverBalance = (driverData['walletBalance'] ?? 0).toDouble();
-            final driverNew = max(0.0, driverBalance - amount);
+            final driverBalance = _toDoubleSafe(driverData['walletBalance']);
+            final driverNew = max<double>(0.0, driverBalance - amount);
             tx.update(driverRef, {'walletBalance': driverNew, 'updatedAt': FieldValue.serverTimestamp()});
           }
 
-          // تحديث سجل الدفع
           tx.update(paymentRef, {
             'status': 'refunded',
             'refundedAt': FieldValue.serverTimestamp(),
@@ -611,7 +588,6 @@ class PaymentService {
             'updatedAt': FieldValue.serverTimestamp(),
           });
 
-          // تحديث الحجز
           if (bookingIdFound != null) {
             final bookingRef = _firestore.collection(_bookingsCollection).doc(bookingIdFound);
             tx.update(bookingRef, {
@@ -621,7 +597,6 @@ class PaymentService {
           }
         });
 
-        // إشعار الراكب
         if (passengerId != null) {
           try {
             await _notificationService.sendNotification(
@@ -638,8 +613,6 @@ class PaymentService {
         return PaymentResult(success: true, message: 'تم استرجاع المبلغ بنجاح', transactionId: transactionId, amount: amount);
       }
 
-      // إذا كان الدفع عبر مزود خارجي: هنا يجب استدعاء API المزود لإجراء الاسترجاع
-      // في هذا المثال نرجع رسالة تفصيلية تفيد بضرورة تنفيذ الاسترجاع عبر المزود الخارجي.
       return PaymentResult(success: false, message: 'استرجاع المدفوعات عبر المزود الخارجي غير مفعّل في هذه النسخة. نفّذ الاسترجاع عبر لوحة المزود ثم حدّث سجل الدفع.');
     } catch (e, st) {
       debugPrint('PaymentService.refundPayment error: $e\n$st');
@@ -648,8 +621,91 @@ class PaymentService {
   }
 
   // ============================
-  // دوال مساعدة
+  // دوال مساعدة عامة مطلوبة من Providers/واجهات أخرى
   // ============================
+
+  Future<String> getPaymentStatus(String bookingId) async {
+    try {
+      final snap = await _firestore.collection(_paymentsCollection).where('bookingId', isEqualTo: bookingId).limit(1).get();
+      if (snap.docs.isEmpty) return 'unknown';
+      final data = snap.docs.first.data() as Map<String, dynamic>;
+      return (data['status'] ?? 'unknown') as String;
+    } catch (e) {
+      debugPrint('PaymentService.getPaymentStatus error: $e');
+      return 'unknown';
+    }
+  }
+
+  Map<String, dynamic> buildDeepLinkPayload({
+    required String bookingId,
+    required double amount,
+    required String paymentMethod,
+    required String callbackUrl,
+  }) {
+    return {
+      'bookingId': bookingId,
+      'amount': amount,
+      'paymentMethod': paymentMethod,
+      'callbackUrl': callbackUrl,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  String buildDeepLinkUri({required String schemeHost, required Map<String, dynamic> payload}) {
+    final encoded = Uri.encodeComponent(jsonEncode(payload));
+    return '$schemeHost://pay?payload=$encoded';
+  }
+
+  Future<PaymentResult> confirmPayment({
+    required String transactionId,
+    required String bookingId,
+    required double amount,
+    String? paymentMethod,
+    String currency = 'YER',
+    String? payerId, // أصبح اختياريًا لتوافق الاستدعاءات الحالية
+  }) async {
+    try {
+      final verifyResult = await providerAdapter.verify(transactionId: transactionId);
+      if (!verifyResult.success) {
+        return PaymentResult(success: false, message: 'فشل التحقق من المزود', transactionId: transactionId);
+      }
+
+      final existing = await _firestore.collection(_paymentsCollection).where('transactionId', isEqualTo: transactionId).limit(1).get();
+      if (existing.docs.isEmpty) {
+        await _firestore.collection(_paymentsCollection).add({
+          'bookingId': bookingId,
+          'transactionId': transactionId,
+          'amount': amount,
+          'currency': currency,
+          'paymentMethod': paymentMethod ?? 'unknown',
+          'status': 'paid',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await _firestore.collection(_paymentsCollection).doc(existing.docs.first.id).update({
+          'status': 'paid',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      final confirmError = await _booking_service_confirmSafe(
+        bookingId: bookingId,
+        paymentIntentId: transactionId,
+        payerId: payerId ?? '',
+      );
+
+      if (confirmError != null) {
+        return PaymentResult(success: false, message: confirmError, transactionId: transactionId);
+      }
+
+      return PaymentResult(success: true, message: 'تم تأكيد الدفع', transactionId: transactionId, amount: amount);
+    } catch (e, st) {
+      debugPrint('PaymentService.confirmPayment error: $e\n$st');
+      return PaymentResult(success: false, message: 'خطأ أثناء تأكيد الدفع', transactionId: transactionId);
+    }
+  }
+
   Future<String?> _booking_service_confirmSafe({
     required String bookingId,
     required String paymentIntentId,

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart' as pdf;
 import '../models/trip.dart';
 
 class TripExporter {
@@ -187,7 +188,7 @@ class TripExporter {
       // بناء صفحة PDF بسيطة مع جدول
       doc.addPage(
         pw.MultiPage(
-          pageFormat: pw.PageFormat.a4,
+          pageFormat: pdf.PdfPageFormat.a4,
           build: (pw.Context ctx) {
             return [
               pw.Header(level: 0, child: pw.Text('تقرير الرحلات', style: pw.TextStyle(fontSize: 18))),
@@ -197,7 +198,7 @@ class TripExporter {
                 data: rows,
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 cellAlignment: pw.Alignment.centerLeft,
-                headerDecoration: pw.BoxDecoration(color: PdfColors.grey300),
+                headerDecoration: pw.BoxDecoration(color: pdf.PdfColors.grey300),
                 cellHeight: 22,
                 columnWidths: {
                   0: pw.FlexColumnWidth(1),

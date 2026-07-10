@@ -49,7 +49,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final data = doc.data() as Map<String, dynamic>? ?? {};
+      final data = doc.data() ?? {};
       // try multiple possible field names for backward compatibility
       _vehicleOwnerController.text = (data['vehicle_owner'] ?? data['vehicleOwner'] ?? data['name'] ?? '') as String;
       setState(() {});
@@ -77,7 +77,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('المركبة غير موجودة')));
         return;
       }
-      final data = doc.data() as Map<String, dynamic>? ?? {};
+      final data = doc.data() ?? {};
       _plateController.text = (data['plateNumber'] as String?) ?? (data['plate_number'] as String?) ?? '';
       _vehicleTypeController.text = (data['vehicleType'] as String?) ?? (data['vehicle_type'] as String?) ?? '';
       _makeModelYearController.text = (data['makeModelYear'] as String?) ?? (data['make_model_year'] as String?) ?? '';
@@ -128,11 +128,11 @@ class _VehicleScreenState extends State<VehicleScreen> {
           return;
         } else {
           final doc = q2.docs.first;
-          _populateFieldsFromVehicleDoc(doc.data() as Map<String, dynamic>, doc.id);
+          _populateFieldsFromVehicleDoc(doc.data(), doc.id);
         }
       } else {
         final doc = q.docs.first;
-        _populateFieldsFromVehicleDoc(doc.data() as Map<String, dynamic>, doc.id);
+        _populateFieldsFromVehicleDoc(doc.data(), doc.id);
       }
     } catch (e) {
       debugPrint('VehicleScreen._findByPlate error: $e');

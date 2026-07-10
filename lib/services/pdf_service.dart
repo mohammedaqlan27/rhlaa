@@ -16,6 +16,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart' as pdf;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import '../models/trip.dart';
@@ -55,7 +56,7 @@ class PdfService {
       final bookings = bookingsSnap.docs.map((d) => d.data() as Map<String, dynamic>).toList();
 
       // توليد PDF
-      final pdf = pw.Document();
+      final pw.Document pdfDoc = pw.Document();
       final DateFormat dateFmt = DateFormat('yyyy-MM-dd');
       final DateFormat timeFmt = DateFormat('HH:mm');
 
@@ -64,14 +65,20 @@ class PdfService {
       final dateText = tripDate != null ? dateFmt.format(tripDate) : '-';
       final timeText = tripDate != null ? timeFmt.format(tripDate) : (trip.time.isNotEmpty ? trip.time : '-');
 
-      // رأس الصفحة
-      pdf.addPage(
+      // رأس الصفحة وبناء المحتوى
+      pdfDoc.addPage(
         pw.MultiPage(
-          pageFormat: pw.PageFormat.a4,
+          pageFormat: pdf.PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(18),
           build: (pw.Context ctx) {
             return [
-              pw.Header(level: 0, child: pw.Text(title, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
+              pw.Header(
+                level: 0,
+                child: pw.Text(
+                  title,
+                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
               pw.SizedBox(height: 6),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -99,16 +106,16 @@ class PdfService {
                 headers: ['#', 'اسم الراكب', 'هاتف', 'مقعد', 'مبلغ مدفوع', 'ملاحظات'],
                 data: List<List<String>>.generate(bookings.length, (i) {
                   final b = bookings[i];
-                  final passengerName = (b['passengerName'] ?? b['name'] ?? '') as String;
-                  final phone = (b['passengerPhone'] ?? b['phone'] ?? '') as String;
-                  final seat = (b['seatNumber']?.toString() ?? '-') as String;
+                  final passengerName = (b['passengerName'] ?? b['name'] ?? '')?.toString() ?? '';
+                  final phone = (b['passengerPhone'] ?? b['phone'] ?? '')?.toString() ?? '';
+                  final seat = (b['seatNumber']?.toString() ?? '-');
                   final paid = ((b['amountPaid'] ?? b['amount'] ?? 0).toString());
-                  final notes = (b['notes'] ?? '') as String;
+                  final notes = (b['notes'] ?? '')?.toString() ?? '';
                   return ['${i + 1}', passengerName, phone, seat, paid, notes];
                 }),
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 cellAlignment: pw.Alignment.centerLeft,
-                headerDecoration: pw.BoxDecoration(color: PdfColors.grey300),
+                headerDecoration: pw.BoxDecoration(color: pdf.PdfColors.grey300),
                 cellHeight: 20,
                 columnWidths: {
                   0: pw.FlexColumnWidth(0.6),
@@ -137,7 +144,7 @@ class PdfService {
       );
 
       // حفظ PDF مؤقتاً
-      final Uint8List pdfBytes = await pdf.save();
+      final Uint8List pdfBytes = await pdfDoc.save();
       final Directory tempDir = await getTemporaryDirectory();
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final String localPath = '${tempDir.path}/manifest_${tripId}_$timestamp.pdf';

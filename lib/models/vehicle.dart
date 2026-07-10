@@ -48,7 +48,7 @@ class Vehicle {
   factory Vehicle.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String _s(List<String> keys, [String fallback = '']) {
+    String s(List<String> keys, [String fallback = '']) {
       for (var k in keys) {
         final v = data[k];
         if (v != null && v.toString().isNotEmpty) return v.toString();
@@ -56,7 +56,7 @@ class Vehicle {
       return fallback;
     }
 
-    int _i(List<String> keys, [int fallback = 0]) {
+    int i(List<String> keys, [int fallback = 0]) {
       for (var k in keys) {
         final v = data[k];
         if (v is int) return v;
@@ -66,7 +66,7 @@ class Vehicle {
       return fallback;
     }
 
-    bool _b(List<String> keys, [bool fallback = false]) {
+    bool b(List<String> keys, [bool fallback = false]) {
       for (var k in keys) {
         final v = data[k];
         if (v is bool) return v;
@@ -76,7 +76,7 @@ class Vehicle {
       return fallback;
     }
 
-    Timestamp? _ts(List<String> keys) {
+    Timestamp? ts(List<String> keys) {
       for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
@@ -90,16 +90,16 @@ class Vehicle {
 
     return Vehicle(
       id: doc.id,
-      plateNumber: _s(['plateNumber', 'plate_number', 'plate']),
-      vehicleOwner: _s(['vehicleOwner', 'vehicle_owner', 'ownerId', 'owner']),
-      vehicleType: _s(['vehicleType', 'vehicle_type', 'type']),
-      makeModelYear: _s(['makeModelYear', 'make_model_year', 'makeModel', 'modelYear']),
-      color: _s(['color']),
-      maxCapacity: _i(['maxCapacity', 'max_capacity', 'capacity']),
-      licenseNumber: _s(['licenseNumber', 'license_number', 'registrationNumber']),
-      isVerified: _b(['isVerified', 'is_verified', 'verified']),
-      notes: _s(['notes', 'note', 'description']),
-      createdAt: _ts(['createdAt', 'created_at', 'created']),
+      plateNumber: s(['plateNumber', 'plate_number', 'plate']),
+      vehicleOwner: s(['vehicleOwner', 'vehicle_owner', 'ownerId', 'owner']),
+      vehicleType: s(['vehicleType', 'vehicle_type', 'type']),
+      makeModelYear: s(['makeModelYear', 'make_model_year', 'makeModel', 'modelYear']),
+      color: s(['color']),
+      maxCapacity: i(['maxCapacity', 'max_capacity', 'capacity']),
+      licenseNumber: s(['licenseNumber', 'license_number', 'registrationNumber']),
+      isVerified: b(['isVerified', 'is_verified', 'verified']),
+      notes: s(['notes', 'note', 'description']),
+      createdAt: ts(['createdAt', 'created_at', 'created']),
     );
   }
 
