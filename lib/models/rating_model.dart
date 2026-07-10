@@ -1,96 +1,84 @@
+// lib/models/rating_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Rating {
-  final String id; // معرف المستند
-  final String? tripId;
-  final String? bookingId;
-  final String fromUserId; // المعرف العام للراسل
-  final String toUserId;   // المعرف العام للمستقبل
-  final String? passengerId; // معرف الراكب (حسب Firestore)
-  final String? driverId;    // معرف السائق (حسب Firestore)
-  final double rating;
-  final int score;
+  final String id;
+  final String tripId;
+  final String bookingId;
+  final String fromUserId;
+  final String toUserId;
+
+  /// rating: descriptive label (e.g., "excellent", "good", "poor")
+  final String rating;
+  /// score: numeric score (e.g., 4.5)
+  final double score;
+
+  /// نص ملاحظات قصيرة أو وصفية
   final String? note;
+  /// تعليق أطول إن وُجد
   final String? comment;
+
   final Timestamp? createdAt;
 
   Rating({
     required this.id,
-    this.tripId,
-    this.bookingId,
+    required this.tripId,
+    required this.bookingId,
     required this.fromUserId,
     required this.toUserId,
-    this.passengerId,
-    this.driverId,
-    required this.rating,
-    required this.score,
+    this.rating = '',
+    this.score = 0.0,
     this.note,
     this.comment,
     this.createdAt,
   });
 
-  /// تحويل النموذج إلى Map للكتابة إلى Firestore
+  /// تحويل الكائن إلى خريطة جاهزة للحفظ في Firestore
   Map<String, dynamic> toMap() {
     return {
       'tripId': tripId,
       'bookingId': bookingId,
       'fromUserId': fromUserId,
       'toUserId': toUserId,
-      'passengerId': passengerId ?? fromUserId, // افتراضياً هو الراسل إذا كان راكباً
-      'driverId': driverId ?? toUserId,         // افتراضياً هو المستقبل إذا كان سائقاً
       'rating': rating,
       'score': score,
       'note': note,
       'comment': comment,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-    };
+    }..removeWhere((key, value) => value == null);
   }
 
-  /// إنشاء نموذج من مستند Firestore مع معالجة ذكية للبيانات
+  /// إنشاء نموذج من مستند Firestore مع دعم أسماء حقول متعددة (camelCase / snake_case)
   factory Rating.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // --- دوال مساعدة ذكية لمنع الـ Crash ---
-
-    // جلب النصوص مع فحص مفاتيح متعددة
     String _s(List<String> keys, [String fallback = '']) {
-      for (final k in keys) {
-        if (data[k] != null && data[k].toString().trim().isNotEmpty) {
-          return data[k].toString().trim();
+      for (var k in keys) {
+        final v = data[k];
+        if (v != null && v.toString().isNotEmpty) return v.toString();
+      }
+      return fallback;
+    }
+
+    double _d(List<String> keys, [double fallback = 0.0]) {
+      for (var k in keys) {
+        final v = data[k];
+        if (v is num) return v.toDouble();
+        if (v is String) {
+          final parsed = double.tryParse(v);
+          if (parsed != null) return parsed;
         }
       }
       return fallback;
     }
 
-    // جلب الأرقام العشرية (double) بأمان
-    double _d(List<String> keys, [double fallback = 0.0]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v is num) return v.toDouble();
-        if (v is String) return double.tryParse(v) ?? fallback;
-      }
-      return fallback;
-    }
-
-    // جلب الأرقام الصحيحة (int) بأمان
-    int _i(List<String> keys, [int fallback = 0]) {
-      for (final k in keys) {
-        final v = data[k];
-        if (v is num) return v.toInt();
-        if (v is String) return int.tryParse(v) ?? fallback;
-      }
-      return fallback;
-    }
-
-    // جلب التاريخ (Timestamp) بأمان
-    Timestamp? _t(List<String> keys) {
-      for (final k in keys) {
+    Timestamp? _ts(List<String> keys) {
+      for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
-        if (v is DateTime) return Timestamp.fromDate(v);
         if (v is String) {
-          final p = DateTime.tryParse(v);
-          if (p != null) return Timestamp.fromDate(p);
+          final parsed = DateTime.tryParse(v);
+          if (parsed != null) return Timestamp.fromDate(parsed);
         }
       }
       return null;
@@ -100,15 +88,13 @@ class Rating {
       id: doc.id,
       tripId: _s(['tripId', 'trip_id']),
       bookingId: _s(['bookingId', 'booking_id']),
-      fromUserId: _s(['fromUserId', 'from_user_id', 'passengerId']),
-      toUserId: _s(['toUserId', 'to_user_id', 'driverId']),
-      passengerId: _s(['passengerId', 'fromUserId']),
-      driverId: _s(['driverId', 'toUserId']),
-      rating: _d(['rating', 'rating_value']),
-      score: _i(['score', 'stars']),
-      note: _s(['note']),
-      comment: _s(['comment']),
-      createdAt: _t(['createdAt', 'created_at']),
+      fromUserId: _s(['fromUserId', 'from_user_id', 'fromId']),
+      toUserId: _s(['toUserId', 'to_user_id', 'toId']),
+      rating: _s(['rating', 'ratingLabel', 'rate']),
+      score: _d(['score', 'ratingScore', 'rate_value']),
+      note: _s(['note', 'notes']),
+      comment: _s(['comment', 'comments']),
+      createdAt: _ts(['createdAt', 'created_at', 'timestamp']),
     );
   }
 
@@ -118,10 +104,8 @@ class Rating {
     String? bookingId,
     String? fromUserId,
     String? toUserId,
-    String? passengerId,
-    String? driverId,
-    double? rating,
-    int? score,
+    String? rating,
+    double? score,
     String? note,
     String? comment,
     Timestamp? createdAt,
@@ -132,8 +116,6 @@ class Rating {
       bookingId: bookingId ?? this.bookingId,
       fromUserId: fromUserId ?? this.fromUserId,
       toUserId: toUserId ?? this.toUserId,
-      passengerId: passengerId ?? this.passengerId,
-      driverId: driverId ?? this.driverId,
       rating: rating ?? this.rating,
       score: score ?? this.score,
       note: note ?? this.note,
@@ -143,5 +125,7 @@ class Rating {
   }
 
   @override
-  String toString() => 'Rating(ID: $id, Score: $score, From: $fromUserId, To: $toUserId)';
+  String toString() {
+    return 'Rating(id: $id, tripId: $tripId, bookingId: $bookingId, from: $fromUserId, to: $toUserId, rating: $rating, score: $score)';
+  }
 }

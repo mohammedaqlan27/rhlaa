@@ -1,51 +1,41 @@
+// lib/models/booking_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Booking {
-  final String id; // معرف الحجز
+  final String id;
   final String tripId;
   final String passengerId;
-  final String driverId;
   final String passengerNickname;
+  final String driverId;
 
   final int bookedSeatsCount;
-  final int childrenCount;
-  final int? seatNumber;
-
   final double totalPrice;
-  final String amount; // الحقل الجديد (نصي حسب طلبك)
-
   final bool isFamilyBooking;
-  final String bookingStatus;
-  final String paymentStatus;
-  final String? paymentMethod;
-  final String? paymentService; // الحقل الجديد
-  final String? schemeHost;     // الحقل الجديد
-  final String? notes;          // الحقل الجديد
+  final int childrenCount;
 
-  final Timestamp? createdAt;
+  final String bookingStatus; // pending, confirmed, cancelled, completed
+  final String paymentStatus; // unpaid, paid, refunded
+
+  final String? notes;
   final Timestamp? canceledAt;
+  final Timestamp? createdAt;
   final Timestamp? updatedAt;
 
   Booking({
     required this.id,
     required this.tripId,
     required this.passengerId,
-    required this.driverId,
     required this.passengerNickname,
-    required this.bookedSeatsCount,
-    required this.childrenCount,
-    this.seatNumber,
-    required this.totalPrice,
-    this.amount = "",
-    required this.isFamilyBooking,
-    required this.bookingStatus,
-    required this.paymentStatus,
-    this.paymentMethod,
-    this.paymentService,
-    this.schemeHost,
+    required this.driverId,
+    this.bookedSeatsCount = 1,
+    this.totalPrice = 0.0,
+    this.isFamilyBooking = false,
+    this.childrenCount = 0,
+    this.bookingStatus = 'pending',
+    this.paymentStatus = 'unpaid',
     this.notes,
-    this.createdAt,
     this.canceledAt,
+    this.createdAt,
     this.updatedAt,
   });
 
@@ -53,43 +43,39 @@ class Booking {
   Map<String, dynamic> toMap() {
     return {
       'tripId': tripId,
-      'driverId': driverId,
       'passengerId': passengerId,
       'passengerNickname': passengerNickname,
+      'driverId': driverId,
       'bookedSeatsCount': bookedSeatsCount,
-      'childrenCount': childrenCount,
-      'seatNumber': seatNumber,
       'totalPrice': totalPrice,
-      'amount': amount,
       'isFamilyBooking': isFamilyBooking,
+      'childrenCount': childrenCount,
       'bookingStatus': bookingStatus,
       'paymentStatus': paymentStatus,
-      'paymentMethod': paymentMethod,
-      'paymentService': paymentService,
-      'schemeHost': schemeHost,
       'notes': notes,
-      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
       'canceledAt': canceledAt,
-      'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'updatedAt': updatedAt,
     }..removeWhere((key, value) => value == null);
   }
 
-  /// إنشاء نموذج من مستند Firestore مع معالجة ذكية
+  /// إنشاء نموذج من مستند Firestore مع معالجة أنواع مختلفة بأمان
   factory Booking.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // دوال مساعدة لمنع الـ Crash
     String _s(List<String> keys, [String fallback = '']) {
       for (var k in keys) {
-        if (data[k] != null) return data[k].toString();
+        final v = data[k];
+        if (v != null && v.toString().isNotEmpty) return v.toString();
       }
       return fallback;
     }
 
     int _i(List<String> keys, [int fallback = 0]) {
       for (var k in keys) {
-        var v = data[k];
-        if (v is num) return v.toInt();
+        final v = data[k];
+        if (v is int) return v;
+        if (v is double) return v.toInt();
         if (v is String) return int.tryParse(v) ?? fallback;
       }
       return fallback;
@@ -97,7 +83,7 @@ class Booking {
 
     double _d(List<String> keys, [double fallback = 0.0]) {
       for (var k in keys) {
-        var v = data[k];
+        final v = data[k];
         if (v is num) return v.toDouble();
         if (v is String) return double.tryParse(v) ?? fallback;
       }
@@ -106,81 +92,83 @@ class Booking {
 
     bool _b(List<String> keys, [bool fallback = false]) {
       for (var k in keys) {
-        var v = data[k];
+        final v = data[k];
         if (v is bool) return v;
+        if (v is num) return v != 0;
         if (v is String) return v.toLowerCase() == 'true';
-        if (v is num) return v == 1;
       }
       return fallback;
     }
 
-    Timestamp? _t(List<String> keys) {
-      for (var k in keys) {
-        var v = data[k];
-        if (v is Timestamp) return v;
-        if (v is DateTime) return Timestamp.fromDate(v);
+    Timestamp? _ts(String key) {
+      final v = data[key];
+      if (v is Timestamp) return v;
+      if (v is String) {
+        final parsed = DateTime.tryParse(v);
+        if (parsed != null) return Timestamp.fromDate(parsed);
       }
       return null;
     }
 
     return Booking(
-      id: _s(['id', 'bookingId']) ?? doc.id,
+      id: doc.id,
       tripId: _s(['tripId', 'trip_id']),
       passengerId: _s(['passengerId', 'passenger_id']),
+      passengerNickname: _s(['passengerNickname', 'passenger_nickname', 'passengerName']),
       driverId: _s(['driverId', 'driver_id']),
-      passengerNickname: _s(['passengerNickname', 'passenger_nickname'], 'راكب'),
-      bookedSeatsCount: _i(['bookedSeatsCount', 'booked_seats_count']),
-      childrenCount: _i(['childrenCount', 'children_count']),
-      seatNumber: data['seatNumber'] != null ? _i(['seatNumber']) : null,
-      totalPrice: _d(['totalPrice', 'total_price']),
-      amount: _s(['amount']),
+      bookedSeatsCount: _i(['bookedSeatsCount', 'seatsCount', 'seats_count'], 1),
+      totalPrice: _d(['totalPrice', 'total_price', 'price']),
       isFamilyBooking: _b(['isFamilyBooking', 'is_family_booking']),
-      bookingStatus: _s(['bookingStatus', 'booking_status'], 'pending'),
+      childrenCount: _i(['childrenCount', 'children_count']),
+      bookingStatus: _s(['bookingStatus', 'status'], 'pending'),
       paymentStatus: _s(['paymentStatus', 'payment_status'], 'unpaid'),
-      paymentMethod: _s(['paymentMethod', 'payment_method']),
-      paymentService: _s(['paymentService']),
-      schemeHost: _s(['schemeHost']),
-      notes: _s(['notes']),
-      createdAt: _t(['createdAt', 'created_at']),
-      canceledAt: _t(['canceledAt', 'canceled_at']),
-      updatedAt: _t(['updatedAt', 'updated_at']),
+      notes: data['notes']?.toString(),
+      canceledAt: _ts('canceledAt'),
+      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : _ts('createdAt'),
+      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] as Timestamp : _ts('updatedAt'),
     );
   }
 
-  get bookingId => null;
+  List<int>? get seatIndexes => null;
 
   Booking copyWith({
+    String? id,
+    String? tripId,
+    String? passengerId,
+    String? passengerNickname,
+    String? driverId,
+    int? bookedSeatsCount,
+    double? totalPrice,
+    bool? isFamilyBooking,
+    int? childrenCount,
     String? bookingStatus,
     String? paymentStatus,
     String? notes,
-    int? seatNumber,
-    Timestamp? updatedAt,
     Timestamp? canceledAt,
+    Timestamp? createdAt,
+    Timestamp? updatedAt,
   }) {
     return Booking(
-      id: id,
-      tripId: tripId,
-      passengerId: passengerId,
-      driverId: driverId,
-      passengerNickname: passengerNickname,
-      bookedSeatsCount: bookedSeatsCount,
-      childrenCount: childrenCount,
-      seatNumber: seatNumber ?? this.seatNumber,
-      totalPrice: totalPrice,
-      amount: amount,
-      isFamilyBooking: isFamilyBooking,
+      id: id ?? this.id,
+      tripId: tripId ?? this.tripId,
+      passengerId: passengerId ?? this.passengerId,
+      passengerNickname: passengerNickname ?? this.passengerNickname,
+      driverId: driverId ?? this.driverId,
+      bookedSeatsCount: bookedSeatsCount ?? this.bookedSeatsCount,
+      totalPrice: totalPrice ?? this.totalPrice,
+      isFamilyBooking: isFamilyBooking ?? this.isFamilyBooking,
+      childrenCount: childrenCount ?? this.childrenCount,
       bookingStatus: bookingStatus ?? this.bookingStatus,
       paymentStatus: paymentStatus ?? this.paymentStatus,
-      paymentMethod: paymentMethod,
-      paymentService: paymentService,
-      schemeHost: schemeHost,
       notes: notes ?? this.notes,
-      createdAt: createdAt,
       canceledAt: canceledAt ?? this.canceledAt,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   @override
-  String toString() => 'Booking(ID: $id, Status: $bookingStatus, Price: $totalPrice)';
+  String toString() {
+    return 'Booking(id: $id, tripId: $tripId, passengerId: $passengerId, seats: $bookedSeatsCount, total: $totalPrice, status: $bookingStatus)';
+  }
 }

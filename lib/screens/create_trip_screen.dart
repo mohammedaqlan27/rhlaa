@@ -46,14 +46,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   void initState() {
     super.initState();
     _fetchDriverData();
-    // استمع لمزود المركبات لاستخدام المركبة المختارة إن وُجدت
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final vp = context.read<VehicleProvider>();
       final sel = vp.selectedVehicle;
       if (sel != null) {
         _driverCarPlateNumber = sel.plateNumber;
         _driverCarOwnerOfficialName = sel.vehicleOwner;
-        setState(() {});
+        if (mounted) setState(() {});
       }
     });
   }
@@ -66,10 +65,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   Future<void> _fetchDriverData() async {
+    if (!mounted) return;
     setState(() => _isLoadingUserData = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      setState(() => _isLoadingUserData = false);
+      if (mounted) setState(() => _isLoadingUserData = false);
       return;
     }
 
@@ -84,15 +84,14 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         _driverCarOwnerOfficialName = null;
       }
 
-      // إذا كان هناك مركبة مختارة في الـ Provider، استخدمها لتجاوز بيانات الملف
       final vp = context.read<VehicleProvider>();
       final sel = vp.selectedVehicle;
       if (sel != null) {
         _driverCarPlateNumber = sel.plateNumber;
         _driverCarOwnerOfficialName = sel.vehicleOwner;
       }
-    } catch (e) {
-      debugPrint("CreateTripScreen._fetchDriverData error: $e");
+    } catch (e, st) {
+      debugPrint("CreateTripScreen._fetchDriverData error: $e\n$st");
     } finally {
       if (mounted) setState(() => _isLoadingUserData = false);
     }
@@ -100,21 +99,23 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   Future<void> _openVehicleScreenAndRefresh() async {
     final result = await Navigator.push<bool?>(context, MaterialPageRoute(builder: (_) => const VehicleScreen()));
-    // بعد العودة نعيد جلب بيانات المستخدم ونحدث مزود المركبات
     await _fetchDriverData();
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
-      await context.read<VehicleProvider>().fetchDriverVehicles(uid);
+      try {
+        await context.read<VehicleProvider>().fetchDriverVehicles(uid);
+      } catch (e) {
+        debugPrint('Error fetching driver vehicles: $e');
+      }
     }
-    if (result == true) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات المركبة', style: TextStyle(fontFamily: 'Cairo'))));
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات المركبة', style: TextStyle(fontFamily: 'Cairo'))));
     }
   }
 
   Future<void> _submitTrip() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // إلزامية بيانات المركبة: اسم المالك ورقم اللوحة
     if ((_driverCarOwnerOfficialName ?? '').trim().isEmpty) {
       _showCompleteProfileDialog(message: 'يرجى إدخال اسم مالك المركبة');
       return;
@@ -132,7 +133,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
       final price = double.tryParse(_priceController.text.trim()) ?? 0.0;
 
-      final tripData = {
+      final tripData = <String, dynamic>{
         'title': 'رحلة من $_selectedOrigin إلى $_selectedDestination',
         'description': _descriptionController.text.trim(),
         'driverId': user.uid,
@@ -147,7 +148,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         'departureTime': Timestamp.fromDate(_selectedDate),
         'status': 'active',
         'price': price,
-        // نستخدم أسماء الحقول المتوافقة مع قاعدة البيانات لديك
         'plateNumber': _driverCarPlateNumber,
         'plate_number': _driverCarPlateNumber,
         'carPlateNumber': _driverCarPlateNumber,
@@ -165,7 +165,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('CreateTripScreen._submitTrip error: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('❌ خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
@@ -233,7 +234,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 30)),
               );
-              if (date != null) setState(() => _selectedDate = date);
+              if (date != null && mounted) setState(() => _selectedDate = date);
             },
           ),
           const SizedBox(height: 12),

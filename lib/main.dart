@@ -12,6 +12,7 @@ import 'providers/booking_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/rating_provider.dart';
 import 'providers/vehicle_provider.dart';
+import 'providers/agencies_provider.dart';
 import 'state/auth_state.dart';
 
 // Screens
@@ -19,7 +20,6 @@ import 'screens/auth_screen.dart';
 import 'screens/auth_wrapper.dart';
 import 'screens/available_trips_screen.dart' hide TripProvider;
 import 'screens/create_trip_screen.dart';
-import 'screens/debug_trips_screen.dart';
 import 'screens/driver_bookings_screen.dart';
 import 'screens/driver_calendar_screen.dart';
 import 'screens/driver_home_screen.dart';
@@ -45,6 +45,12 @@ import 'screens/user_ratings_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/vehicle_selection_screen.dart';
 
+// Agencies screens
+import 'screens/agencies_list_screen.dart';
+import 'screens/agency_form_screen.dart';
+import 'screens/agency_detail_screen.dart';
+import 'screens/agency_location_edit_screen.dart';
+
 import 'models/trip.dart';
 import 'utils/app_localizations.dart';
 
@@ -66,9 +72,9 @@ class RootApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BookingProvider()),
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
         ChangeNotifierProvider(create: (_) => RatingProvider()),
-
         ChangeNotifierProvider(create: (_) => TripProvider()),
-        ChangeNotifierProvider(create: (_) => VehicleProvider()),// مزود المركبات
+        ChangeNotifierProvider(create: (_) => VehicleProvider()),
+        ChangeNotifierProvider(create: (_) => AgenciesProvider()), // Added AgenciesProvider
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -80,7 +86,26 @@ class RootApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
           AppLocalizations.delegate,
         ],
-        home: const TestMenuScreen(),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const TestMenuScreen(),
+          '/agencies': (context) => const AgenciesListScreen(),
+          '/agency_form': (context) => const AgencyFormScreen(),
+          '/agency_detail': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments;
+            if (args is String) {
+              return AgencyDetailScreen(agencyId: args);
+            }
+            return const AgenciesListScreen();
+          },
+          '/agency_edit_location': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments;
+            if (args is String) {
+              return AgencyLocationEditScreen(agencyId: args);
+            }
+            return const AgenciesListScreen();
+          },
+        },
       ),
     );
   }
@@ -107,7 +132,6 @@ class TestMenuScreen extends StatelessWidget {
       'AuthScreen': const AuthScreen(),
       'AvailableTrips': const AvailableTripsScreen(destination: 'تعز'),
       'CreateTrip': const CreateTripScreen(),
-      'DebugTrips': const DebugTripsScreen(),
       'DriverBookings': DriverBookingsScreen(tripId: 'trip123'),
       'DriverCalendar': const DriverCalendarScreen(),
       'DriverHome': const DriverHomeScreen(),
@@ -132,6 +156,9 @@ class TestMenuScreen extends StatelessWidget {
       'UserRatings': const UserRatingsScreen(userId: 'user001'),
       'Vehicle': const VehicleScreen(),
       'VehicleSelection': const VehicleSelectionScreen(),
+      // Agencies screens
+      'AgenciesList': const AgenciesListScreen(),
+      'AgencyForm': const AgencyFormScreen(),
     };
 
     return Scaffold(

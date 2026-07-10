@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
+	   <!-- Google Maps API Key -->
+      <key>GMSApiKey</key>
+      <string>YOUR_API_KEY</string>
+
+      <!-- أذونات الموقع -->
+      <key>NSLocationWhenInUseUsageDescription</key>
+      <string>التطبيق يحتاج الوصول لموقعك لتعيين موقع المكتب على الخريطة</string>
+      <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+      <string>التطبيق يحتاج الوصول لموقعك لتعيين موقع المكتب على الخريطة</string>
+
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>

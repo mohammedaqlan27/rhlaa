@@ -1,3 +1,4 @@
+// lib/services/rating_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -8,36 +9,41 @@ class RatingService {
   final _uuid = const Uuid();
   final String _collection = 'ratings';
 
-  /// إضافة أو تحديث تقييم مع تحديث إحصائيات المستخدم (السائق/الراكب) تلقائياً
+  /// إضافة أو تحديث تقييم مع تحديث إحصائيات المستخدم (المُقيَّم) تلقائياً
+  /// score يجب أن يكون قيمة رقمية (مثلاً 4.5)
+  /// ratingLabel يمكن أن يكون نصًا وصفيًا مثل "excellent" أو "جيد"
   Future<bool> addOrUpdateRating({
     required String tripId,
     required String bookingId,
-    required String passengerId,
-    required String driverId,
-    required int score,
+    required String fromUserId,
+    required String toUserId,
+    required double score,
+    String? ratingLabel,
     String? comment,
     String? note,
   }) async {
     try {
-      // 1. التحقق من وجود تقييم سابق من هذا الراكب لهذه الرحلة وهذا الحجز
-      QuerySnapshot existing = await _firestore
+      // 1. التحقق من وجود تقييم سابق من هذا المقيّم لنفس الرحلة/الحجز
+      final existing = await _firestore
           .collection(_collection)
           .where('tripId', isEqualTo: tripId)
           .where('bookingId', isEqualTo: bookingId)
-          .where('fromUserId', isEqualTo: passengerId)
+          .where('fromUserId', isEqualTo: fromUserId)
           .limit(1)
           .get();
 
       if (existing.docs.isNotEmpty) {
         // تحديث التقييم الموجود
         final docRef = existing.docs.first.reference;
-        await docRef.update({
+        final updateData = <String, dynamic>{
           'score': score,
-          'rating': score.toDouble(),
+          'rating': ratingLabel ?? (score.toString()),
           'comment': comment,
           'note': note,
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        }..removeWhere((k, v) => v == null);
+
+        await docRef.update(updateData);
       } else {
         // إضافة تقييم جديد باستخدام الموديل المحدث
         final ratingId = _uuid.v4();
@@ -45,21 +51,20 @@ class RatingService {
           id: ratingId,
           tripId: tripId,
           bookingId: bookingId,
-          fromUserId: passengerId,
-          toUserId: driverId,
-          passengerId: passengerId, // الحقل الجديد
-          driverId: driverId,       // الحقل الجديد
-          rating: score.toDouble(),
+          fromUserId: fromUserId,
+          toUserId: toUserId,
+          rating: ratingLabel ?? '',
           score: score,
-          comment: comment,
           note: note,
+          comment: comment,
           createdAt: Timestamp.now(),
         );
+
         await _firestore.collection(_collection).doc(ratingId).set(rating.toMap());
       }
 
       // 2. تحديث إحصائيات المستخدم (المُقيَّم) في مجموعة users
-      await _updateUserRatingStats(driverId);
+      await _updateUserRatingStats(toUserId);
 
       return true;
     } catch (e, st) {
@@ -88,25 +93,28 @@ class RatingService {
       }
 
       int count = snapshot.docs.length;
-      double totalScore = 0;
+      double totalScore = 0.0;
 
       for (var doc in snapshot.docs) {
-        // استخدام الموديل لضمان قراءة البيانات بشكل آمن (Smart Parsing)
-        final ratingObj = Rating.fromDocument(doc);
-        totalScore += ratingObj.rating;
+        try {
+          final ratingObj = Rating.fromDocument(doc);
+          totalScore += ratingObj.score;
+        } catch (e) {
+          debugPrint('RatingService._updateUserRatingStats parse error: $e');
+        }
       }
 
-      double average = totalScore / count;
+      final double average = count > 0 ? totalScore / count : 0.0;
 
       // تحديث مستند المستخدم بالحقول الموحدة
       await _firestore.collection('users').doc(userId).update({
-        'averageRating': double.parse(average.toStringAsFixed(1)), // تقريب لمنزلة واحدة (مثلاً 4.7)
+        'averageRating': double.parse(average.toStringAsFixed(1)), // تقريب لمنزلة واحدة
         'ratingCount': count,
       });
 
-      debugPrint('Stats updated for $userId: Avg $average, Count $count');
-    } catch (e) {
-      debugPrint('Error updating user rating stats: $e');
+      debugPrint('Stats updated for $userId: Avg ${average.toStringAsFixed(2)}, Count $count');
+    } catch (e, st) {
+      debugPrint('RatingService._updateUserRatingStats error: $e\n$st');
     }
   }
 
@@ -122,15 +130,17 @@ class RatingService {
         try {
           list.add(Rating.fromDocument(doc));
         } catch (e) {
-          debugPrint('Error parsing rating doc: $e');
+          debugPrint('RatingService.getRatingsForUser parse error: $e');
         }
       }
 
-      // الترتيب يدوياً حسب التاريخ الأحدث (من الأحدث إلى الأقدم)
+      // الترتيب حسب التاريخ الأحدث (من الأحدث إلى الأقدم)
       list.sort((a, b) {
         final DateTime? dateA = a.createdAt?.toDate();
         final DateTime? dateB = b.createdAt?.toDate();
-        if (dateA == null || dateB == null) return 0;
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
         return dateB.compareTo(dateA);
       });
 
@@ -144,10 +154,13 @@ class RatingService {
       final doc = await _firestore.collection('users').doc(userId).get();
       if (doc.exists) {
         final data = doc.data();
-        return (data?['averageRating'] ?? 0.0).toDouble();
+        final val = data?['averageRating'] ?? 0.0;
+        if (val is num) return val.toDouble();
+        if (val is String) return double.tryParse(val) ?? 0.0;
       }
       return 0.0;
     } catch (e) {
+      debugPrint('RatingService.getAverageRatingFromUserDoc error: $e');
       return 0.0;
     }
   }

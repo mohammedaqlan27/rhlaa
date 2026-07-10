@@ -188,7 +188,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           bookingId: bookingId,
           transactionId: 'manual-${DateTime.now().millisecondsSinceEpoch}',
           amount: _amount,
-          paymentMethod: _selectedMethod,
+          paymentMethod: _selectedMethod, payerId: '',
         );
 
         if (!confirmResult.success) {

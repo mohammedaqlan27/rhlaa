@@ -1,3 +1,4 @@
+// lib/models/notification_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AppNotification {
@@ -5,62 +6,78 @@ class AppNotification {
   final String userId;
   final String title;
   final String body;
-  final String type;
-  final Timestamp? createdAt;
+  final String type; // مثال: 'booking', 'payment', 'system', ...
+  final Map<String, dynamic>? metadata; // بيانات إضافية قابلة للتوسع
   final bool isRead;
-  final Map<String, dynamic>? metadata;
+  final Timestamp? createdAt;
 
   AppNotification({
     required this.id,
     required this.userId,
     required this.title,
     required this.body,
-    required this.type,
-    this.createdAt,
-    this.isRead = false,
+    this.type = 'general',
     this.metadata,
+    this.isRead = false,
+    this.createdAt,
   });
 
-  /// تحويل النموذج إلى خريطة للكتابة إلى Firestore
-  /// تم تنظيف الحقول وحذف التكرار المزدوج لـ snake_case لضغط حجم البيانات المرفوعة
+  /// تحويل الكائن إلى Map لحفظه في Firestore
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
       'title': title,
       'body': body,
       'type': type,
-      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-      'isRead': isRead,
       'metadata': metadata,
-    };
+      'isRead': isRead,
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+    }..removeWhere((key, value) => value == null);
   }
 
-  /// إنشاء نموذج من مستند Firestore يدعم قراءة الصيغتين بأمان تام
+  /// إنشاء نموذج من مستند Firestore مع دعم camelCase و snake_case
   factory AppNotification.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String? _getString(List<String> keys, [String? fallback]) {
-      for (final k in keys) {
-        if (data.containsKey(k) && data[k] != null) return data[k].toString();
+    String _s(List<String> keys, [String fallback = '']) {
+      for (var k in keys) {
+        final v = data[k];
+        if (v != null && v.toString().isNotEmpty) return v.toString();
       }
       return fallback;
     }
 
-    bool _getBool(List<String> keys, [bool fallback = false]) {
-      for (final k in keys) {
+    bool _b(List<String> keys, [bool fallback = false]) {
+      for (var k in keys) {
         final v = data[k];
         if (v is bool) return v;
-        if (v is int) return v != 0;
+        if (v is num) return v != 0;
         if (v is String) return v.toLowerCase() == 'true';
       }
       return fallback;
     }
 
-    Timestamp? _getTimestamp(List<String> keys) {
-      for (final k in keys) {
+    Map<String, dynamic>? _m(List<String> keys) {
+      for (var k in keys) {
+        final v = data[k];
+        if (v is Map<String, dynamic>) return v;
+        if (v is Map) return Map<String, dynamic>.from(v);
+        if (v is String) {
+          try {
+            // محاولة تحويل JSON نصي إلى Map
+            final parsed = Map<String, dynamic>.from(
+                (v.isNotEmpty) ? (v.startsWith('{') ? (v as dynamic) : {}) : {});
+            return parsed;
+          } catch (_) {}
+        }
+      }
+      return null;
+    }
+
+    Timestamp? _ts(List<String> keys) {
+      for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
-        if (v is DateTime) return Timestamp.fromDate(v);
         if (v is String) {
           final parsed = DateTime.tryParse(v);
           if (parsed != null) return Timestamp.fromDate(parsed);
@@ -69,28 +86,15 @@ class AppNotification {
       return null;
     }
 
-    final userId = _getString(['userId', 'user_id']) ?? '';
-    final title = _getString(['title']) ?? '';
-    final body = _getString(['body']) ?? '';
-    final type = _getString(['type']) ?? '';
-    final createdAt = _getTimestamp(['createdAt', 'created_at']);
-    final isRead = _getBool(['isRead', 'is_read'], false);
-
-    final metadata = (() {
-      final m = data['metadata'] ?? data['meta'];
-      if (m is Map) return Map<String, dynamic>.from(m as Map);
-      return null;
-    })();
-
     return AppNotification(
       id: doc.id,
-      userId: userId,
-      title: title,
-      body: body,
-      type: type,
-      createdAt: createdAt,
-      isRead: isRead,
-      metadata: metadata,
+      userId: _s(['userId', 'user_id']),
+      title: _s(['title']),
+      body: _s(['body', 'message']),
+      type: _s(['type'], 'general'),
+      metadata: _m(['metadata', 'meta', 'data']),
+      isRead: _b(['isRead', 'is_read', 'read']),
+      createdAt: _ts(['createdAt', 'created_at', 'timestamp']),
     );
   }
 
@@ -100,9 +104,9 @@ class AppNotification {
     String? title,
     String? body,
     String? type,
-    Timestamp? createdAt,
-    bool? isRead,
     Map<String, dynamic>? metadata,
+    bool? isRead,
+    Timestamp? createdAt,
   }) {
     return AppNotification(
       id: id ?? this.id,
@@ -110,9 +114,9 @@ class AppNotification {
       title: title ?? this.title,
       body: body ?? this.body,
       type: type ?? this.type,
-      createdAt: createdAt ?? this.createdAt,
-      isRead: isRead ?? this.isRead,
       metadata: metadata ?? this.metadata,
+      isRead: isRead ?? this.isRead,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 

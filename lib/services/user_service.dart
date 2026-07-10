@@ -1,3 +1,4 @@
+// lib/services/user_service.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -14,7 +15,6 @@ class UserService {
     try {
       if (uid.isEmpty) return null;
       final doc = await _firestore.collection(_collection).doc(uid).get();
-      // نستخدم AppUser.fromDocument لضمان معالجة الأنواع (double, int, bool)
       return doc.exists ? AppUser.fromDocument(doc) : null;
     } catch (e, st) {
       debugPrint('UserService.getUserById error: $e\n$st');
@@ -22,7 +22,25 @@ class UserService {
     }
   }
 
-  /// تحديث الملف الشخصي بالكامل بناءً على الموديل
+  /// إنشاء مستخدم جديد أو استبدال كامل للمستند (يستخدم toMap من AppUser)
+  Future<bool> createOrSetUser(AppUser user) async {
+    try {
+      if (user.id.isEmpty) {
+        debugPrint('UserService.createOrSetUser error: user.id is empty');
+        return false;
+      }
+      final data = user.toMap();
+      // تأكد أن createdAt يتم تعيينه من السيرفر عند الإنشاء
+      if (data['createdAt'] == null) data['createdAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection(_collection).doc(user.id).set(data, SetOptions(merge: true));
+      return true;
+    } catch (e, st) {
+      debugPrint('UserService.createOrSetUser error: $e\n$st');
+      return false;
+    }
+  }
+
+  /// تحديث الملف الشخصي بالكامل بناءً على الموديل (يحذف الحقول المحمية)
   Future<bool> updateUserProfile(AppUser user) async {
     try {
       if (user.id.isEmpty) {
@@ -30,13 +48,15 @@ class UserService {
         return false;
       }
 
-      // نستخدم toMap() التي قمنا بتجهيزها لتطابق Firestore
       final data = user.toMap();
 
       // حماية الحقول الأساسية من التغيير العشوائي
-      data.remove('id'); // المعرف الخاص بالمستند
-      data.remove('uid'); // المعرف الفريد
-      data.remove('createdAt'); // تاريخ الإنشاء لا يتغير
+      data.remove('id');
+      data.remove('uid');
+      data.remove('createdAt');
+
+      // إزالة القيم null لتجنب مسح الحقول الموجودة
+      data.removeWhere((k, v) => v == null);
 
       await _firestore.collection(_collection).doc(user.id).update(data);
       return true;
@@ -55,6 +75,16 @@ class UserService {
 
       if (fields.isEmpty) return true;
 
+      // تحويل بعض الحقول لأنواع مناسبة إن لزم (مثال childrenCount -> int)
+      if (fields.containsKey('childrenCount')) {
+        final v = fields['childrenCount'];
+        if (v is String) {
+          fields['childrenCount'] = int.tryParse(v) ?? 0;
+        } else if (v is double) {
+          fields['childrenCount'] = v.toInt();
+        }
+      }
+
       await _firestore.collection(_collection).doc(uid).update(fields);
       return true;
     } catch (e, st) {
@@ -66,9 +96,7 @@ class UserService {
   /// رفع ملف إلى Firebase Storage
   Future<String?> uploadDocument(File file, String uid, String type, {String? extension}) async {
     try {
-      // استخراج الامتداد بشكل صحيح
       final ext = extension ?? file.path.split('.').last;
-      // تنظيم المسار بشكل احترافي: documents/uid/نوع_الوثيقة.الامتداد
       final ref = _storage.ref().child('documents/$uid/$type.$ext');
 
       final UploadTask uploadTask = ref.putFile(file);
@@ -81,19 +109,46 @@ class UserService {
   }
 
   /// حفظ رابط الوثيقة في حقل Firestore المناسب بناءً على النوع
+  ///
+  /// قواعد الحفظ:
+  /// - 'profile' -> profilePictureUrl (حقل منفصل)
+  /// - أي نوع آخر -> يحفظ داخل خريطة 'documents' كمفتاح type
+  /// مثال: documents.identity_card = url
   Future<bool> saveDocumentUrl(String uid, String type, String url) async {
     try {
       if (uid.isEmpty) throw Exception('UID فارغ');
 
-      // خريطة لربط نوع الملف المرفوع باسم الحقل الفعلي في Firestore
-      final fieldMap = {
-        'identity_card': 'identityCardUrl', // بطاقة الهوية
-        'profile': 'profilePictureUrl',     // صورة الملف الشخصي
-        'license': 'drivingLicenseNumber',  // رخصة القيادة (أو حقل مخصص للرابط)
-      };
+      final userRef = _firestore.collection(_collection).doc(uid);
 
-      final fieldName = fieldMap[type] ?? type;
-      await _firestore.collection(_collection).doc(uid).update({fieldName: url});
+      // أنواع خاصة تتطلب حقول منفصلة
+      if (type == 'profile') {
+        await userRef.update({'profilePictureUrl': url});
+        return true;
+      }
+
+      // لباقي الأنواع نخزن الرابط داخل خريطة documents
+      // نستخدم transaction أو update مع merge لضمان عدم فقدان روابط أخرى
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(userRef);
+        if (!snap.exists) {
+          // إذا لم يوجد المستخدم، ننشئ مستندًا بسيطًا مع documents
+          tx.set(userRef, {
+            'documents': {type: url},
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          return;
+        }
+
+        final data = snap.data() as Map<String, dynamic>? ?? {};
+        final Map<String, dynamic> docs = data['documents'] != null
+            ? Map<String, dynamic>.from(data['documents'])
+            : <String, dynamic>{};
+
+        docs[type] = url;
+
+        tx.update(userRef, {'documents': docs});
+      });
+
       return true;
     } catch (e, st) {
       debugPrint('UserService.saveDocumentUrl error: $e\n$st');
@@ -116,6 +171,26 @@ class UserService {
       final ext = extension ?? 'jpg';
       final ref = _storage.ref().child('documents/$uid/$type.$ext');
       await ref.delete();
+
+      // إزالة الرابط من خريطة documents أو من profilePictureUrl
+      final userRef = _firestore.collection(_collection).doc(uid);
+      if (type == 'profile') {
+        await userRef.update({'profilePictureUrl': FieldValue.delete()});
+      } else {
+        await _firestore.runTransaction((tx) async {
+          final snap = await tx.get(userRef);
+          if (!snap.exists) return;
+          final data = snap.data() as Map<String, dynamic>? ?? {};
+          final Map<String, dynamic> docs = data['documents'] != null
+              ? Map<String, dynamic>.from(data['documents'])
+              : <String, dynamic>{};
+          if (docs.containsKey(type)) {
+            docs.remove(type);
+            tx.update(userRef, {'documents': docs});
+          }
+        });
+      }
+
       return true;
     } catch (e, st) {
       debugPrint('UserService.deleteDocument error: $e\n$st');

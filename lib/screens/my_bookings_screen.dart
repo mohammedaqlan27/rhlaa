@@ -48,7 +48,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return DateTime.now();
   }
 
-  // دالة جلب مرنة تفحص الطريقتين لكتابة المعرف في Firestore لضمان استقرار البيانات
+  /// جلب الحجوزات الخاصة بالمستخدم. نعيد قائمة من الخرائط:
+  /// { 'booking': Booking, 'tripId': String, 'raw': Map<String,dynamic> }
   Future<List<Map<String, dynamic>>> _fetchBookings() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return [];
@@ -56,7 +57,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final List<Map<String, dynamic>> allBookings = [];
 
     try {
-      // 1. محاولة جلب البيانات بأسلوب camelCase
+      // 1. camelCase
       final camelSnapshot = await FirebaseFirestore.instance
           .collection('bookings')
           .where('passengerId', isEqualTo: uid)
@@ -68,7 +69,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         if (bData != null) allBookings.add(bData);
       }
 
-      // 2. محاولة جلب البيانات بأسلوب snake_case للتوافق الرجعي
+      // 2. snake_case (توافق رجعي)
       final snakeSnapshot = await FirebaseFirestore.instance
           .collection('bookings')
           .where('passenger_id', isEqualTo: uid)
@@ -76,8 +77,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
           .get();
 
       for (var doc in snakeSnapshot.docs) {
-        // تأكيد عدم تكرار الحجز إذا جُلب في الاستعلام الأول
-        if (!allBookings.any((element) => (element['booking'] as Booking).bookingId == doc.id)) {
+        if (!allBookings.any((element) => (element['booking'] as Booking).id == doc.id)) {
           final bData = _parseBookingDoc(doc);
           if (bData != null) allBookings.add(bData);
         }
@@ -90,22 +90,22 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
+  /// نحاول تحويل المستند إلى Booking ونُعيد أيضاً بيانات المستند الخام
   Map<String, dynamic>? _parseBookingDoc(DocumentSnapshot doc) {
     try {
       final booking = Booking.fromDocument(doc);
       final tripId = booking.tripId;
-      if (tripId == null || tripId.isEmpty) return null;
+      if (tripId.isEmpty) return null;
 
-      // جلب بيانات الرحلة المتزامنة مع الحجز بشكل منفصل
-      // تنويه: في الإنتاج الفعلي يفضل عمل لدمج البيانات، لكن نعتمد هذا الهيكل تماشياً مع الكود الأصلي الحالي
-      return {'booking': booking, 'tripId': tripId};
-    } catch (e) {
-      debugPrint('Error parsing booking doc: $e');
+      final raw = (doc.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+      return {'booking': booking, 'tripId': tripId, 'raw': raw};
+    } catch (e, st) {
+      debugPrint('Error parsing booking doc: $e\n$st');
       return null;
     }
   }
 
-  // حل مشكلة تحميل تفاصيل الرحلات بالتوازي لعدم تعطيل الـ UI
+  /// جلب بيانات الرحلات المرتبطة بالحجوزات
   Future<List<Map<String, dynamic>>> _populateTripsData(List<Map<String, dynamic>> partialBookings) async {
     final List<Map<String, dynamic>> fullData = [];
     for (var item in partialBookings) {
@@ -116,10 +116,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
           fullData.add({
             'booking': item['booking'] as Booking,
             'trip': trip,
+            'raw': item['raw'] as Map<String, dynamic>,
+          });
+        } else {
+          // إذا لم توجد الرحلة، نضيف الحجز مع trip = null لتتم معالجته لاحقاً
+          fullData.add({
+            'booking': item['booking'] as Booking,
+            'trip': null,
+            'raw': item['raw'] as Map<String, dynamic>,
           });
         }
-      } catch (e) {
-        debugPrint('Error populating trip details: $e');
+      } catch (e, st) {
+        debugPrint('Error populating trip details: $e\n$st');
       }
     }
     return fullData;
@@ -171,7 +179,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     setState(() => _isCancelling = true);
     try {
       final result = await BookingService().cancelBooking(
-        bookingId: booking.bookingId,
+        bookingId: booking.id,
         passengerId: uid,
       );
 
@@ -191,13 +199,22 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  Widget _buildBookingCard(BuildContext context, Booking booking, Trip trip) {
-    final formattedDate = _formatDateSafe(trip.date);
+  Widget _buildBookingCard(BuildContext context, Booking booking, Trip? trip, Map<String, dynamic> raw) {
+    final formattedDate = _formatDateSafe(trip?.date);
 
     Color statusColor = Colors.grey;
     if (_isConfirmed(booking.bookingStatus)) statusColor = Colors.orange.shade700;
     if (_isCompleted(booking.bookingStatus)) statusColor = Colors.green.shade700;
-    if ((booking.bookingStatus ?? '').contains('ملغي') || (booking.bookingStatus ?? '').contains('cancel')) statusColor = Colors.red.shade700;
+    final lowerStatus = booking.bookingStatus.toLowerCase();
+    if (lowerStatus.contains('ملغي') || lowerStatus.contains('cancel')) statusColor = Colors.red.shade700;
+
+    final destinationText = (trip?.destination != null && trip!.destination.isNotEmpty) ? trip.destination : 'وجهة غير محددة';
+    final driverNameText = (trip?.driverName != null && trip!.driverName.isNotEmpty) ? trip!.driverName : 'غير معروف';
+
+    // استخراج معلومات اختيارية من raw (إن وُجدت)
+    final List<dynamic>? seatIndexesRaw = raw['seatIndexes'] as List<dynamic>?;
+    final String? paymentMethodRaw = raw['paymentMethod']?.toString();
+    final List<int> seatIndexes = seatIndexesRaw != null ? seatIndexesRaw.map((e) => (e is num) ? e.toInt() : int.tryParse(e.toString()) ?? -1).where((i) => i >= 0).toList() : [];
 
     return AppCard(
       child: Padding(
@@ -211,7 +228,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'رحلة إلى ${trip.destination ?? 'وجهة غير محددة'}',
+                    'رحلة إلى $destinationText',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo'),
                   ),
                 ),
@@ -222,7 +239,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    booking.bookingStatus ?? 'غير محدد',
+                    booking.bookingStatus,
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 12),
                   ),
                 ),
@@ -233,7 +250,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               children: [
                 const Icon(Icons.person_outline, size: 18, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text('🧑‍✈️ الكابتن: ${trip.driverName ?? 'غير معروف'}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+                Text('🧑‍✈️ الكابتن: $driverNameText', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
               ],
             ),
             const SizedBox(height: 8),
@@ -251,12 +268,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   children: [
                     const Icon(Icons.event_seat_outlined, size: 16, color: Colors.grey),
                     const SizedBox(width: 6),
-                    Text('المقاعد: ${booking.bookedSeatsCount ?? 1}', style: TextStyle(fontSize: 12, color: Colors.black, fontFamily: 'Cairo')),
+                    Text('المقاعد: ${booking.bookedSeatsCount}', style: TextStyle(fontSize: 12, color: Colors.black, fontFamily: 'Cairo')),
                   ],
                 )
               ],
             ),
-            if (booking.seatNumber != null || (booking.paymentMethod != null && booking.paymentMethod!.isNotEmpty)) ...[
+            if (seatIndexes.isNotEmpty || (paymentMethodRaw != null && paymentMethodRaw.isNotEmpty)) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -268,12 +285,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (booking.seatNumber != null)
-                      Text('💺 رقم المقعد المخصص: ${booking.seatNumber}', style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.black87)),
-                    if (booking.paymentMethod != null && booking.paymentMethod!.isNotEmpty)
+                    if (seatIndexes.isNotEmpty)
+                      Text('💺 المقاعد المحجوزة: ${seatIndexes.map((i) => (i + 1).toString()).join(', ')}', style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.black87)),
+                    if (paymentMethodRaw != null && paymentMethodRaw.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4.0),
-                        child: Text('💳 طريقة الدفع: ${booking.paymentMethod}', style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.black54)),
+                        child: Text('💳 طريقة الدفع: $paymentMethodRaw', style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.black54)),
                       ),
                   ],
                 ),
@@ -289,9 +306,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       side: BorderSide(color: _primaryColor),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: () {
+                    onPressed: trip != null ? () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)));
-                    },
+                    } : null,
                     child: Text('تفاصيل الرحلة', style: TextStyle(color: _primaryColor, fontFamily: 'Cairo', fontSize: 13)),
                   ),
                 ),
@@ -317,11 +334,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
-                          tripId: trip.id ?? '',
-                          targetUserId: trip.driverId ?? '',
-                          userType: 'سائق',
-                        )));
+                        if (trip != null) {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
+                            tripId: trip.id,
+                            targetUserId: trip.driverId,
+                            userType: 'سائق',
+                          )));
+                        }
                       },
                       child: const Text('تقييم السائق', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.white)),
                     ),
@@ -329,7 +348,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 const SizedBox(width: 4),
                 IconButton(
                   onPressed: () {
-                    Clipboard.setData(ClipboardData(text: booking.bookingId));
+                    Clipboard.setData(ClipboardData(text: booking.id));
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📋 تم نسخ رقم الحجز بنجاح')));
                   },
                   icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
@@ -396,7 +415,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               );
             }
 
-            // نقوم بتحميل بيانات الرحلات الكاملة متزامنة مع الحجوزات
+            // تحميل بيانات الرحلات الكاملة متزامنة مع الحجوزات
             return FutureBuilder<List<Map<String, dynamic>>>(
               future: _populateTripsData(partialList),
               builder: (context, tripSnapshot) {
@@ -423,8 +442,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final booking = fullList[index]['booking'] as Booking;
-                    final trip = fullList[index]['trip'] as Trip;
-                    return _buildBookingCard(context, booking, trip);
+                    final trip = fullList[index]['trip'] as Trip?;
+                    final raw = fullList[index]['raw'] as Map<String, dynamic>;
+                    return _buildBookingCard(context, booking, trip, raw);
                   },
                 );
               },

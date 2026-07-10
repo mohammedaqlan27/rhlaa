@@ -1,0 +1,14 @@
+name: Expire Bookings Cron
+on:
+  schedule:
+    - cron: '*/10 * * * *' # كل 10 دقائق
+  workflow_dispatch:
+
+jobs:
+  call-expire:
+    runs-on: ubuntu-latest
+    steps:
+      -- name: Call function
+                 - run: |
+                 - curl -X POST "https://<REGION>-<PROJECT>.cloudfunctions.net/expirePendingBookingsHttp" \
+      -H "Authorization: Bearer ${{ secrets.EXPIRE_TOKEN }}"
