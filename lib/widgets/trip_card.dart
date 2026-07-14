@@ -63,8 +63,8 @@ class TripCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    (trip.title != null && trip.title!.isNotEmpty)
-                        ? trip.title!
+                    (trip.title.isNotEmpty)
+                        ? trip.title
                         : 'رحلة تنقل',
                     style: const TextStyle(
                       fontFamily: 'Cairo',

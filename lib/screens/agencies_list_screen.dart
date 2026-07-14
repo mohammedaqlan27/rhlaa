@@ -7,7 +7,7 @@ import '../models/agency.dart';
 import 'agency_detail_screen.dart';
 
 class AgenciesListScreen extends StatefulWidget {
-  const AgenciesListScreen({Key? key}) : super(key: key);
+  const AgenciesListScreen({super.key});
 
   @override
   State<AgenciesListScreen> createState() => _AgenciesListScreenState();

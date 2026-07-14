@@ -299,7 +299,7 @@ class GovFeesService {
 
         tx.update(tripRef, {
           'govFeeAmount': fee,
-          'manifestStatus': FieldValue.serverTimestamp() == null ? 'pending' : 'pending', // لا تغيير فعلي، مجرد مثال
+          'manifestStatus': 'pending', // لا تغيير فعلي، مجرد مثال
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });

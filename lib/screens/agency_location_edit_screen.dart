@@ -10,7 +10,7 @@ import '../models/agency.dart';
 
 class AgencyLocationEditScreen extends StatefulWidget {
   final String agencyId;
-  const AgencyLocationEditScreen({Key? key, required this.agencyId}) : super(key: key);
+  const AgencyLocationEditScreen({super.key, required this.agencyId});
 
   @override
   State<AgencyLocationEditScreen> createState() => _AgencyLocationEditScreenState();

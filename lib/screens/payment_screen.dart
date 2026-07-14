@@ -103,7 +103,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     Navigator.pop(context);
                   },
                 );
-              }).toList(),
+              }),
             ],
           ),
         );
@@ -127,9 +127,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     String? bookingId = widget.bookingId.isNotEmpty ? widget.bookingId : null;
 
     try {
-      if (bookingId == null) {
-        bookingId = await _findLatestBookingId(user.uid, widget.tripId);
-      }
+      bookingId ??= await _findLatestBookingId(user.uid, widget.tripId);
 
       if (bookingId != null) {
         double amount = _amount;

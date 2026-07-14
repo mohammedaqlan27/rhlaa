@@ -6,7 +6,7 @@ import '../models/trip.dart';
 import '../utils/trip_exporter.dart' as exporter_service;
 
 class TripHistoryScreen extends StatefulWidget {
-  const TripHistoryScreen({Key? key}) : super(key: key);
+  const TripHistoryScreen({super.key});
 
   @override
   State<TripHistoryScreen> createState() => _TripHistoryScreenState();
@@ -36,7 +36,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
             ? '${trip.departureTime!.year}-${trip.departureTime!.month.toString().padLeft(2, '0')}-${trip.departureTime!.day.toString().padLeft(2, '0')}'
             : 'غير محدد');
 
-    final title = (trip.title ?? '').isNotEmpty ? trip.title! : '${trip.origin} → ${trip.destination}';
+    final title = (trip.title ?? '').isNotEmpty ? trip.title : '${trip.origin} → ${trip.destination}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

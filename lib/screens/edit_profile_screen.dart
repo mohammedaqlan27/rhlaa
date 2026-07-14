@@ -22,7 +22,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _avatarController = TextEditingController();
 
   final _idNumberController = TextEditingController();
-  final _carPlateController = TextEditingController();
+  final _PlateController = TextEditingController();
   final _carOwnerController = TextEditingController();
   final _drivingLicenseController = TextEditingController();
 
@@ -46,7 +46,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _phoneController.dispose();
     _avatarController.dispose();
     _idNumberController.dispose();
-    _carPlateController.dispose();
+    _PlateController.dispose();
     _carOwnerController.dispose();
     _drivingLicenseController.dispose();
     super.dispose();
@@ -74,7 +74,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _phoneController.text = readString(['mobileNumber', 'phone']) ?? '';
       _avatarController.text = readString(['profilePictureUrl']) ?? '';
       _idNumberController.text = readString(['idNumber', 'fullNameId']) ?? '';
-      _carPlateController.text = readString(['carPlateNumber', 'plateNumber']) ?? '';
+      _PlateController.text = readString(['PlateNumber', 'plateNumber']) ?? '';
       _carOwnerController.text = readString(['carOwnerOfficialName', 'vehicleOwner']) ?? '';
       _drivingLicenseController.text = readString(['drivingLicenseNumber', 'licenseNumber']) ?? '';
       _userType = readString(['userType']);
@@ -120,7 +120,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'mobileNumber': _phoneController.text.trim(),
         'profilePictureUrl': _avatarController.text.trim(),
         'idNumber': _idNumberController.text.trim(),
-        'carPlateNumber': _carPlateController.text.trim(),
+        'carPlateNumber': _PlateController.text.trim(),
         'carOwnerOfficialName': _carOwnerController.text.trim(),
         'drivingLicenseNumber': _drivingLicenseController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -244,7 +244,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Column(
                 children: [
                   CustomTextField(
-                    controller: _carPlateController,
+                    controller: _PlateController,
                     label: 'رقم لوحة السيارة ${isDriver ? "(مطلوب للقيادة)" : "(اختياري)"}',
                     prefixIcon: Icons.pin_rounded,
                     validator: (val) => isDriver && (val == null || val.isEmpty) ? 'بيانات اللوحة مطلوبة كابتن!' : null,

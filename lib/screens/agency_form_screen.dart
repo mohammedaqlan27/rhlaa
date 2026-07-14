@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AgencyFormScreen extends StatefulWidget {
   final Agency? agency;
-  const AgencyFormScreen({Key? key, this.agency}) : super(key: key);
+  const AgencyFormScreen({super.key, this.agency});
 
   @override
   State<AgencyFormScreen> createState() => _AgencyFormScreenState();

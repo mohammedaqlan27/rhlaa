@@ -209,7 +209,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     if (lowerStatus.contains('ملغي') || lowerStatus.contains('cancel')) statusColor = Colors.red.shade700;
 
     final destinationText = (trip?.destination != null && trip!.destination.isNotEmpty) ? trip.destination : 'وجهة غير محددة';
-    final driverNameText = (trip?.driverName != null && trip!.driverName.isNotEmpty) ? trip!.driverName : 'غير معروف';
+    final driverNameText = (trip?.driverName != null && trip!.driverName.isNotEmpty) ? trip.driverName : 'غير معروف';
 
     // استخراج معلومات اختيارية من raw (إن وُجدت)
     final List<dynamic>? seatIndexesRaw = raw['seatIndexes'] as List<dynamic>?;

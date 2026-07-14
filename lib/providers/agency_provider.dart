@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import '../services/agencies_service.dart';
 import '../models/agency.dart';
 import '../models/agency_transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AgencyProvider with ChangeNotifier {
   final AgenciesService _service;
@@ -299,9 +300,14 @@ class AgencyProvider with ChangeNotifier {
   /// ابدأ الاستماع للتغييرات في مجموعة المكاتب (Realtime)
   /// - onData callback اختياري لتلقي التحديثات فورياً
   void startRealtimeListener({void Function(List<Agency>)? onData}) {
-    stopRealtimeListener(); // تأكد من إيقاف أي اشتراك سابق
+    stopRealtimeListener();
     try {
-      _realtimeSub = _service._firestore.collection('agencies').orderBy('createdAt', descending: true).snapshots().listen(
+      // التعديل هنا: نستخدم FirebaseFirestore.instance مباشرة
+      _realtimeSub = FirebaseFirestore.instance
+          .collection('agencies') // الوصول لمجموعة المكاتب
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .listen(
             (snap) {
           final list = snap.docs.map((d) => Agency.fromDoc(d)).toList();
           _agencies = list;
@@ -318,7 +324,6 @@ class AgencyProvider with ChangeNotifier {
       _setError('فشل بدء الاستماع في الوقت الحقيقي: $e');
     }
   }
-
   /// إيقاف الاستماع في الوقت الحقيقي
   void stopRealtimeListener() {
     try {
@@ -339,6 +344,3 @@ class AgencyProvider with ChangeNotifier {
   }
 }
 
-extension on AgenciesService {
-  get _firestore => null;
-}

@@ -1,6 +1,8 @@
+// lib/widgets/loading_indicator.dart
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../utils/constants.dart' hide AppColors, AppFonts;// استيراد الثوابت لاستخدام الألوان
+// تم إبقاء الاستيراد كما هو لتجنب أي تعارض
+import '../utils/constants.dart' hide AppColors, AppFonts;
 
 class CustomLoadingIndicator extends StatelessWidget {
   final double size;
@@ -10,13 +12,13 @@ class CustomLoadingIndicator extends StatelessWidget {
   final String? message;
 
   const CustomLoadingIndicator({
-    Key? key,
+    super.key,
     this.size = 40.0,
     this.strokeWidth = 4.0,
     this.color,
     this.isFullScreen = false,
     this.message,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +33,8 @@ class CustomLoadingIndicator extends StatelessWidget {
           child: CircularProgressIndicator(
             strokeWidth: strokeWidth,
             valueColor: AlwaysStoppedAnimation<Color>(
-              color ?? AppColors.primaryPurple, // استخدام اللون البنفسجي من الثوابت
+              // استخدام اللون الأزرق بدلاً من البنفسجي
+              color ?? AppColors.primaryBlue,
             ),
           ),
         ),
@@ -39,10 +42,12 @@ class CustomLoadingIndicator extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             message!,
-            style: TextStyle(
-              fontFamily: AppFonts.arabicFont,
+            style: const TextStyle(
+              // استخدام المتغير الصحيح للخط
+              fontFamily: AppFonts.arabic,
               fontSize: 14,
-              color: AppColors.darkPurple,
+              // استخدام لون النصوص الداكن بدلاً من البنفسجي الغامق
+              color: AppColors.textDark,
             ),
           ),
         ],
@@ -68,8 +73,8 @@ class CustomLoadingIndicator extends StatelessWidget {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false, // منع إغلاق النافذة بالرجوع
+      builder: (context) => PopScope(
+        canPop: false, // الطريقة الحديثة لمنع إغلاق النافذة بالرجوع
         child: CustomLoadingIndicator(
           isFullScreen: false,
           message: message,

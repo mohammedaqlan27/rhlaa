@@ -137,7 +137,7 @@ class TestMenuScreen extends StatelessWidget {
       'DriverHome': const DriverHomeScreen(),
       'DriverTrips': const DriverTripsScreen(),
       'EditProfile': const EditProfileScreen(),
-      'EditTrip': EditTripScreen(tripId: 'trip123', trip: sampleTrip),
+      'EditTrip': EditTripScreen(tripId: 'trip123'),
       'Home': const HomeScreen(),
       'Loading': const LoadingScreen(),
       'ManageTrip': ManageTripScreen(trip: sampleTrip),

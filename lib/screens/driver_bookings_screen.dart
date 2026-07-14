@@ -25,8 +25,6 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
 
   String _selectedFilter = 'الكل';
 
-  get AppUser => null;
-
   DateTime _toDateTime(dynamic value) {
     if (value == null) return DateTime.now();
     try {
@@ -70,12 +68,12 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
         String passengerName = 'راكب غير معروف';
         String passengerPhone = 'لا يوجد رقم';
 
-        if (booking.passengerId != null && booking.passengerId!.isNotEmpty) {
+        if (booking.passengerId.isNotEmpty) {
           final userDoc = await firestore.collection('users').doc(booking.passengerId).get();
           if (userDoc.exists) {
             final appUser = AppUser.fromDocument(userDoc);
             passengerName = appUser.nickname ?? passengerName;
-            passengerPhone = appUser.phoneNumber ?? passengerPhone;
+            passengerPhone = appUser.mobileNumber ?? passengerPhone;
           }
         }
 
@@ -188,7 +186,7 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
               children: [
                 const Icon(Icons.phone_android_outlined, size: 16, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text('الهاتف: $passengerPhone', style: TextStyle(fontSize: 13, color: Colors.black)),
+                Text('الهاتف: $passengerPhone', style: const TextStyle(fontSize: 13, color: Colors.black)),
               ],
             ),
             const SizedBox(height: 4),

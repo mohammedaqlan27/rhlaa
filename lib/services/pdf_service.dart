@@ -4,11 +4,11 @@
 // - تولد PDF مفصّل لرحلة واحدة (تضم بيانات الرحلة، قائمة الركاب إن وُجدت، govFee، إلخ).
 // - ترفع الملف إلى Firebase Storage وتحدّث وثيقة الرحلة بحقل manifestUrl.
 // - توفر دوال لحذف الـ manifest أو إعادة توليده.
-// متطلبات:
+//
+// متطلبات في pubspec.yaml:
 //   firebase_storage: ^x.x.x
 //   pdf: ^3.x.x
 //   path_provider: ^x.x.x
-// تأكد من إضافة الحزم في pubspec.yaml ثم تشغيل flutter pub get.
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -26,129 +26,147 @@ class PdfService {
   final FirebaseStorage _storage;
 
   final String _tripsCollection = 'trips';
-  final String _bookingsCollection = 'bookings'; // إن كنت تحتفظ بحجوزات الركاب هنا
+  final String _bookingsCollection = 'bookings';
   final String _manifestsFolder = 'manifests';
 
   PdfService({FirebaseFirestore? firestore, FirebaseStorage? storage})
       : _firestore = firestore ?? FirebaseFirestore.instance,
         _storage = storage ?? FirebaseStorage.instance;
 
-  /// توليد PDF لكشف الركاب لرحلة واحدة، رفعه إلى Storage، وتحديث وثيقة الرحلة
+  /// توليد بايتس PDF لكشف الركاب لرحلة واحدة (لا يرفع الملف).
+  /// يعيد Uint8List أو يرمي استثناء عند الفشل.
+  Future<Uint8List> buildManifestPdfBytes(String tripId) async {
+    // جلب بيانات الرحلة
+    final tripDoc = await _firestore.collection(_tripsCollection).doc(tripId).get();
+    if (!tripDoc.exists) throw Exception('Trip not found: $tripId');
+    final trip = Trip.fromDocument(tripDoc);
+
+    // جلب الحجوزات المرتبطة بالرحلة (confirmed أو bookingStatus)
+    Query bookingsQuery = _firestore.collection(_bookingsCollection).where('tripId', isEqualTo: tripId);
+
+    // بعض المشاريع تستخدم bookingStatus أو status
+    // نحاول جلب الحجوزات المؤكدة أولاً
+    final snapConfirmed = await bookingsQuery.where('bookingStatus', isEqualTo: 'confirmed').orderBy('createdAt', descending: false).get();
+    QuerySnapshot bookingsSnap;
+    if (snapConfirmed.docs.isNotEmpty) {
+      bookingsSnap = snapConfirmed;
+    } else {
+      // احتياطي: بعض المستندات قد تستخدم 'status' أو 'paymentStatus'
+      final snapAlt = await bookingsQuery.where('status', isEqualTo: 'confirmed').orderBy('createdAt', descending: false).get();
+      bookingsSnap = snapAlt;
+    }
+
+    final bookings = bookingsSnap.docs.map((d) => d.data() as Map<String, dynamic>).toList();
+
+    // توليد PDF
+    final pw.Document pdfDoc = pw.Document();
+    final DateFormat dateFmt = DateFormat('yyyy-MM-dd');
+    final DateFormat timeFmt = DateFormat('HH:mm');
+
+    final title = (trip.title != null && trip.title!.isNotEmpty) ? trip.title! : 'كشف ركاب الرحلة ${trip.id}';
+    final tripDate = trip.date ?? trip.departureTime;
+    final dateText = tripDate != null ? dateFmt.format(tripDate) : '-';
+    final timeText = tripDate != null ? timeFmt.format(tripDate) : (trip.time != null && trip.time!.isNotEmpty ? trip.time! : '-');
+
+    pdfDoc.addPage(
+      pw.MultiPage(
+        pageFormat: pdf.PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(18),
+        build: (pw.Context ctx) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Text(
+                title,
+                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                  pw.Text('من: ${trip.origin ?? '-'}', style: pw.TextStyle(fontSize: 12)),
+                  pw.Text('إلى: ${trip.destination ?? '-'}', style: pw.TextStyle(fontSize: 12)),
+                  pw.Text('التاريخ: $dateText', style: pw.TextStyle(fontSize: 12)),
+                  pw.Text('الوقت: $timeText', style: pw.TextStyle(fontSize: 12)),
+                ]),
+                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+                  pw.Text('السائق: ${trip.driverName ?? '-'}', style: pw.TextStyle(fontSize: 12)),
+                  pw.Text('رقم المركبة: ${trip.carPlateNumber ?? '-'}', style: pw.TextStyle(fontSize: 12)),
+                  pw.Text('السعر: ${trip.price?.toStringAsFixed(2) ?? '-'}', style: pw.TextStyle(fontSize: 12)),
+                  pw.Text('govFee: ${(trip.govFeeAmount ?? 0.0).toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 12)),
+                ]),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+            pw.Text('قائمة الركاب', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 8),
+
+            // جدول الركاب
+            pw.Table.fromTextArray(
+              headers: ['#', 'اسم الراكب', 'هاتف', 'مقعد', 'مبلغ مدفوع', 'ملاحظات'],
+              data: List<List<String>>.generate(bookings.length, (i) {
+                final b = bookings[i];
+                final passengerName = (b['passengerName'] ?? b['passengerNickname'] ?? b['name'] ?? '')?.toString() ?? '';
+                final phone = (b['passengerPhone'] ?? b['phone'] ?? '')?.toString() ?? '';
+                // seat: قد يكون seatIndexes أو seatNumber أو seat
+                String seat = '-';
+                if (b['seatNumber'] != null) seat = b['seatNumber'].toString();
+                else if (b['seatIndexes'] is List && (b['seatIndexes'] as List).isNotEmpty) {
+                  final idxList = List.from(b['seatIndexes']);
+                  seat = idxList.map((e) => e.toString()).join(',');
+                }
+                final paid = ((b['amountPaid'] ?? b['amount'] ?? 0).toString());
+                final notes = (b['notes'] ?? '')?.toString() ?? '';
+                return ['${i + 1}', passengerName, phone, seat, paid, notes];
+              }),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              cellAlignment: pw.Alignment.centerLeft,
+              headerDecoration: pw.BoxDecoration(color: pdf.PdfColors.grey300),
+              cellHeight: 20,
+              columnWidths: {
+                0: pw.FlexColumnWidth(0.6),
+                1: pw.FlexColumnWidth(2),
+                2: pw.FlexColumnWidth(1.4),
+                3: pw.FlexColumnWidth(0.8),
+                4: pw.FlexColumnWidth(1.2),
+                5: pw.FlexColumnWidth(2),
+              },
+            ),
+
+            pw.SizedBox(height: 12),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+                pw.Text('إجمالي الركاب: ${bookings.length}', style: pw.TextStyle(fontSize: 12)),
+                pw.Text('المقاعد المتاحة: ${trip.availableSeats ?? '-'}', style: pw.TextStyle(fontSize: 12)),
+              ])
+            ]),
+
+            pw.SizedBox(height: 18),
+            pw.Text('ملاحظات إضافية:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+            pw.Text(trip.description != null && trip.description!.isNotEmpty ? trip.description! : '-', style: pw.TextStyle(fontSize: 11)),
+          ];
+        },
+      ),
+    );
+
+    final Uint8List pdfBytes = await pdfDoc.save();
+    return pdfBytes;
+  }
+
+  /// توليد PDF ورفع الملف إلى Firebase Storage وتحديث وثيقة الرحلة.
   /// يعيد رابط التحميل (download URL) عند النجاح، أو null عند الفشل.
   Future<String?> generateManifestForTrip(String tripId, {bool attachToTrip = true}) async {
+    File? localFile;
     try {
-      // جلب بيانات الرحلة
-      final tripDoc = await _firestore.collection(_tripsCollection).doc(tripId).get();
-      if (!tripDoc.exists) {
-        debugPrint('PdfService.generateManifestForTrip: Trip not found $tripId');
-        return null;
-      }
-      final trip = Trip.fromDocument(tripDoc);
+      final Uint8List pdfBytes = await buildManifestPdfBytes(tripId);
 
-      // جلب الحجوزات المرتبطة بالرحلة (إن وُجدت) لترتيب الركاب في الكشوف
-      final bookingsSnap = await _firestore
-          .collection(_bookingsCollection)
-          .where('tripId', isEqualTo: tripId)
-          .where('status', isEqualTo: 'confirmed') // أو الحالة المناسبة
-          .orderBy('createdAt', descending: false)
-          .get();
-
-      final bookings = bookingsSnap.docs.map((d) => d.data() as Map<String, dynamic>).toList();
-
-      // توليد PDF
-      final pw.Document pdfDoc = pw.Document();
-      final DateFormat dateFmt = DateFormat('yyyy-MM-dd');
-      final DateFormat timeFmt = DateFormat('HH:mm');
-
-      final title = trip.title.isNotEmpty ? trip.title : 'كشف ركاب الرحلة ${trip.id}';
-      final tripDate = trip.date ?? trip.departureTime;
-      final dateText = tripDate != null ? dateFmt.format(tripDate) : '-';
-      final timeText = tripDate != null ? timeFmt.format(tripDate) : (trip.time.isNotEmpty ? trip.time : '-');
-
-      // رأس الصفحة وبناء المحتوى
-      pdfDoc.addPage(
-        pw.MultiPage(
-          pageFormat: pdf.PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(18),
-          build: (pw.Context ctx) {
-            return [
-              pw.Header(
-                level: 0,
-                child: pw.Text(
-                  title,
-                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-                ),
-              ),
-              pw.SizedBox(height: 6),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                    pw.Text('من: ${trip.origin}', style: pw.TextStyle(fontSize: 12)),
-                    pw.Text('إلى: ${trip.destination}', style: pw.TextStyle(fontSize: 12)),
-                    pw.Text('التاريخ: $dateText', style: pw.TextStyle(fontSize: 12)),
-                    pw.Text('الوقت: $timeText', style: pw.TextStyle(fontSize: 12)),
-                  ]),
-                  pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                    pw.Text('السائق: ${trip.driverName}', style: pw.TextStyle(fontSize: 12)),
-                    pw.Text('رقم المركبة: ${trip.carPlateNumber}', style: pw.TextStyle(fontSize: 12)),
-                    pw.Text('السعر: ${trip.price.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 12)),
-                    pw.Text('govFee: ${(trip.govFeeAmount ?? 0.0).toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 12)),
-                  ]),
-                ],
-              ),
-              pw.SizedBox(height: 12),
-              pw.Text('قائمة الركاب', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 8),
-
-              // جدول الركاب
-              pw.Table.fromTextArray(
-                headers: ['#', 'اسم الراكب', 'هاتف', 'مقعد', 'مبلغ مدفوع', 'ملاحظات'],
-                data: List<List<String>>.generate(bookings.length, (i) {
-                  final b = bookings[i];
-                  final passengerName = (b['passengerName'] ?? b['name'] ?? '')?.toString() ?? '';
-                  final phone = (b['passengerPhone'] ?? b['phone'] ?? '')?.toString() ?? '';
-                  final seat = (b['seatNumber']?.toString() ?? '-');
-                  final paid = ((b['amountPaid'] ?? b['amount'] ?? 0).toString());
-                  final notes = (b['notes'] ?? '')?.toString() ?? '';
-                  return ['${i + 1}', passengerName, phone, seat, paid, notes];
-                }),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                cellAlignment: pw.Alignment.centerLeft,
-                headerDecoration: pw.BoxDecoration(color: pdf.PdfColors.grey300),
-                cellHeight: 20,
-                columnWidths: {
-                  0: pw.FlexColumnWidth(0.6),
-                  1: pw.FlexColumnWidth(2),
-                  2: pw.FlexColumnWidth(1.4),
-                  3: pw.FlexColumnWidth(0.8),
-                  4: pw.FlexColumnWidth(1.2),
-                  5: pw.FlexColumnWidth(2),
-                },
-              ),
-
-              pw.SizedBox(height: 12),
-              pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [
-                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                  pw.Text('إجمالي الركاب: ${bookings.length}', style: pw.TextStyle(fontSize: 12)),
-                  pw.Text('المقاعد المتاحة: ${trip.availableSeats}', style: pw.TextStyle(fontSize: 12)),
-                ])
-              ]),
-
-              pw.SizedBox(height: 18),
-              pw.Text('ملاحظات إضافية:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-              pw.Text(trip.description.isNotEmpty ? trip.description : '-', style: pw.TextStyle(fontSize: 11)),
-            ];
-          },
-        ),
-      );
-
-      // حفظ PDF مؤقتاً
-      final Uint8List pdfBytes = await pdfDoc.save();
+      // حفظ PDF مؤقتاً (اختياري، مفيد للتصحيح على الأجهزة المحلية)
       final Directory tempDir = await getTemporaryDirectory();
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final String localPath = '${tempDir.path}/manifest_${tripId}_$timestamp.pdf';
-      final File localFile = File(localPath);
+      localFile = File(localPath);
       await localFile.writeAsBytes(pdfBytes, flush: true);
 
       // رفع الملف إلى Firebase Storage
@@ -169,20 +187,23 @@ class PdfService {
         });
       }
 
-      // حذف الملف المحلي المؤقت إن رغبت
+      // حذف الملف المحلي المؤقت إن وُجد
       try {
-        if (await localFile.exists()) await localFile.delete();
+        if (localFile.existsSync()) await localFile.delete();
       } catch (_) {}
 
       return downloadUrl;
     } catch (e, st) {
       debugPrint('PdfService.generateManifestForTrip error: $e\n$st');
+      // حاول حذف الملف المحلي عند الفشل
+      try {
+        if (localFile != null && await localFile.exists()) await localFile.delete();
+      } catch (_) {}
       return null;
     }
   }
 
-  /// توليد ورفع manifests لعدة رحلات (موازي أو متسلسل حسب الحاجة)
-  /// يعيد خريطة tripId -> manifestUrl (null عند الفشل لكل رحلة)
+  /// توليد ورفع manifests لعدة رحلات (متسلسل). يعيد خريطة tripId -> manifestUrl (null عند الفشل).
   Future<Map<String, String?>> generateAndAttachManifestForTrips(List<String> tripIds) async {
     final Map<String, String?> results = {};
     for (final id in tripIds) {
@@ -199,11 +220,18 @@ class PdfService {
       final doc = await docRef.get();
       if (!doc.exists) return false;
       final data = doc.data() as Map<String, dynamic>? ?? {};
-      final storagePath = data['manifestStoragePath'] as String?;
+      final storagePath = (data['manifestStoragePath'] as String?) ?? (data['manifest_path'] as String?);
+
       if (storagePath != null && storagePath.isNotEmpty) {
         final ref = _storage.ref().child(storagePath);
-        await ref.delete();
+        try {
+          await ref.delete();
+        } catch (e) {
+          // قد يكون الملف غير موجود؛ لا نوقف العملية بسبب ذلك
+          debugPrint('PdfService.deleteManifest: storage delete error: $e');
+        }
       }
+
       await docRef.update({
         'manifestUrl': FieldValue.delete(),
         'manifestStoragePath': FieldValue.delete(),

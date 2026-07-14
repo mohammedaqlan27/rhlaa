@@ -2,14 +2,25 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // ألوان أساسية قابلة للتعديل
-  static const Color seedColor = Color(0xFF3E3A8F); // أزرق بنفسجي
-  static const Color success = Color(0xFF2E7D32);
+  // ألوان الشعار الخاصة بك
+  static const Color logoBlue = Color(0xFF1E70B8);
+  static const Color logoTeal = Color(0xFF17A5A3);
+  static const Color logoGreen = Color(0xFF4EBF64);
+
+  // تعيين الألوان داخل نظام التطبيق
+  static const Color seedColor = logoBlue; // اللون الرئيسي الذي تُشتق منه باقي الدرجات
+  static const Color success = logoGreen;  // تم استبدال الأخضر القديم بأخضر الشعار
   static const Color warning = Color(0xFFF9A825);
   static const Color danger = Color(0xFFC62828);
 
   static ThemeData light() {
-    final colorScheme = ColorScheme.fromSeed(seedColor: seedColor, brightness: Brightness.light);
+    // توليد لوحة الألوان مع تخصيص اللون الثانوي ليكون التيل (Teal) لضمان ظهوره في الهوية
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.light,
+    ).copyWith(
+      secondary: logoTeal,
+    );
 
     return ThemeData(
       useMaterial3: true,
@@ -54,7 +65,7 @@ class AppTheme {
         bodyLarge: const TextStyle(fontSize: 16),
         bodyMedium: const TextStyle(fontSize: 14),
       ).apply(
-        fontFamily: 'Cairo', // استخدم الخط المضاف في pubspec
+        fontFamily: 'Cairo', // تطبيق خط كايرو
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: colorScheme.surface,
@@ -64,6 +75,4 @@ class AppTheme {
       visualDensity: VisualDensity.adaptivePlatformDensity,
     );
   }
-
-// يمكنك إضافة dark() لاحقًا
 }

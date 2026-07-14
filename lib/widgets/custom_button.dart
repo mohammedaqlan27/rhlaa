@@ -15,7 +15,7 @@ class CustomButton extends StatelessWidget {
   final bool compact;
 
   const CustomButton({
-    Key? key,
+    super.key,
     this.text,
     this.child,
     required this.onPressed,
@@ -28,8 +28,7 @@ class CustomButton extends StatelessWidget {
     this.icon,
     this.compact = false,
   })  : height = height ?? (compact ? 44.0 : 54.0),
-        assert(text != null || child != null, 'Either text or child must be provided'),
-        super(key: key);
+        assert(text != null || child != null, 'Either text or child must be provided');
 
   static const Color _logoBlue = Color(0xFF1E70B8);
 

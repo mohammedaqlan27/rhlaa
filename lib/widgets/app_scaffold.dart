@@ -17,7 +17,7 @@ class AppScaffold extends StatelessWidget {
   final Color? appBarColor;
 
   const AppScaffold({
-    Key? key,
+    super.key,
     this.title,
     required this.body,
     this.actions,
@@ -30,7 +30,7 @@ class AppScaffold extends StatelessWidget {
     this.padding,
     this.extendBodyBehindAppBar = false,
     this.appBarColor,
-  }) : super(key: key);
+  });
 
   // ألوان الهوية البصرية لـ "رحلاء"
   static const Color _logoBlue = Color(0xFF1E70B8);

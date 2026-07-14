@@ -9,7 +9,7 @@ class TripExporterScreen extends StatefulWidget {
   final List<dynamic>? itemsToExport;
   final String? driverIdForFetch;
 
-  const TripExporterScreen({Key? key, this.itemsToExport, this.driverIdForFetch}) : super(key: key);
+  const TripExporterScreen({super.key, this.itemsToExport, this.driverIdForFetch});
 
   @override
   State<TripExporterScreen> createState() => _TripExporterScreenState();

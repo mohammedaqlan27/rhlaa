@@ -38,7 +38,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   String _selectedOrigin = 'صنعاء';
   String _selectedDestination = 'عدن';
   String _carType = 'سيارة سيدان';
-  String _tripCategory = 'داخلية';
+  final String _tripCategory = 'داخلية';
   int _totalSeats = 4;
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
 

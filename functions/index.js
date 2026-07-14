@@ -178,3 +178,177 @@ exports.expirePendingBookingsHttp = functions.https.onRequest(async (req, res) =
     return res.status(500).send('Internal error');
   }
 });
+
+/* ------------------------------------------------------------------
+   Additional notification functions:
+   - sendNotificationToUser (callable)
+   - processScheduledNotifications (scheduled)
+   These functions integrate with the notification system:
+   - reads tokens from users/{uid}/fcmTokens/{token}
+   - creates notification docs in notifications collection (when scheduled)
+   - sends FCM payloads and cleans invalid tokens
+   ------------------------------------------------------------------ */
+
+/**
+ * Helper: getUserTokens
+ * Returns array of token strings for a given userId
+ */
+async function getUserTokens(userId) {
+  try {
+    const tokensSnap = await db.collection('users').doc(userId).collection('fcmTokens').get();
+    return tokensSnap.docs.map(d => d.id).filter(Boolean);
+  } catch (err) {
+    console.error('getUserTokens error for', userId, err);
+    return [];
+  }
+}
+
+/**
+ * Callable: sendNotificationToUser
+ * Expects: { userId, title, body, data, notificationId }
+ * Sends FCM to all tokens under users/{userId}/fcmTokens/{token}
+ */
+exports.sendNotificationToUser = functions.https.onCall(async (data, context) => {
+  const payloadData = data || {};
+  const userId = payloadData.userId;
+  const title = payloadData.title;
+  const body = payloadData.body;
+  const extraData = payloadData.data || {};
+  const notificationId = payloadData.notificationId || '';
+
+  if (!userId || !title || !body) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing userId/title/body');
+  }
+
+  const tokens = await getUserTokens(userId);
+  if (!tokens.length) {
+    console.log('No FCM tokens for user:', userId);
+    return { success: false, reason: 'no_tokens' };
+  }
+
+  const message = {
+    notification: { title: String(title), body: String(body) },
+    data: Object.assign({}, extraData, { notificationId: String(notificationId) }),
+  };
+
+  try {
+    const res = await admin.messaging().sendToDevice(tokens, message);
+    // Collect invalid tokens to remove
+    const tokensToRemove = [];
+    res.results.forEach((r, i) => {
+      const err = r.error;
+      if (err) {
+        const token = tokens[i];
+        if (err.code === 'messaging/invalid-registration-token' || err.code === 'messaging/registration-token-not-registered') {
+          tokensToRemove.push(token);
+        } else {
+          console.warn('FCM send error for token', tokens[i], err.code, err.message);
+        }
+      }
+    });
+
+    if (tokensToRemove.length) {
+      const batch = db.batch();
+      tokensToRemove.forEach(t => {
+        const ref = db.collection('users').doc(userId).collection('fcmTokens').doc(t);
+        batch.delete(ref);
+      });
+      await batch.commit();
+      console.log('Removed invalid tokens for user', userId, tokensToRemove.length);
+    }
+
+    return { success: true, sent: res.successCount, failed: res.failureCount };
+  } catch (err) {
+    console.error('sendNotificationToUser error', err);
+    throw new functions.https.HttpsError('internal', 'Failed to send notification');
+  }
+});
+
+/**
+ * Scheduled: processScheduledNotifications
+ * Runs every minute, processes scheduled_notifications where sendAt <= now and sent == false
+ */
+exports.processScheduledNotifications = functions.pubsub.schedule('every 1 minutes').onRun(async (context) => {
+  const now = admin.firestore.Timestamp.now();
+  try {
+    const snaps = await db
+      .collection('scheduled_notifications')
+      .where('sendAt', '<=', now)
+      .where('sent', '==', false)
+      .limit(50)
+      .get();
+
+    if (snaps.empty) {
+      // nothing to do
+      return null;
+    }
+
+    for (const doc of snaps.docs) {
+      const data = doc.data() || {};
+      try {
+        // create notification doc in notifications collection
+        const notifRef = await db.collection('notifications').add({
+          userId: data.userId,
+          title: data.title,
+          body: data.body,
+          type: data.type || 'scheduled',
+          metadata: data.metadata || {},
+          isRead: false,
+          sendNotification: data.sendNotification !== false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // send push if requested
+        if (data.sendNotification !== false) {
+          try {
+            // call the callable function logic directly to send FCM
+            // reuse sendNotificationToUser implementation by invoking it programmatically
+            // but since onCall wrapper expects HTTPS callable, we call the internal helper instead:
+            const tokens = await getUserTokens(data.userId);
+            if (tokens.length) {
+              const message = {
+                notification: { title: String(data.title), body: String(data.body) },
+                data: Object.assign({}, data.metadata || {}, { notificationId: notifRef.id }),
+              };
+              const res = await admin.messaging().sendToDevice(tokens, message);
+              // remove invalid tokens
+              const tokensToRemove = [];
+              res.results.forEach((r, i) => {
+                const err = r.error;
+                if (err) {
+                  const token = tokens[i];
+                  if (err.code === 'messaging/invalid-registration-token' || err.code === 'messaging/registration-token-not-registered') {
+                    tokensToRemove.push(token);
+                  }
+                }
+              });
+              if (tokensToRemove.length) {
+                const batch = db.batch();
+                tokensToRemove.forEach(t => {
+                  const ref = db.collection('users').doc(data.userId).collection('fcmTokens').doc(t);
+                  batch.delete(ref);
+                });
+                await batch.commit();
+              }
+            } else {
+              console.log('No tokens to send scheduled notification for user', data.userId);
+            }
+          } catch (sendErr) {
+            console.error('Failed to send scheduled push for doc', doc.id, sendErr);
+          }
+        }
+
+        // mark scheduled doc as sent
+        await doc.ref.update({ sent: true, sentAt: admin.firestore.FieldValue.serverTimestamp() });
+      } catch (docErr) {
+        console.error('Error processing scheduled notification doc', doc.id, docErr);
+        // continue with next doc
+      }
+    }
+  } catch (err) {
+    console.error('processScheduledNotifications error', err);
+  }
+
+  return null;
+});

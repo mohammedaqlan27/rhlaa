@@ -9,7 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AgencyDetailScreen extends StatefulWidget {
   final String agencyId;
-  const AgencyDetailScreen({Key? key, required this.agencyId}) : super(key: key);
+  const AgencyDetailScreen({super.key, required this.agencyId});
 
   @override
   State<AgencyDetailScreen> createState() => _AgencyDetailScreenState();
@@ -191,7 +191,7 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> {
 
 class _TransactionsList extends StatelessWidget {
   final List<AgencyTransaction> transactions;
-  const _TransactionsList({Key? key, required this.transactions}) : super(key: key);
+  const _TransactionsList({super.key, required this.transactions});
 
   @override
   Widget build(BuildContext context) {

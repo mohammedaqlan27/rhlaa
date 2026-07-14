@@ -105,7 +105,7 @@ class BookingService {
 
         bool usedIndexes = false;
         for (final idxList in seatIndexesList) {
-          if (idxList != null && idxList.isNotEmpty) {
+          if (idxList.isNotEmpty) {
             usedIndexes = true;
             for (final idx in idxList) {
               if (idx is int && idx >= 0 && idx < seatStatus.length) {

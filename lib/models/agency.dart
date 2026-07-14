@@ -1,48 +1,87 @@
 // lib/models/agency.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// نموذج Agency موحّد وآمن للقراءة والكتابة إلى Firestore.
 class Agency {
   final String id;
   final String agencyName;
   final String managerName;
-  final dynamic location; // GeoPoint أو String
+  final dynamic location; // GeoPoint أو Map أو null
   final String mobileNumber;
   final double walletBalance;
   final bool isActive;
-  final Timestamp createdAt;
+  final Timestamp? createdAt;
   final Timestamp? updatedAt;
 
   Agency({
     required this.id,
-    required this.agencyName,
-    required this.managerName,
+    this.agencyName = '',
+    this.managerName = '',
     this.location,
-    required this.mobileNumber,
-    required this.walletBalance,
-    required this.isActive,
-    required this.createdAt,
+    this.mobileNumber = '',
+    this.walletBalance = 0.0,
+    this.isActive = true,
+    this.createdAt,
     this.updatedAt,
   });
 
-  factory Agency.fromMap(String id, Map<String, dynamic> data) {
+  /// قراءة من خريطة (مثلاً من DocumentSnapshot.data())
+  factory Agency.fromMap(String id, Map<String, dynamic>? data) {
+    final d = data ?? <String, dynamic>{};
+
+    dynamic parseLocation(dynamic v) {
+      if (v == null) return null;
+      if (v is GeoPoint) return v;
+      if (v is Map<String, dynamic>) return v;
+      if (v is Map) return Map<String, dynamic>.from(v);
+      return v;
+    }
+
+    Timestamp? parseTs(dynamic v) {
+      if (v == null) return null;
+      if (v is Timestamp) return v;
+      if (v is DateTime) return Timestamp.fromDate(v);
+      if (v is String) {
+        final parsed = DateTime.tryParse(v);
+        if (parsed != null) return Timestamp.fromDate(parsed);
+      }
+      if (v is int) {
+        try {
+          return Timestamp.fromMillisecondsSinceEpoch(v);
+        } catch (_) {}
+      }
+      return null;
+    }
+
+    double toDoubleSafe(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0.0;
+      return 0.0;
+    }
+
     return Agency(
       id: id,
-      agencyName: (data['agencyName'] ?? '') as String,
-      managerName: (data['managerName'] ?? '') as String,
-      location: data['location'],
-      mobileNumber: (data['mobileNumber'] ?? '') as String,
-      walletBalance: _toDoubleSafe(data['walletBalance']),
-      isActive: (data['isActive'] ?? true) as bool,
-      createdAt: data['createdAt'] as Timestamp? ?? Timestamp.now(),
-      updatedAt: data['updatedAt'] as Timestamp?,
+      agencyName: (d['agencyName'] ?? '') as String,
+      managerName: (d['managerName'] ?? '') as String,
+      location: parseLocation(d['location']),
+      mobileNumber: (d['mobileNumber'] ?? '') as String,
+      walletBalance: toDoubleSafe(d['walletBalance']),
+      isActive: d['isActive'] is bool ? d['isActive'] as bool : (d['isActive'] == null ? true : d['isActive'].toString().toLowerCase() == 'true'),
+      createdAt: parseTs(d['createdAt']),
+      updatedAt: parseTs(d['updatedAt']),
     );
   }
 
+  /// إنشاء من DocumentSnapshot
   factory Agency.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
     return Agency.fromMap(doc.id, data);
   }
 
+  /// تحويل إلى Map للحفظ في Firestore
   Map<String, dynamic> toMap() {
     return {
       'agencyName': agencyName,
@@ -51,18 +90,9 @@ class Agency {
       'mobileNumber': mobileNumber,
       'walletBalance': walletBalance,
       'isActive': isActive,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
-    };
-  }
-
-  static double _toDoubleSafe(dynamic v) {
-    if (v == null) return 0.0;
-    if (v is double) return v;
-    if (v is int) return v.toDouble();
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0.0;
-    return 0.0;
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
+    }..removeWhere((k, v) => v == null);
   }
 
   Agency copyWith({
@@ -72,6 +102,7 @@ class Agency {
     String? mobileNumber,
     double? walletBalance,
     bool? isActive,
+    Timestamp? createdAt,
     Timestamp? updatedAt,
   }) {
     return Agency(
@@ -82,8 +113,13 @@ class Agency {
       mobileNumber: mobileNumber ?? this.mobileNumber,
       walletBalance: walletBalance ?? this.walletBalance,
       isActive: isActive ?? this.isActive,
-      createdAt: createdAt,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  @override
+  String toString() {
+    return 'Agency(id: $id, name: $agencyName, manager: $managerName, active: $isActive, wallet: $walletBalance)';
   }
 }

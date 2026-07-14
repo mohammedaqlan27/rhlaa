@@ -190,7 +190,7 @@ class PaymentService {
       final booking = Booking.fromDocument(bookingSnap);
 
       // حاول استخراج agencyId من بيانات المستند مباشرة (لأن نموذج Booking قد لا يحتوي عليه)
-      final bookingData = bookingSnap.data() as Map<String, dynamic>? ?? {};
+      final bookingData = bookingSnap.data() ?? {};
       final agencyIdFromDoc = bookingData['agencyId'] ?? bookingData['agency_id'];
       final String? agencyId = agencyIdFromDoc != null ? agencyIdFromDoc.toString() : null;
 
@@ -218,7 +218,7 @@ class PaymentService {
       // خيار: استخدام المحفظة أولاً ثم الباقي عبر مزود خارجي
       if (useWalletFirst) {
         final userDoc = await _firestore.collection(_usersCollection).doc(booking.passengerId).get();
-        final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+        final userData = userDoc.data() ?? {};
         final walletBalance = _toDoubleSafe(userData['walletBalance']);
         if (walletBalance >= amount) {
           final walletResult = await _processWalletPayment(
@@ -345,7 +345,7 @@ class PaymentService {
         final passengerSnap = await tx.get(passengerRef);
         if (!passengerSnap.exists) throw Exception('المستخدم غير موجود');
 
-        final passengerData = passengerSnap.data() as Map<String, dynamic>? ?? {};
+        final passengerData = passengerSnap.data() ?? {};
         final passengerBalance = _toDoubleSafe(passengerData['walletBalance']);
 
         if (passengerBalance < amount) throw Exception('رصيد المحفظة غير كافٍ');
@@ -385,14 +385,14 @@ class PaymentService {
           final agencyRef = _firestore.collection('agencies').doc(agencyId);
           final agencySnap = await tx.get(agencyRef);
           if (!agencySnap.exists) throw Exception('المكتب غير موجود');
-          final agencyData = agencySnap.data() as Map<String, dynamic>? ?? {};
+          final agencyData = agencySnap.data() ?? {};
           final currentAgencyBalance = _toDoubleSafe(agencyData['walletBalance']);
           final newAgencyBalance = currentAgencyBalance + commission.agencyCommissionAmount;
           tx.update(agencyRef, {'walletBalance': newAgencyBalance, 'updatedAt': FieldValue.serverTimestamp()});
         } else {
           final driverSnap = await tx.get(driverRef);
           if (!driverSnap.exists) throw Exception('السائق غير موجود');
-          final driverData = driverSnap.data() as Map<String, dynamic>? ?? {};
+          final driverData = driverSnap.data() ?? {};
           final currentDriverBalance = _toDoubleSafe(driverData['walletBalance']);
           final newDriverBalance = currentDriverBalance + commission.driverNetAmount;
           tx.update(driverRef, {'walletBalance': newDriverBalance, 'updatedAt': FieldValue.serverTimestamp()});
@@ -491,7 +491,7 @@ class PaymentService {
         if (agencyRef != null) {
           final agencySnap = await tx.get(agencyRef);
           if (!agencySnap.exists) throw Exception('المكتب غير موجود');
-          final agencyData = agencySnap.data() as Map<String, dynamic>? ?? {};
+          final agencyData = agencySnap.data() ?? {};
           final currentAgencyBalance = _toDoubleSafe(agencyData['walletBalance']);
           final newAgencyBalance = currentAgencyBalance + commission.agencyCommissionAmount;
           tx.update(agencyRef, {'walletBalance': newAgencyBalance, 'updatedAt': FieldValue.serverTimestamp()});
@@ -499,7 +499,7 @@ class PaymentService {
 
         final driverSnap = await tx.get(driverRef);
         if (!driverSnap.exists) throw Exception('السائق غير موجود');
-        final driverData = driverSnap.data() as Map<String, dynamic>? ?? {};
+        final driverData = driverSnap.data() ?? {};
         final currentDriverBalance = _toDoubleSafe(driverData['walletBalance']);
         final newDriverBalance = currentDriverBalance + commission.driverNetAmount;
         tx.update(driverRef, {'walletBalance': newDriverBalance, 'updatedAt': FieldValue.serverTimestamp()});
@@ -561,21 +561,21 @@ class PaymentService {
 
           final passengerSnap = await tx.get(passengerRef);
           if (!passengerSnap.exists) throw Exception('المستخدم غير موجود');
-          final passengerData = passengerSnap.data() as Map<String, dynamic>? ?? {};
+          final passengerData = passengerSnap.data() ?? {};
           final passengerBalance = _toDoubleSafe(passengerData['walletBalance']);
           tx.update(passengerRef, {'walletBalance': passengerBalance + amount, 'updatedAt': FieldValue.serverTimestamp()});
 
           if (agencyRef != null) {
             final agencySnap = await tx.get(agencyRef);
             if (!agencySnap.exists) throw Exception('المكتب غير موجود');
-            final agencyData = agencySnap.data() as Map<String, dynamic>? ?? {};
+            final agencyData = agencySnap.data() ?? {};
             final agencyBalance = _toDoubleSafe(agencyData['walletBalance']);
             final agencyNew = max<double>(0.0, agencyBalance - amount);
             tx.update(agencyRef, {'walletBalance': agencyNew, 'updatedAt': FieldValue.serverTimestamp()});
           } else {
             final driverSnap = await tx.get(driverRef);
             if (!driverSnap.exists) throw Exception('السائق غير موجود');
-            final driverData = driverSnap.data() as Map<String, dynamic>? ?? {};
+            final driverData = driverSnap.data() ?? {};
             final driverBalance = _toDoubleSafe(driverData['walletBalance']);
             final driverNew = max<double>(0.0, driverBalance - amount);
             tx.update(driverRef, {'walletBalance': driverNew, 'updatedAt': FieldValue.serverTimestamp()});
@@ -628,7 +628,7 @@ class PaymentService {
     try {
       final snap = await _firestore.collection(_paymentsCollection).where('bookingId', isEqualTo: bookingId).limit(1).get();
       if (snap.docs.isEmpty) return 'unknown';
-      final data = snap.docs.first.data() as Map<String, dynamic>;
+      final data = snap.docs.first.data();
       return (data['status'] ?? 'unknown') as String;
     } catch (e) {
       debugPrint('PaymentService.getPaymentStatus error: $e');

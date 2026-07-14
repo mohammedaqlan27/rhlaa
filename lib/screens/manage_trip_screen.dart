@@ -146,8 +146,8 @@ class _ManageTripScreenState extends State<ManageTripScreen> {
                     style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold),
                     items: _statusOptions.map((status) => DropdownMenuItem(value: status, child: Text(status))).toList(),
                     onChanged: (newStatus) {
-                      if (newStatus != null && trip.id != null) {
-                        _updateTripStatus(trip.id!, newStatus);
+                      if (newStatus != null) {
+                        _updateTripStatus(trip.id, newStatus);
                       }
                     },
                   ),
@@ -155,7 +155,7 @@ class _ManageTripScreenState extends State<ManageTripScreen> {
               ),
               const Spacer(),
               CustomButton(
-                onPressed: trip.id == null || currentStatus == 'ملغاة' ? null : () => _confirmCancel(trip.id!),
+                onPressed: currentStatus == 'ملغاة' ? null : () => _confirmCancel(trip.id),
                 text: 'إلغاء الرحبة',
                 width: 90,
                 compact: true,

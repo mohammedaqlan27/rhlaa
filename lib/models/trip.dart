@@ -1,6 +1,8 @@
 // lib/models/trip.dart
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// نموذج Trip موحّد وآمن للقراءة والكتابة إلى Firestore.
 class Trip {
   final String id;
   final String title;
@@ -31,9 +33,17 @@ class Trip {
   final String carOwnerOfficialName;
 
   // إضافات متعلقة بالرسوم والمسافة
-  final double? govFeeAmount; // رسوم الفرزة الحكومية المحسوبة للرحلة
-  final double? distanceKm; // المسافة بالكيلومترات (إن كانت متوفرة)
+  final double? govFeeAmount;
+  final double? distanceKm;
 
+  // بيانات كشف الركاب (Manifest)
+  final String? manifestUrl;
+  final String? manifestStoragePath;
+  final Timestamp? manifestGeneratedAt;
+  final String? manifestStatus;
+
+  // بيانات إضافية
+  final String? cancellationPolicy;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
 
@@ -63,138 +73,100 @@ class Trip {
     this.carOwnerOfficialName = '',
     this.govFeeAmount,
     this.distanceKm,
+    this.manifestUrl,
+    this.manifestStoragePath,
+    this.manifestGeneratedAt,
+    this.manifestStatus,
+    this.cancellationPolicy,
     this.createdAt,
     this.updatedAt,
   }) : seatStatus = seatStatus ?? List<bool>.filled(totalSeats > 0 ? totalSeats : 0, true);
 
-  /// تحويل مستند Firestore إلى نموذج Trip (آمن ومرن مع أسماء حقول متعددة)
+  // =========================
+  // Factory: from Firestore doc
+  // =========================
   factory Trip.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // _s الآن يقبل fallback قابل لأن يكون null
-    String _s(List<String> keys, [String? fallback]) {
-      for (var k in keys) {
-        if (data[k] != null && data[k].toString().isNotEmpty) return data[k].toString();
-      }
-      return fallback ?? '';
+    int _parseInt(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? 0;
+      return 0;
     }
 
-    int _i(List<String> keys, [int fallback = 0]) {
-      for (var k in keys) {
-        final v = data[k];
-        if (v is int) return v;
-        if (v is double) return v.toInt();
-        if (v is String) return int.tryParse(v) ?? fallback;
-      }
-      return fallback;
+    double _parseDouble(dynamic v) {
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0.0;
+      return 0.0;
     }
 
-    double _d(List<String> keys, [double fallback = 0.0]) {
-      for (var k in keys) {
-        final v = data[k];
-        if (v is num) return v.toDouble();
-        if (v is String) return double.tryParse(v) ?? fallback;
-      }
-      return fallback;
-    }
-
-    DateTime? _dt(List<String> keys) {
-      for (var k in keys) {
-        final v = data[k];
-        if (v is Timestamp) return v.toDate();
-        if (v is DateTime) return v;
-        if (v is String) {
-          final parsed = DateTime.tryParse(v);
-          if (parsed != null) return parsed;
-        }
-      }
+    DateTime? _parseDate(dynamic v) {
+      if (v is Timestamp) return v.toDate();
+      if (v is DateTime) return v;
+      if (v is String) return DateTime.tryParse(v);
+      if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
       return null;
     }
 
-    List<bool> _seatList(dynamic raw, int total) {
+    List<bool> _parseSeatStatus(dynamic raw, int total) {
       if (raw is List) {
-        try {
-          return raw.map<bool>((e) {
-            if (e is bool) return e;
-            if (e is num) return e != 0;
-            if (e is String) return e.toLowerCase() == 'true';
-            return false;
-          }).toList();
-        } catch (_) {}
+        final parsed = raw.map<bool>((e) {
+          if (e is bool) return e;
+          if (e is num) return e != 0;
+          if (e is String) return e.toLowerCase() == 'true' || e == '1';
+          return false;
+        }).toList();
+        if (total > 0 && parsed.length != total) {
+          return List<bool>.filled(total, true);
+        }
+        return parsed;
       }
-      // fallback: all available
-      return List<bool>.filled(total > 0 ? total : 0, true);
+      return List<bool>.filled(total, true);
     }
 
-    final totalSeats = _i(['totalSeats', 'total_seats', 'total_seat', 'seats', 'total']);
-    final availableSeats = _i(['availableSeats', 'available_seats', 'available', 'available_seat']);
-
-    final seatStatusRaw = data['seatStatus'] ?? data['seat_status'] ?? data['seat_statuses'];
-    final seatStatus = _seatList(seatStatusRaw, totalSeats);
-
-    final departure = _dt(['departureTime', 'departure_time', 'departure']);
-    final tripDate = _dt(['date', 'trip_date', 'departureDate']);
-
-    // حقول جديدة: govFeeAmount, distanceKm, agencyId
-    double? govFee;
-    if (data.containsKey('govFeeAmount')) {
-      final v = data['govFeeAmount'];
-      if (v is num) govFee = v.toDouble();
-      else if (v is String) govFee = double.tryParse(v);
-    } else if (data.containsKey('gov_fee') || data.containsKey('gov_fee_amount')) {
-      final v = data['gov_fee'] ?? data['gov_fee_amount'];
-      if (v is num) govFee = v.toDouble();
-      else if (v is String) govFee = double.tryParse(v);
-    }
-
-    double? distance;
-    if (data.containsKey('distanceKm')) {
-      final v = data['distanceKm'];
-      if (v is num) distance = v.toDouble();
-      else if (v is String) distance = double.tryParse(v);
-    } else if (data.containsKey('distance_km') || data.containsKey('distance')) {
-      final v = data['distanceKm'] ?? data['distance_km'] ?? data['distance'];
-      if (v is num) distance = v.toDouble();
-      else if (v is String) distance = double.tryParse(v);
-    }
-
-    final agencyIdRaw = _s(['agencyId', 'agency_id'], null);
-    final agencyId = agencyIdRaw.isNotEmpty ? agencyIdRaw : null;
-
+    final totalSeats = _parseInt(data['totalSeats']);
     return Trip(
       id: doc.id,
-      title: _s(['title', 'tripTitle']),
-      description: _s(['description']),
-      driverId: _s(['driverId', 'driver_id']),
-      driverName: _s(['driverName', 'driver_name']),
-      agencyId: agencyId,
-      tripCategory: _s(['tripCategory', 'category']),
-      origin: _s(['origin']),
-      destination: _s(['destination']),
-      vehicleType: _s(['vehicleType', 'vehicle_type']),
-      vehicleId: _s(['vehicleId', 'vehicle_id'], null),
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      driverId: data['driverId'] ?? '',
+      driverName: data['driverName'] ?? '',
+      agencyId: data['agencyId'],
+      tripCategory: data['tripCategory'] ?? '',
+      origin: data['origin'] ?? '',
+      destination: data['destination'] ?? '',
+      vehicleType: data['vehicleType'] ?? '',
+      vehicleId: data['vehicleId'],
       totalSeats: totalSeats,
-      availableSeats: availableSeats,
-      seatStatus: seatStatus,
-      departureTime: departure,
-      date: tripDate,
-      time: _s(['time']),
-      flexibleWindow: _s(['flexibleWindow', 'flexible_window']),
-      status: _s(['status'], 'active'),
-      price: _d(['price']),
-      driverRating: _d(['driverRating', 'driver_rating']),
-      carPlateNumber: _s(['carPlateNumber', 'plateNumber', 'car_plate_number']),
-      carOwnerOfficialName: _s(['carOwnerOfficialName', 'car_owner_official_name']),
-      govFeeAmount: govFee,
-      distanceKm: distance,
-      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : null,
-      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] as Timestamp : null,
+      availableSeats: _parseInt(data['availableSeats']),
+      seatStatus: _parseSeatStatus(data['seatStatus'], totalSeats),
+      departureTime: _parseDate(data['departureTime']),
+      date: _parseDate(data['date']),
+      time: data['time'] ?? '',
+      flexibleWindow: data['flexibleWindow'] ?? '',
+      status: data['status'] ?? 'active',
+      price: _parseDouble(data['price']),
+      driverRating: _parseDouble(data['driverRating']),
+      carPlateNumber: data['carPlateNumber'] ?? data['plateNumber'] ?? '',
+      carOwnerOfficialName: data['carOwnerOfficialName'] ?? '',
+      govFeeAmount: data['govFeeAmount'] != null ? _parseDouble(data['govFeeAmount']) : null,
+      distanceKm: data['distanceKm'] != null ? _parseDouble(data['distanceKm']) : null,
+      manifestUrl: data['manifestUrl'],
+      manifestStoragePath: data['manifestStoragePath'],
+      manifestGeneratedAt: data['manifestGeneratedAt'] is Timestamp ? data['manifestGeneratedAt'] : null,
+      manifestStatus: data['manifestStatus'],
+      cancellationPolicy: data['cancellationPolicy'],
+      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] : null,
+      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] : null,
     );
   }
 
-  /// تحويل النموذج إلى Map للكتابة إلى Firestore
+  // =========================
+  // Convert to Map for Firestore
+  // =========================
   Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
+    return {
       'title': title,
       'description': description,
       'driverId': driverId,
@@ -219,14 +191,19 @@ class Trip {
       'carOwnerOfficialName': carOwnerOfficialName,
       'govFeeAmount': govFeeAmount,
       'distanceKm': distanceKm,
+      'manifestUrl': manifestUrl,
+      'manifestStoragePath': manifestStoragePath,
+      'manifestGeneratedAt': manifestGeneratedAt,
+      'manifestStatus': manifestStatus,
+      'cancellationPolicy': cancellationPolicy,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
       'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
-    };
-
-    map.removeWhere((key, value) => value == null);
-    return map;
+    }..removeWhere((key, value) => value == null);
   }
 
+  // =========================
+  // CopyWith: تم إضافة كافة الحقول الناقصة هنا
+  // =========================
   Trip copyWith({
     String? id,
     String? title,
@@ -253,6 +230,11 @@ class Trip {
     String? carOwnerOfficialName,
     double? govFeeAmount,
     double? distanceKm,
+    String? manifestUrl,
+    String? manifestStoragePath,
+    Timestamp? manifestGeneratedAt,
+    String? manifestStatus,
+    String? cancellationPolicy,
     Timestamp? createdAt,
     Timestamp? updatedAt,
   }) {
@@ -270,7 +252,7 @@ class Trip {
       vehicleId: vehicleId ?? this.vehicleId,
       totalSeats: totalSeats ?? this.totalSeats,
       availableSeats: availableSeats ?? this.availableSeats,
-      seatStatus: seatStatus ?? List<bool>.from(this.seatStatus),
+      seatStatus: seatStatus ?? this.seatStatus,
       departureTime: departureTime ?? this.departureTime,
       date: date ?? this.date,
       time: time ?? this.time,
@@ -282,6 +264,11 @@ class Trip {
       carOwnerOfficialName: carOwnerOfficialName ?? this.carOwnerOfficialName,
       govFeeAmount: govFeeAmount ?? this.govFeeAmount,
       distanceKm: distanceKm ?? this.distanceKm,
+      manifestUrl: manifestUrl ?? this.manifestUrl,
+      manifestStoragePath: manifestStoragePath ?? this.manifestStoragePath,
+      manifestGeneratedAt: manifestGeneratedAt ?? this.manifestGeneratedAt,
+      manifestStatus: manifestStatus ?? this.manifestStatus,
+      cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -289,6 +276,6 @@ class Trip {
 
   @override
   String toString() {
-    return 'Trip(id: $id, title: $title, from: $origin, to: $destination, price: $price, govFee: ${govFeeAmount ?? 0.0})';
+    return 'Trip(id: $id, from: $origin, to: $destination, seats: $availableSeats/$totalSeats, price: $price)';
   }
 }
