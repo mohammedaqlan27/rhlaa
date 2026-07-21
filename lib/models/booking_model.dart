@@ -17,7 +17,7 @@ class Booking {
   final int childrenCount;
 
   final String bookingStatus; // pending, confirmed, cancelled, completed
-  final String paymentStatus; // unpaid, paid, refunded
+  final String paymentStatus; // unpaid, paid, refunded, refund_pending (تمت إضافتها للمنطق الجديد)
   final String paymentMethod;
   final String? paymentIntentId;
   final String? transactionId;
@@ -25,14 +25,15 @@ class Booking {
 
   final List<int>? seatIndexes; // قائمة مؤشرات المقاعد
   final int? seatNumber; // رقم المقعد المفرد (legacy)
-  final Timestamp? reservedUntil; // يمكن أن يكون Timestamp أو String
+  final Timestamp? reservedUntil; // وقت انتهاء الحجز المؤقت
 
   final String? notes;
   final Timestamp? canceledAt;
+  final String? updatedBy; // تم إضافته لتتبع من قام بتغيير الحالة (system, client, admin)
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
 
-  // حقول إضافية عامة (قد تكون موجودة في المستند)
+  // حقول إضافية عامة
   final String? bookingService;
   final String? pdfService;
 
@@ -58,11 +59,15 @@ class Booking {
     this.reservedUntil,
     this.notes,
     this.canceledAt,
+    this.updatedBy,
     this.createdAt,
     this.updatedAt,
     this.bookingService,
     this.pdfService,
   });
+
+  /// حقل محسوب لمعرفة ما إذا كان الحجز يتطلب استرداد أموال
+  bool get requiresRefund => paymentStatus == 'refund_pending';
 
   /// تحويل النموذج إلى Map للكتابة إلى Firestore
   Map<String, dynamic> toMap() {
@@ -87,6 +92,7 @@ class Booking {
       'reservedUntil': reservedUntil,
       'notes': notes,
       'canceledAt': canceledAt,
+      'updatedBy': updatedBy,
       'bookingService': bookingService,
       'pdfService': pdfService,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
@@ -178,7 +184,6 @@ class Booking {
           return null;
         }
       }
-      // إذا كان مخزناً كقيمة مفردة (legacy) مثل 0 أو "0"
       if (raw is int) return [raw];
       if (raw is double) return [raw.toInt()];
       if (raw is String) {
@@ -187,10 +192,6 @@ class Booking {
       }
       return null;
     }
-
-    // قراءة reservedUntil قد تكون نص أو Timestamp
-    final reservedRaw = data['reservedUntil'] ?? data['reserved_until'];
-    final reservedTimestamp = ts(reservedRaw);
 
     return Booking(
       id: doc.id,
@@ -213,9 +214,10 @@ class Booking {
       seatNumber: (data['seatNumber'] ?? data['seat_number']) is num
           ? (data['seatNumber'] ?? data['seat_number']).toInt()
           : null,
-      reservedUntil: reservedTimestamp,
+      reservedUntil: ts(data['reservedUntil'] ?? data['reserved_until']),
       notes: data['notes']?.toString(),
       canceledAt: ts(data['canceledAt'] ?? data['canceled_at']),
+      updatedBy: s(['updatedBy', 'updated_by']),
       createdAt: ts(data['createdAt'] ?? data['created_at']),
       updatedAt: ts(data['updatedAt'] ?? data['updated_at']),
       bookingService: s(['BookingService', 'bookingService']),
@@ -245,6 +247,7 @@ class Booking {
     Timestamp? reservedUntil,
     String? notes,
     Timestamp? canceledAt,
+    String? updatedBy,
     Timestamp? createdAt,
     Timestamp? updatedAt,
     String? bookingService,
@@ -272,6 +275,7 @@ class Booking {
       reservedUntil: reservedUntil ?? this.reservedUntil,
       notes: notes ?? this.notes,
       canceledAt: canceledAt ?? this.canceledAt,
+      updatedBy: updatedBy ?? this.updatedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       bookingService: bookingService ?? this.bookingService,
@@ -281,6 +285,6 @@ class Booking {
 
   @override
   String toString() {
-    return 'Booking(id: $id, tripId: $tripId, passengerId: $passengerId, seats: $bookedSeatsCount, total: $totalPrice, status: $bookingStatus)';
+    return 'Booking(id: $id, tripId: $tripId, status: $bookingStatus, payment: $paymentStatus)';
   }
 }

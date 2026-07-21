@@ -5,9 +5,14 @@ import 'package:uuid/uuid.dart';
 import '../models/rating_model.dart';
 
 class RatingService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
   final _uuid = const Uuid();
   final String _collection = 'ratings';
+
+  // التعديل هنا: المشيد الآن يدعم حقن الاعتمادات (Dependency Injection)
+  // إذا لم يتم تمرير firestore، سيستخدم النسخة الحقيقية تلقائياً
+  RatingService({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   /// إضافة أو تحديث تقييم مع تحديث إحصائيات المستخدم (المُقيَّم) تلقائياً
   /// score يجب أن يكون قيمة رقمية (مثلاً 4.5)

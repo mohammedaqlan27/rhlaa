@@ -1,4 +1,5 @@
 // lib/providers/booking_provider.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
@@ -6,13 +7,16 @@ import '../services/booking_service.dart';
 import '../services/payment_service.dart';
 
 class BookingProvider with ChangeNotifier {
+  // تهيئة الخدمات (تستخدم النسخ الافتراضية تلقائياً)
   final BookingService _bookingService = BookingService();
   final PaymentService _paymentService = PaymentService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   bool _isLoading = false;
   String? _errorMessage;
   List<Booking> _userBookings = [];
+
+  // اشتراك للبث المباشر
+  StreamSubscription<List<Booking>>? _bookingsSubscription;
 
   // Getters
   bool get isLoading => _isLoading;
@@ -29,11 +33,11 @@ class BookingProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// سير العمل الجديد:
-  /// 1) إنشاء حجز pending (يحجز المقاعد مؤقتًا)
-  /// 2) معالجة الدفع عبر PaymentService
-  /// 3) عند نجاح الدفع: تأكيد الحجز (confirmBookingAfterPayment)
-  /// 4) عند فشل الدفع: إلغاء الحجز وإرجاع المقاعد
+  // ---------------------------------------------------------
+  // 1. إدارة الحجوزات (العمليات)
+  // ---------------------------------------------------------
+
+  /// إنشاء حجز جديد (Pending -> Payment -> Confirm)
   Future<String?> createNewBooking({
     required String tripId,
     required String passengerId,
@@ -42,14 +46,14 @@ class BookingProvider with ChangeNotifier {
     bool isFamily = false,
     int children = 0,
     String? notes,
-    required String paymentMethod, // مثال: 'card'
+    required String paymentMethod,
   }) async {
     _setLoading(true);
     _errorMessage = null;
 
     try {
-      // 1) إنشاء الحجز كـ pending
-      final bookingIdOrError = await _bookingService.createBookingPending(
+      // 1) إنشاء الحجز كـ pending (حجز المقاعد مؤقتاً)
+      final result = await _bookingService.createBookingPending(
         tripId: tripId,
         passengerId: passengerId,
         seatsToBook: seatsCount,
@@ -59,21 +63,14 @@ class BookingProvider with ChangeNotifier {
         notes: notes,
       );
 
-      if (bookingIdOrError == null) {
-        _errorMessage = 'فشل إنشاء الحجز.';
+      // التحقق مما إذا كان الرد رسالة خطأ أو معرف حجز
+      if (result == null || result.length < 5) {
+        _errorMessage = result ?? 'فشل إنشاء الحجز.';
         _setLoading(false);
         return null;
       }
 
-      // إذا كانت القيمة عبارة عن رسالة خطأ نصية
-      // createBookingPending يعيد bookingId عند النجاح أو رسالة خطأ
-      // نتحقق إن كانت صيغة UUID تقريبًا (طويلة) أو رسالة قصيرة
-      final bookingId = bookingIdOrError;
-      if (bookingId.length < 8) {
-        _errorMessage = bookingIdOrError;
-        _setLoading(false);
-        return null;
-      }
+      final bookingId = result;
 
       // 2) معالجة الدفع
       final totalAmount = pricePerSeat * seatsCount;
@@ -84,12 +81,10 @@ class BookingProvider with ChangeNotifier {
       );
 
       if (!paymentResult.success) {
-        // فشل الدفع -> إلغاء الحجز وإرجاع المقاعد
+        // فشل الدفع -> إلغاء الحجز فوراً لتحرير المقاعد
         await _bookingService.cancelBooking(bookingId: bookingId, passengerId: passengerId);
-        _errorMessage = paymentResult.message ?? 'فشل الدفع.';
+        _errorMessage = paymentResult.message ?? 'فشل عملية الدفع.';
         _setLoading(false);
-        // تحديث قائمة الحجوزات المحلية
-        await fetchUserBookings(passengerId);
         return null;
       }
 
@@ -101,93 +96,23 @@ class BookingProvider with ChangeNotifier {
       );
 
       if (confirmError != null) {
-        // إذا فشل التأكيد، نحاول إلغاء الحجز
-        await _bookingService.cancelBooking(bookingId: bookingId, passengerId: passengerId);
         _errorMessage = confirmError;
         _setLoading(false);
-        await fetchUserBookings(passengerId);
         return null;
       }
 
-      // 4) تحديث القائمة المحلية وإرجاع المعرف
-      await fetchUserBookings(passengerId);
       _setLoading(false);
       return bookingId;
-    } catch (e, st) {
-      debugPrint('BookingProvider.createNewBooking error: $e\n$st');
-      _errorMessage = 'حدث خطأ أثناء إنشاء الحجز أو الدفع.';
+    } catch (e) {
+      _errorMessage = 'حدث خطأ غير متوقع أثناء الحجز.';
       _setLoading(false);
       return null;
     }
   }
 
-  /// معالجة عملية الدفع منفصلة (إذا أردت تنفيذ الدفع في شاشة مستقلة)
-  Future<bool> payForExistingBooking({
-    required String bookingId,
-    required String passengerId,
-    required double amount,
-    required String paymentMethod,
-  }) async {
-    _setLoading(true);
-    _errorMessage = null;
-
-    try {
-      final paymentResult = await _paymentService.processPayment(
-        bookingId: bookingId,
-        amount: amount,
-        paymentMethod: paymentMethod,
-      );
-
-      if (!paymentResult.success) {
-        _errorMessage = paymentResult.message ?? 'فشل الدفع.';
-        _setLoading(false);
-        return false;
-      }
-
-      final confirmError = await _bookingService.confirmBookingAfterPayment(
-        bookingId: bookingId,
-        paymentIntentId: paymentResult.paymentIntentId ?? '',
-        payerId: passengerId,
-      );
-
-      if (confirmError != null) {
-        _errorMessage = confirmError;
-        _setLoading(false);
-        return false;
-      }
-
-      await fetchUserBookings(passengerId);
-      _setLoading(false);
-      return true;
-    } catch (e, st) {
-      debugPrint('BookingProvider.payForExistingBooking error: $e\n$st');
-      _errorMessage = 'حدث خطأ أثناء الدفع.';
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  /// جلب حجوزات المستخدم (الراكب)
-  Future<void> fetchUserBookings(String userId) async {
-    _setLoading(true);
-    _errorMessage = null;
-
-    try {
-      _userBookings = await _bookingService.getBookingsForPassenger(userId);
-      _setLoading(false);
-      notifyListeners();
-    } catch (e, st) {
-      debugPrint('BookingProvider.fetchUserBookings error: $e\n$st');
-      _errorMessage = 'تعذر جلب الحجوزات، تأكد من الاتصال بالشبكة.';
-      _setLoading(false);
-    }
-  }
-
-  /// إلغاء حجز وتحديث الواجهة
+  /// إلغاء حجز (مع دعم منطق الاسترداد التلقائي في الخدمة)
   Future<bool> cancelUserBooking(String bookingId, String userId) async {
     _setLoading(true);
-    _errorMessage = null;
-
     try {
       final error = await _bookingService.cancelBooking(
         bookingId: bookingId,
@@ -195,7 +120,6 @@ class BookingProvider with ChangeNotifier {
       );
 
       if (error == null) {
-        await fetchUserBookings(userId);
         _setLoading(false);
         return true;
       } else {
@@ -203,11 +127,61 @@ class BookingProvider with ChangeNotifier {
         _setLoading(false);
         return false;
       }
-    } catch (e, st) {
-      debugPrint('BookingProvider.cancelUserBooking error: $e\n$st');
-      _errorMessage = 'فشل إلغاء الحجز بسبب خطأ في السيرفر.';
+    } catch (e) {
+      _errorMessage = 'فشل إلغاء الحجز.';
       _setLoading(false);
       return false;
     }
+  }
+
+  // ---------------------------------------------------------
+  // 2. جلب البيانات والبث المباشر (Real-time)
+  // ---------------------------------------------------------
+
+  /// الاستماع لحجوزات المستخدم وتحديث الواجهة تلقائياً (أفضل من fetch)
+  void listenToUserBookings(String userId) {
+    _bookingsSubscription?.cancel(); // إلغاء أي اشتراك قديم
+    _setLoading(true);
+
+    _bookingsSubscription = _bookingService
+        .streamBookingsForPassenger(userId)
+        .listen((bookings) {
+      _userBookings = bookings;
+      _isLoading = false;
+      notifyListeners();
+    }, onError: (error) {
+      _errorMessage = 'خطأ في تحديث البيانات المباشرة.';
+      _setLoading(false);
+    });
+  }
+
+  /// جلب تفاصيل حجز واحد (مفيد لصفحة النجاح أو التفاصيل)
+  Future<Booking?> getBookingDetails(String bookingId) async {
+    return await _bookingService.getBookingById(bookingId);
+  }
+
+  /// عرض السائق: الحصول على بث مباشر لركاب رحلة معينة
+  Stream<List<Booking>> getTripBookingsStream(String tripId) {
+    return _bookingService.streamConfirmedBookingsForTrip(tripId);
+  }
+
+  // ---------------------------------------------------------
+  // 3. خدمات إضافية
+  // ---------------------------------------------------------
+
+  /// الانضمام لقائمة الانتظار
+  Future<void> joinWaitlist(String tripId, String userId) async {
+    try {
+      await _bookingService.addToWaitlist(tripId, userId);
+    } catch (e) {
+      _errorMessage = 'تعذر الانضمام لقائمة الانتظار.';
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _bookingsSubscription?.cancel(); // تنظيف الذاكرة عند إغلاق الـ Provider
+    super.dispose();
   }
 }

@@ -6,9 +6,20 @@ import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
 
 class UserService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseFirestore _firestore;
+  final FirebaseStorage? _providedStorage; // قد يكون null في الاختبارات
   final String _collection = 'users';
+
+  // دعم حقن التبعيات للاختبارات والمحاكيات
+  // ملاحظة: لا نستدعي FirebaseStorage.instance هنا مباشرةً
+  UserService({FirebaseFirestore? firestore, FirebaseStorage? storage})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _providedStorage = storage;
+
+  // Getter كسلوك lazy للحصول على storage عند الحاجة فقط
+  FirebaseStorage get _storage {
+    return _providedStorage ?? FirebaseStorage.instance;
+  }
 
   /// جلب بيانات المستخدم وتحويلها إلى كائن AppUser
   Future<AppUser?> getUserById(String uid) async {
@@ -30,7 +41,6 @@ class UserService {
         return false;
       }
       final data = user.toMap();
-      // تأكد أن createdAt يتم تعيينه من السيرفر عند الإنشاء
       if (data['createdAt'] == null) data['createdAt'] = FieldValue.serverTimestamp();
       await _firestore.collection(_collection).doc(user.id).set(data, SetOptions(merge: true));
       return true;
@@ -49,13 +59,9 @@ class UserService {
       }
 
       final data = user.toMap();
-
-      // حماية الحقول الأساسية من التغيير العشوائي
       data.remove('id');
       data.remove('uid');
       data.remove('createdAt');
-
-      // إزالة القيم null لتجنب مسح الحقول الموجودة
       data.removeWhere((k, v) => v == null);
 
       await _firestore.collection(_collection).doc(user.id).update(data);
@@ -66,16 +72,13 @@ class UserService {
     }
   }
 
-  /// تحديث حقول معينة فقط (مثل تحديث رقم الهاتف فقط)
+  /// تحديث حقول معينة فقط
   Future<bool> updateUserFields(String uid, Map<String, dynamic> fields) async {
     if (uid.isEmpty) return false;
     try {
-      // تنظيف البيانات من القيم الفارغة قبل الإرسال لضمان عدم مسح بيانات موجودة
       fields.removeWhere((k, v) => v == null);
-
       if (fields.isEmpty) return true;
 
-      // تحويل بعض الحقول لأنواع مناسبة إن لزم (مثال childrenCount -> int)
       if (fields.containsKey('childrenCount')) {
         final v = fields['childrenCount'];
         if (v is String) {
@@ -108,30 +111,21 @@ class UserService {
     }
   }
 
-  /// حفظ رابط الوثيقة في حقل Firestore المناسب بناءً على النوع
-  ///
-  /// قواعد الحفظ:
-  /// - 'profile' -> profilePictureUrl (حقل منفصل)
-  /// - أي نوع آخر -> يحفظ داخل خريطة 'documents' كمفتاح type
-  /// مثال: documents.identity_card = url
+  /// حفظ رابط الوثيقة في حقل Firestore المناسب
   Future<bool> saveDocumentUrl(String uid, String type, String url) async {
     try {
       if (uid.isEmpty) throw Exception('UID فارغ');
 
       final userRef = _firestore.collection(_collection).doc(uid);
 
-      // أنواع خاصة تتطلب حقول منفصلة
       if (type == 'profile') {
         await userRef.update({'profilePictureUrl': url});
         return true;
       }
 
-      // لباقي الأنواع نخزن الرابط داخل خريطة documents
-      // نستخدم transaction أو update مع merge لضمان عدم فقدان روابط أخرى
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(userRef);
         if (!snap.exists) {
-          // إذا لم يوجد المستخدم، ننشئ مستندًا بسيطًا مع documents
           tx.set(userRef, {
             'documents': {type: url},
             'createdAt': FieldValue.serverTimestamp(),
@@ -145,7 +139,6 @@ class UserService {
             : <String, dynamic>{};
 
         docs[type] = url;
-
         tx.update(userRef, {'documents': docs});
       });
 
@@ -156,7 +149,6 @@ class UserService {
     }
   }
 
-  /// دالة مدمجة: رفع الملف ثم تحديث الرابط في Firestore مباشرة
   Future<bool> uploadAndSaveDocument(File file, String uid, String type, {String? extension}) async {
     final url = await uploadDocument(file, uid, type, extension: extension);
     if (url != null) {
@@ -165,14 +157,12 @@ class UserService {
     return false;
   }
 
-  /// حذف وثيقة من Storage (مثلاً عند رغبة المستخدم في تغيير صورته)
   Future<bool> deleteDocument(String uid, String type, {String? extension}) async {
     try {
       final ext = extension ?? 'jpg';
       final ref = _storage.ref().child('documents/$uid/$type.$ext');
       await ref.delete();
 
-      // إزالة الرابط من خريطة documents أو من profilePictureUrl
       final userRef = _firestore.collection(_collection).doc(uid);
       if (type == 'profile') {
         await userRef.update({'profilePictureUrl': FieldValue.delete()});
@@ -198,7 +188,6 @@ class UserService {
     }
   }
 
-  /// التحقق من وجود وثيقة مرفوعة مسبقاً
   Future<bool> documentExists(String uid, String type, {String? extension}) async {
     try {
       final ext = extension ?? 'jpg';

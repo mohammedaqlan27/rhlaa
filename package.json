@@ -1,0 +1,32 @@
+{
+  "name": "rhlaa",
+  "version": "1.0.0",
+  "description": "A new Flutter project.",
+  "main": "import_data.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+
+  "gen-tests": "./generate_tests.ps1"
+
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohammedaqlan27/rhlaa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mohammedaqlan27/rhlaa/issues"
+  },
+  "homepage": "https://github.com/mohammedaqlan27/rhlaa#readme",
+  "dependencies": {
+    "firebase-admin": "^14.1.0"
+  }
+}

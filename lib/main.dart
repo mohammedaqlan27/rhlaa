@@ -1,10 +1,15 @@
 // lib/main.dart
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-
 // Providers
 import 'providers/user_provider.dart';
 import 'providers/trip_provider.dart';
@@ -54,9 +59,26 @@ import 'screens/agency_location_edit_screen.dart';
 import 'models/trip.dart';
 import 'utils/app_localizations.dart';
 
-Future<void> main() async {
+
+Future<void> main() async { // تم حذف (dynamic FirebaseDatabase) لأنه خطأ
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  if (kDebugMode) {
+    // بما أنك تستخدم كروم، الـ host يجب أن يكون localhost
+    final String host = 'localhost';
+
+    try {
+      FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+      FirebaseFunctions.instance.useFunctionsEmulator(host, 5002);
+      FirebaseAuth.instance.useAuthEmulator(host, 9099);
+      FirebaseDatabase.instance.useDatabaseEmulator(host, 9000);
+
+      print("✅ تم الربط بمحاكيات Firebase بنجاح على المتصفح");
+    } catch (e) {
+      print("❌ فشل الربط بالمحاكيات: $e");
+    }
+  }
   runApp(const RootApp());
 }
 
