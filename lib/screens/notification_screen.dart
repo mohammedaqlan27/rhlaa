@@ -6,7 +6,7 @@ import '../models/notification_model.dart';
 import '../widgets/app_card.dart';
 
 class NotificationScreen extends StatelessWidget {
-  const NotificationScreen({Key? key}) : super(key: key);
+  const NotificationScreen({super.key});
 
   static const Color _logoBlue = Color(0xFF1E70B8);
   static const Color _baseBg = Color(0xFFF1F5F9);

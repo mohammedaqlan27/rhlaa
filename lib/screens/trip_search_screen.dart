@@ -1,12 +1,15 @@
 // lib/screens/trip_search_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/trip_provider.dart';
 import '../models/trip.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/app_card.dart';
 import '../widgets/custom_button.dart';
 import 'trip_details_screen.dart';
+
+import '../theme/app_colors.dart';
 
 class TripSearchScreen extends StatefulWidget {
   const TripSearchScreen({super.key});
@@ -18,32 +21,25 @@ class TripSearchScreen extends StatefulWidget {
 class _TripSearchScreenState extends State<TripSearchScreen> {
   String? _selectedTripCategory;
   String? _selectedDestination;
-  String? _selectedVehicleType;
-
-  final List<String> _tripCategories = ['داخلية', 'خارجية'];
-  final List<String> _vehicleTypes = ['سيارة سيدان', 'سيارة دفع رباعي', 'سيارة فان'];
-
-  final Map<String, List<String>> _destinations = {
-    'داخلية': ['صنعاء', 'عدن', 'تعز', 'حضرموت'],
-    'خارجية': ['الرياض', 'جدة', 'مكة', 'مسقط', 'أبوظبي', 'دبي', 'الشارقة'],
-  };
 
   bool _hasSearched = false;
-  final Color _primaryColor = const Color(0xFF4A7DAB);
 
   @override
   void initState() {
     super.initState();
-    // جلب البيانات في الخلفية لضمان سرعة البحث المحلي
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<TripProvider>(context, listen: false).fetchAvailableTrips();
     });
   }
 
   void _handleSearch() {
-    if (_selectedTripCategory == null || _selectedDestination == null) {
+    // الآن أصبح الشرط الوحيد للبحث هو تحديد الوجهة فقط
+    if (_selectedDestination == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ يرجى اختيار الفئة والوجهة', style: TextStyle(fontFamily: 'Cairo'))),
+        const SnackBar(
+          content: Text('⚠️ يرجى تحديد الوجهة للبدء بالبحث', style: TextStyle(fontFamily: AppFonts.arabic)),
+          backgroundColor: AppColors.alertYellow,
+        ),
       );
       return;
     }
@@ -53,13 +49,13 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('ابحث عن رحلتك', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text('ابحث عن رحلتك', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        foregroundColor: AppColors.textDark,
       ),
       body: Column(
         children: [
@@ -73,29 +69,79 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   }
 
   Widget _buildSearchForm() {
-    final destinationOptions = _selectedTripCategory != null ? _destinations[_selectedTripCategory] ?? [] : <String>[];
+    // 1. استخراج جميع المدن الخارجية من الخريطة وتحويلها إلى قائمة واحدة
+    final List<String> allExternalCities = AppConstants.externalDestinations.values.expand((e) => e).toList();
+
+    // 2. دمج جميع الوجهات (الداخلية والخارجية) معاً
+    final List<String> allDestinations = [...AppConstants.internalDestinations, ...allExternalCities];
+
+    // 3. تحديد ما سيظهر في قائمة الوجهة بناءً على اختيار الفئة
+    List<String> currentDestinations = allDestinations;
+    if (_selectedTripCategory == 'داخلية') {
+      currentDestinations = AppConstants.internalDestinations;
+    } else if (_selectedTripCategory == 'خارجية') {
+      currentDestinations = allExternalCities;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: _buildDropdown('الفئة', Icons.category, _tripCategories, _selectedTripCategory, (val) {
-                setState(() { _selectedTripCategory = val; _selectedDestination = null; });
-              })),
+              // حقل الفئة (أصبح اختيارياً)
+              Expanded(
+                child: _buildDropdown(
+                  label: 'الفئة (اختياري)',
+                  icon: Icons.category,
+                  items: AppConstants.tripCategories,
+                  value: _selectedTripCategory,
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedTripCategory = val;
+                      _selectedDestination = null; // مسح الوجهة السابقة لمنع التعارض
+                      _hasSearched = false;
+                    });
+                  },
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _buildDropdown('الوجهة', Icons.location_on, destinationOptions, _selectedDestination, (val) {
-                setState(() => _selectedDestination = val);
-              })),
+
+              // حقل الوجهة (يمكن اختياره مباشرة)
+              Expanded(
+                child: _buildDropdown(
+                  label: 'الوجهة (مباشرة)',
+                  icon: Icons.location_on,
+                  items: currentDestinations,
+                  value: _selectedDestination,
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedDestination = val;
+                      _hasSearched = false;
+
+                      // الذكاء البرمجي: التحديد التلقائي للفئة بناءً على الوجهة
+                      if (val != null) {
+                        if (AppConstants.internalDestinations.contains(val)) {
+                          _selectedTripCategory = 'داخلية';
+                        } else if (allExternalCities.contains(val)) {
+                          _selectedTripCategory = 'خارجية';
+                        }
+                      }
+                    });
+                  },
+                ),
+              ),
             ],
           ),
+
           const SizedBox(height: 16),
+
           CustomButton(
             onPressed: _handleSearch,
             text: 'بحث عن الرحلات المتاحة',
@@ -106,11 +152,17 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
     );
   }
 
-  Widget _buildDropdown(String label, IconData icon, List<String> items, String? value, Function(String?) onChanged) {
+  Widget _buildDropdown({
+    required String label,
+    required IconData icon,
+    required List<String> items,
+    required String? value,
+    required Function(String?) onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+        Text(label, style: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.muted)),
         const SizedBox(height: 4),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -122,9 +174,11 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
             child: DropdownButton<String>(
               isExpanded: true,
               value: value,
-              hint: Text('اختر', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
-              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)))).toList(),
+              hint: Text('اختر', style: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 13)),
+              // إزالة التكرارات إن وجدت وترتيب العناصر
+              items: items.toSet().map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 13)))).toList(),
               onChanged: onChanged,
+              iconEnabledColor: AppColors.primaryBlue,
             ),
           ),
         ),
@@ -135,14 +189,16 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   Widget _buildSearchResults() {
     return Consumer<TripProvider>(
       builder: (context, provider, _) {
-        if (provider.isLoading) return const Center(child: CircularProgressIndicator());
+        if (provider.isLoading) return const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue));
 
-        // تصفية ذكية ومحلية (تتجنب مشاكل الـ Firebase Index)
         final results = provider.availableTrips.where((trip) {
-          final matchCat = trip.tripCategory == _selectedTripCategory;
+          // الشرط الأساسي الوحيد الآن هو مطابقة الوجهة
           final matchDest = trip.destination.trim() == _selectedDestination?.trim();
-          final matchVehicle = _selectedVehicleType == null || trip.vehicleType == _selectedVehicleType;
-          return matchCat && matchDest && matchVehicle;
+
+          // إذا كان قد تم تحديد الفئة، نقوم بمطابقتها أيضاً
+          final matchCat = _selectedTripCategory == null || trip.tripCategory == _selectedTripCategory;
+
+          return matchCat && matchDest;
         }).toList();
 
         if (results.isEmpty) {
@@ -167,9 +223,9 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.travel_explore, size: 100, color: Colors.blue.withOpacity(0.2)),
+          Icon(Icons.travel_explore, size: 100, color: AppColors.primaryBlue.withOpacity(0.2)),
           const SizedBox(height: 16),
-          const Text('حدد وجهتك وابدأ البحث الآن', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 16)),
+          const Text('حدد الوجهة مباشرة وابدأ البحث', style: TextStyle(fontFamily: AppFonts.arabic, color: AppColors.muted, fontSize: 16)),
         ],
       ),
     );
@@ -180,10 +236,14 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.sentiment_dissatisfied, size: 60, color: Colors.orangeAccent),
+          const Icon(Icons.sentiment_dissatisfied, size: 60, color: AppColors.alertYellow),
           const SizedBox(height: 16),
-          const Text('لا توجد رحلات مطابقة حالياً', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          TextButton(onPressed: () => setState(() => _hasSearched = false), child: const Text('تغيير خيارات البحث', style: TextStyle(fontFamily: 'Cairo'))),
+          const Text('لا توجد رحلات مطابقة حالياً', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark)),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => setState(() => _hasSearched = false),
+            child: const Text('تغيير خيارات البحث', style: TextStyle(fontFamily: AppFonts.arabic, color: AppColors.primaryBlue)),
+          ),
         ],
       ),
     );

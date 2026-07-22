@@ -1,3 +1,4 @@
+// lib/services/user_service.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -5,16 +6,26 @@ import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
 
 class UserService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseFirestore _firestore;
+  final FirebaseStorage? _providedStorage; // قد يكون null في الاختبارات
   final String _collection = 'users';
+
+  // دعم حقن التبعيات للاختبارات والمحاكيات
+  // ملاحظة: لا نستدعي FirebaseStorage.instance هنا مباشرةً
+  UserService({FirebaseFirestore? firestore, FirebaseStorage? storage})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _providedStorage = storage;
+
+  // Getter كسلوك lazy للحصول على storage عند الحاجة فقط
+  FirebaseStorage get _storage {
+    return _providedStorage ?? FirebaseStorage.instance;
+  }
 
   /// جلب بيانات المستخدم وتحويلها إلى كائن AppUser
   Future<AppUser?> getUserById(String uid) async {
     try {
       if (uid.isEmpty) return null;
       final doc = await _firestore.collection(_collection).doc(uid).get();
-      // نستخدم AppUser.fromDocument لضمان معالجة الأنواع (double, int, bool)
       return doc.exists ? AppUser.fromDocument(doc) : null;
     } catch (e, st) {
       debugPrint('UserService.getUserById error: $e\n$st');
@@ -22,7 +33,24 @@ class UserService {
     }
   }
 
-  /// تحديث الملف الشخصي بالكامل بناءً على الموديل
+  /// إنشاء مستخدم جديد أو استبدال كامل للمستند (يستخدم toMap من AppUser)
+  Future<bool> createOrSetUser(AppUser user) async {
+    try {
+      if (user.id.isEmpty) {
+        debugPrint('UserService.createOrSetUser error: user.id is empty');
+        return false;
+      }
+      final data = user.toMap();
+      if (data['createdAt'] == null) data['createdAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection(_collection).doc(user.id).set(data, SetOptions(merge: true));
+      return true;
+    } catch (e, st) {
+      debugPrint('UserService.createOrSetUser error: $e\n$st');
+      return false;
+    }
+  }
+
+  /// تحديث الملف الشخصي بالكامل بناءً على الموديل (يحذف الحقول المحمية)
   Future<bool> updateUserProfile(AppUser user) async {
     try {
       if (user.id.isEmpty) {
@@ -30,13 +58,11 @@ class UserService {
         return false;
       }
 
-      // نستخدم toMap() التي قمنا بتجهيزها لتطابق Firestore
       final data = user.toMap();
-
-      // حماية الحقول الأساسية من التغيير العشوائي
-      data.remove('id'); // المعرف الخاص بالمستند
-      data.remove('uid'); // المعرف الفريد
-      data.remove('createdAt'); // تاريخ الإنشاء لا يتغير
+      data.remove('id');
+      data.remove('uid');
+      data.remove('createdAt');
+      data.removeWhere((k, v) => v == null);
 
       await _firestore.collection(_collection).doc(user.id).update(data);
       return true;
@@ -46,14 +72,21 @@ class UserService {
     }
   }
 
-  /// تحديث حقول معينة فقط (مثل تحديث رقم الهاتف فقط)
+  /// تحديث حقول معينة فقط
   Future<bool> updateUserFields(String uid, Map<String, dynamic> fields) async {
     if (uid.isEmpty) return false;
     try {
-      // تنظيف البيانات من القيم الفارغة قبل الإرسال لضمان عدم مسح بيانات موجودة
       fields.removeWhere((k, v) => v == null);
-
       if (fields.isEmpty) return true;
+
+      if (fields.containsKey('childrenCount')) {
+        final v = fields['childrenCount'];
+        if (v is String) {
+          fields['childrenCount'] = int.tryParse(v) ?? 0;
+        } else if (v is double) {
+          fields['childrenCount'] = v.toInt();
+        }
+      }
 
       await _firestore.collection(_collection).doc(uid).update(fields);
       return true;
@@ -66,9 +99,7 @@ class UserService {
   /// رفع ملف إلى Firebase Storage
   Future<String?> uploadDocument(File file, String uid, String type, {String? extension}) async {
     try {
-      // استخراج الامتداد بشكل صحيح
       final ext = extension ?? file.path.split('.').last;
-      // تنظيم المسار بشكل احترافي: documents/uid/نوع_الوثيقة.الامتداد
       final ref = _storage.ref().child('documents/$uid/$type.$ext');
 
       final UploadTask uploadTask = ref.putFile(file);
@@ -80,20 +111,37 @@ class UserService {
     }
   }
 
-  /// حفظ رابط الوثيقة في حقل Firestore المناسب بناءً على النوع
+  /// حفظ رابط الوثيقة في حقل Firestore المناسب
   Future<bool> saveDocumentUrl(String uid, String type, String url) async {
     try {
       if (uid.isEmpty) throw Exception('UID فارغ');
 
-      // خريطة لربط نوع الملف المرفوع باسم الحقل الفعلي في Firestore
-      final fieldMap = {
-        'identity_card': 'identityCardUrl', // بطاقة الهوية
-        'profile': 'profilePictureUrl',     // صورة الملف الشخصي
-        'license': 'drivingLicenseNumber',  // رخصة القيادة (أو حقل مخصص للرابط)
-      };
+      final userRef = _firestore.collection(_collection).doc(uid);
 
-      final fieldName = fieldMap[type] ?? type;
-      await _firestore.collection(_collection).doc(uid).update({fieldName: url});
+      if (type == 'profile') {
+        await userRef.update({'profilePictureUrl': url});
+        return true;
+      }
+
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(userRef);
+        if (!snap.exists) {
+          tx.set(userRef, {
+            'documents': {type: url},
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          return;
+        }
+
+        final data = snap.data() ?? {};
+        final Map<String, dynamic> docs = data['documents'] != null
+            ? Map<String, dynamic>.from(data['documents'])
+            : <String, dynamic>{};
+
+        docs[type] = url;
+        tx.update(userRef, {'documents': docs});
+      });
+
       return true;
     } catch (e, st) {
       debugPrint('UserService.saveDocumentUrl error: $e\n$st');
@@ -101,7 +149,6 @@ class UserService {
     }
   }
 
-  /// دالة مدمجة: رفع الملف ثم تحديث الرابط في Firestore مباشرة
   Future<bool> uploadAndSaveDocument(File file, String uid, String type, {String? extension}) async {
     final url = await uploadDocument(file, uid, type, extension: extension);
     if (url != null) {
@@ -110,12 +157,30 @@ class UserService {
     return false;
   }
 
-  /// حذف وثيقة من Storage (مثلاً عند رغبة المستخدم في تغيير صورته)
   Future<bool> deleteDocument(String uid, String type, {String? extension}) async {
     try {
       final ext = extension ?? 'jpg';
       final ref = _storage.ref().child('documents/$uid/$type.$ext');
       await ref.delete();
+
+      final userRef = _firestore.collection(_collection).doc(uid);
+      if (type == 'profile') {
+        await userRef.update({'profilePictureUrl': FieldValue.delete()});
+      } else {
+        await _firestore.runTransaction((tx) async {
+          final snap = await tx.get(userRef);
+          if (!snap.exists) return;
+          final data = snap.data() ?? {};
+          final Map<String, dynamic> docs = data['documents'] != null
+              ? Map<String, dynamic>.from(data['documents'])
+              : <String, dynamic>{};
+          if (docs.containsKey(type)) {
+            docs.remove(type);
+            tx.update(userRef, {'documents': docs});
+          }
+        });
+      }
+
       return true;
     } catch (e, st) {
       debugPrint('UserService.deleteDocument error: $e\n$st');
@@ -123,7 +188,6 @@ class UserService {
     }
   }
 
-  /// التحقق من وجود وثيقة مرفوعة مسبقاً
   Future<bool> documentExists(String uid, String type, {String? extension}) async {
     try {
       final ext = extension ?? 'jpg';

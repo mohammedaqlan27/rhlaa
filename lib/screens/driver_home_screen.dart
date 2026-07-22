@@ -92,7 +92,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       }
 
       final snapshot = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final data = snapshot.data() as Map<String, dynamic>? ?? {};
+      final data = snapshot.data() ?? {};
 
       final plateNumber = (data['plate_number'] as String?)?.trim() ?? (data['carPlateNumber'] as String?)?.trim() ?? '';
       final vehicleOwner = (data['vehicle_owner'] as String?)?.trim() ?? (data['vehicleOwner'] as String?)?.trim() ?? '';

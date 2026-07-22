@@ -1,10 +1,15 @@
 // lib/main.dart
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-
 // Providers
 import 'providers/user_provider.dart';
 import 'providers/trip_provider.dart';
@@ -12,6 +17,7 @@ import 'providers/booking_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/rating_provider.dart';
 import 'providers/vehicle_provider.dart';
+import 'providers/agencies_provider.dart';
 import 'state/auth_state.dart';
 
 // Screens
@@ -19,7 +25,6 @@ import 'screens/auth_screen.dart';
 import 'screens/auth_wrapper.dart';
 import 'screens/available_trips_screen.dart' hide TripProvider;
 import 'screens/create_trip_screen.dart';
-import 'screens/debug_trips_screen.dart';
 import 'screens/driver_bookings_screen.dart';
 import 'screens/driver_calendar_screen.dart';
 import 'screens/driver_home_screen.dart';
@@ -45,12 +50,35 @@ import 'screens/user_ratings_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/vehicle_selection_screen.dart';
 
+// Agencies screens
+import 'screens/agencies_list_screen.dart';
+import 'screens/agency_form_screen.dart';
+import 'screens/agency_detail_screen.dart';
+import 'screens/agency_location_edit_screen.dart';
+
 import 'models/trip.dart';
 import 'utils/app_localizations.dart';
 
-Future<void> main() async {
+
+Future<void> main() async { // تم حذف (dynamic FirebaseDatabase) لأنه خطأ
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  if (kDebugMode) {
+    // بما أنك تستخدم كروم، الـ host يجب أن يكون localhost
+    final String host = 'localhost';
+
+    try {
+      FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+      FirebaseFunctions.instance.useFunctionsEmulator(host, 5002);
+      FirebaseAuth.instance.useAuthEmulator(host, 9099);
+      FirebaseDatabase.instance.useDatabaseEmulator(host, 9000);
+
+      print("✅ تم الربط بمحاكيات Firebase بنجاح على المتصفح");
+    } catch (e) {
+      print("❌ فشل الربط بالمحاكيات: $e");
+    }
+  }
   runApp(const RootApp());
 }
 
@@ -66,9 +94,9 @@ class RootApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BookingProvider()),
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
         ChangeNotifierProvider(create: (_) => RatingProvider()),
-
         ChangeNotifierProvider(create: (_) => TripProvider()),
-        ChangeNotifierProvider(create: (_) => VehicleProvider()),// مزود المركبات
+        ChangeNotifierProvider(create: (_) => VehicleProvider()),
+        ChangeNotifierProvider(create: (_) => AgenciesProvider()), // Added AgenciesProvider
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -80,7 +108,26 @@ class RootApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
           AppLocalizations.delegate,
         ],
-        home: const TestMenuScreen(),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const TestMenuScreen(),
+          '/agencies': (context) => const AgenciesListScreen(),
+          '/agency_form': (context) => const AgencyFormScreen(),
+          '/agency_detail': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments;
+            if (args is String) {
+              return AgencyDetailScreen(agencyId: args);
+            }
+            return const AgenciesListScreen();
+          },
+          '/agency_edit_location': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments;
+            if (args is String) {
+              return AgencyLocationEditScreen(agencyId: args);
+            }
+            return const AgenciesListScreen();
+          },
+        },
       ),
     );
   }
@@ -107,13 +154,12 @@ class TestMenuScreen extends StatelessWidget {
       'AuthScreen': const AuthScreen(),
       'AvailableTrips': const AvailableTripsScreen(destination: 'تعز'),
       'CreateTrip': const CreateTripScreen(),
-      'DebugTrips': const DebugTripsScreen(),
       'DriverBookings': DriverBookingsScreen(tripId: 'trip123'),
       'DriverCalendar': const DriverCalendarScreen(),
       'DriverHome': const DriverHomeScreen(),
       'DriverTrips': const DriverTripsScreen(),
       'EditProfile': const EditProfileScreen(),
-      'EditTrip': EditTripScreen(tripId: 'trip123', trip: sampleTrip),
+      'EditTrip': EditTripScreen(tripId: 'trip123'),
       'Home': const HomeScreen(),
       'Loading': const LoadingScreen(),
       'ManageTrip': ManageTripScreen(trip: sampleTrip),
@@ -132,6 +178,9 @@ class TestMenuScreen extends StatelessWidget {
       'UserRatings': const UserRatingsScreen(userId: 'user001'),
       'Vehicle': const VehicleScreen(),
       'VehicleSelection': const VehicleSelectionScreen(),
+      // Agencies screens
+      'AgenciesList': const AgenciesListScreen(),
+      'AgencyForm': const AgencyFormScreen(),
     };
 
     return Scaffold(

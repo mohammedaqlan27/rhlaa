@@ -1,15 +1,30 @@
+// lib/services/auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth;
+  final FirebaseFirestore _firestore;
 
-  /// مراقبة حالة المصادقة (هل المستخدم مسجل دخول أم لا)
+  // الآن الكونستركتور يقبل تبعيات اختيارية (للاختبارات أو المحاكيات)
+  AuthService({FirebaseAuth? auth, FirebaseFirestore? firestore})
+      : _auth = auth ?? FirebaseAuth.instance,
+        _firestore = firestore ?? FirebaseFirestore.instance;
+
+  // إذا أردت تفعيل محاكيات في وقت التشغيل (اختياري)
+  void useEmulators({required String host, required int authPort, required int firestorePort}) {
+    try {
+      _auth.useAuthEmulator(host, authPort);
+    } catch (_) {}
+    try {
+      _firestore.useFirestoreEmulator(host, firestorePort);
+    } catch (_) {}
+  }
+
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// معالجة أخطاء Firebase برسائل عربية واضحة للمستخدم
   String _handleAuthError(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
@@ -24,15 +39,18 @@ class AuthService {
         return 'صيغة البريد الإلكتروني غير صحيحة.';
       case 'network-request-failed':
         return 'تأكد من اتصالك بالإنترنت.';
+      case 'too-many-requests':
+        return 'تم حظر المحاولات مؤقتاً. حاول لاحقاً.';
+      case 'operation-not-allowed':
+        return 'طريقة المصادقة غير مفعلة في إعدادات Firebase.';
       default:
-        return 'حدث خطأ: ${e.message}';
+        return e.message ?? 'حدث خطأ أثناء المصادقة.';
     }
   }
 
-  /// تسجيل الدخول بواسطة البريد الإلكتروني وكلمة المرور
   Future<User?> signIn(String email, String password) async {
     try {
-      final result = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final result = await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
       return result.user;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
@@ -41,7 +59,6 @@ class AuthService {
     }
   }
 
-  /// إنشاء حساب جديد وحفظ بياناته في Firestore
   Future<User?> register({
     required String name,
     required String nickname,
@@ -50,13 +67,11 @@ class AuthService {
     required String role,
   }) async {
     try {
-      final result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      final result = await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
       final user = result.user;
-
       if (user != null) {
-        await _createUserRecord(user.uid, name, nickname, email, role);
+        await _createUserRecord(user.uid, name, nickname, email.trim(), role);
       }
-
       return user;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthError(e);
@@ -65,43 +80,49 @@ class AuthService {
     }
   }
 
-  /// إنشاء سجل المستخدم في Firestore بالصيغة المحدثة والمتوافقة 100%
   Future<void> _createUserRecord(String uid, String name, String nickname, String email, String role) async {
-    // تجهيز البيانات الأساسية (عامة للراكب والسائق)
-    final userData = {
-      'Id': uid, // الحقل المعرف كما هو في قاعدة بياناتك
+    final normalizedRole = role.trim().toLowerCase();
+    final Map<String, dynamic> userData = {
       'uid': uid,
       'name': name,
       'nickname': nickname,
       'email': email,
-      'userType': role.toLowerCase(), // تخزينها بصيغة lowercase لتوحيد عمليات الفلترة والبحث
+      'userType': normalizedRole,
       'averageRating': 0.0,
       'ratingCount': 0,
       'mobileNumber': '',
       'profilePictureUrl': '',
-      'familyStatus': false, // القيمة الافتراضية كـ boolean
-      'childrenCount': 0.0, // القيمة الافتراضية كـ double لتطابق الـ Firestore تماماً
+      'familyStatus': false,
+      'childrenCount': 0,
       'isIdVerified': false,
       'identityCardUrl': '',
-      'documents': {},
+      'documents': <String, dynamic>{},
       'createdAt': FieldValue.serverTimestamp(),
+      'isDriver': normalizedRole == 'driver',
     };
 
-    // إضافة حقول إضافية خاصة بالسائق فقط إذا كان الدور 'driver'
-    if (role.toLowerCase() == 'driver') {
+    if (normalizedRole == 'driver') {
       userData.addAll({
         'drivingLicenseNumber': '',
         'plateNumber': '',
         'carOwnerOfficialName': '',
         'driverNotes': '',
-        'vehicleIds': [],
+        'vehicleIds': <String>[],
+        'isActiveDriver': true,
+      });
+    }
+
+    if (normalizedRole == 'agency') {
+      userData.addAll({
+        'agencyName': name,
+        'agencyVerified': false,
+        'agencyVehicles': <String>[],
       });
     }
 
     await _firestore.collection('users').doc(uid).set(userData);
   }
 
-  /// جلب بيانات المستخدم ككائن AppUser مباشرة
   Future<AppUser?> getUserData(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
@@ -110,14 +131,42 @@ class AuthService {
       }
       return null;
     } catch (e) {
-      print('Error fetching user data: $e');
+      debugPrint('AuthService.getUserData error: $e');
       return null;
     }
   }
 
-  /// تسجيل الخروج
-  Future<void> signOut() async => await _auth.signOut();
+  Future<bool> updateUserRecord(String uid, Map<String, dynamic> updates) async {
+    if (uid.isEmpty) return false;
+    try {
+      final payload = Map<String, dynamic>.from(updates);
+      payload.removeWhere((k, v) => v == null);
+      payload['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection('users').doc(uid).update(payload);
+      return true;
+    } catch (e) {
+      debugPrint('AuthService.updateUserRecord error: $e');
+      return false;
+    }
+  }
 
-  /// الحصول على كائن المستخدم الحالي من Firebase Auth
+  Future<bool> deleteUserAccount(String uid) async {
+    try {
+      await _firestore.collection('users').doc(uid).delete();
+      final current = _auth.currentUser;
+      if (current != null && current.uid == uid) {
+        await current.delete();
+      }
+      return true;
+    } catch (e) {
+      debugPrint('AuthService.deleteUserAccount error: $e');
+      return false;
+    }
+  }
+
+  Future<void> signOut() async {
+    await _auth.signOut();
+  }
+
   User? getCurrentUser() => _auth.currentUser;
 }

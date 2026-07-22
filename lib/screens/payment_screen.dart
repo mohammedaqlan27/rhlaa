@@ -55,7 +55,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (bookingId != null) {
         final snap = await FirebaseFirestore.instance.collection('bookings').doc(bookingId).get();
         if (snap.exists) {
-          final data = snap.data() as Map<String, dynamic>? ?? {};
+          final data = snap.data() ?? {};
           final tp = data['totalPrice'] ?? data['amountPaid'] ?? data['price'];
           if (tp is num) {
             setState(() => _amount = tp.toDouble());
@@ -103,7 +103,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     Navigator.pop(context);
                   },
                 );
-              }).toList(),
+              }),
             ],
           ),
         );
@@ -127,16 +127,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
     String? bookingId = widget.bookingId.isNotEmpty ? widget.bookingId : null;
 
     try {
-      if (bookingId == null) {
-        bookingId = await _findLatestBookingId(user.uid, widget.tripId);
-      }
+      bookingId ??= await _findLatestBookingId(user.uid, widget.tripId);
 
       if (bookingId != null) {
         double amount = _amount;
         if (amount <= 0) {
           final bookingSnap = await FirebaseFirestore.instance.collection('bookings').doc(bookingId).get();
           if (bookingSnap.exists) {
-            final data = bookingSnap.data() as Map<String, dynamic>? ?? {};
+            final data = bookingSnap.data() ?? {};
             final tp = data['totalPrice'] ?? data['amountPaid'] ?? data['price'];
             if (tp is num) amount = tp.toDouble();
             else if (tp is String) amount = double.tryParse(tp) ?? 0.0;
@@ -188,7 +186,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           bookingId: bookingId,
           transactionId: 'manual-${DateTime.now().millisecondsSinceEpoch}',
           amount: _amount,
-          paymentMethod: _selectedMethod,
+          paymentMethod: _selectedMethod, payerId: '',
         );
 
         if (!confirmResult.success) {
