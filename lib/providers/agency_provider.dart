@@ -3,14 +3,8 @@
 // مزود لإدارة حالة المكاتب (Agencies) في الواجهة.
 // - يعتمد على AgenciesService و نماذج Agency و AgencyTransaction.
 // - يدعم: جلب القوائم، جلب مكتب واحد، إنشاء/تحديث/حذف، تفعيل/تعطيل، شحن/خصم المحفظة، جلب سجل المعاملات.
-// - يوفر أيضاً دعم الاستماع في الوقت الحقيقي (realtime) عبر StreamSubscription إن رغبت.
+// - يوفر أيضاً دعم الاستماع في الوقت الحقيقي (realtime) عبر StreamSubscription.
 // - يُرجع أخطاء قابلة للعرض في الواجهة ويحدّث حالة التحميل عبر notifyListeners().
-//
-// الاستخدام:
-//   final provider = Provider.of<AgencyProvider>(context);
-//   await provider.loadAgencies();
-//   provider.createAgency(...);
-//
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -24,24 +18,27 @@ class AgencyProvider with ChangeNotifier {
 
   AgencyProvider({AgenciesService? service}) : _service = service ?? AgenciesService();
 
-  // الحالة الداخلية
+  // --- الحالة الداخلية (State) ---
   bool _isLoading = false;
   String? _error;
   List<Agency> _agencies = [];
   Agency? _currentAgency;
   List<AgencyTransaction> _transactions = [];
+  double _totalBalance = 0.0; // ميزة جديدة: إجمالي السيولة في كل المكاتب
 
-  // Real-time subscription (اختياري)
+  // الاشتراكات (Subscriptions)
   StreamSubscription? _realtimeSub;
+  StreamSubscription? _currentAgencySub; // ميزة جديدة: الاستماع لمكتب واحد
 
-  // Getters
+  // --- Getters ---
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Agency> get agencies => List.unmodifiable(_agencies);
   Agency? get currentAgency => _currentAgency;
   List<AgencyTransaction> get transactions => List.unmodifiable(_transactions);
+  double get totalBalance => _totalBalance; // الوصول لإجمالي السيولة
 
-  // Helpers
+  // --- Helpers ---
   void _setLoading(bool v) {
     _isLoading = v;
     notifyListeners();
@@ -72,16 +69,17 @@ class AgencyProvider with ChangeNotifier {
   }
 
   // ============================
-  // عمليات CRUD أساسية
+  // عمليات CRUD أساسية والبحث
   // ============================
 
-  /// تحميل كل المكاتب (يمكن تمرير onlyActive=true لجلب المكاتب المفعلة فقط)
+  /// تحميل كل المكاتب وتحديث إجمالي السيولة
   Future<void> loadAgencies({bool onlyActive = false}) async {
     _setLoading(true);
     _setError(null);
     try {
       final list = await _service.fetchAllAgencies(onlyActive: onlyActive);
       _setAgencies(list);
+      await loadTotalBalance(); // تحديث إجمالي السيولة تلقائياً
     } catch (e) {
       debugPrint('AgencyProvider.loadAgencies error: $e');
       _setError('فشل جلب المكاتب: $e');
@@ -90,7 +88,26 @@ class AgencyProvider with ChangeNotifier {
     }
   }
 
-  /// جلب مكتب واحد وتعيينه كحالي
+  /// البحث في السيرفر (باستخدام ميزة البحث الاحترافية في الخدمة)
+  Future<void> searchAgencies(String query) async {
+    if (query.isEmpty) {
+      await loadAgencies();
+      return;
+    }
+    _setLoading(true);
+    _setError(null);
+    try {
+      final results = await _service.searchAgencies(query);
+      _setAgencies(results);
+    } catch (e) {
+      debugPrint('AgencyProvider.searchAgencies error: $e');
+      _setError('خطأ في البحث: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// جلب مكتب واحد وتعيينه كحالي مع الاستماع لتحديثاته اللحظية
   Future<void> loadAgencyById(String id) async {
     _setLoading(true);
     _setError(null);
@@ -101,7 +118,7 @@ class AgencyProvider with ChangeNotifier {
         _setCurrentAgency(null);
       } else {
         _setCurrentAgency(a);
-        // جلب سجل المعاملات تلقائياً
+        listenToAgency(id); // بدء الاستماع اللحظي لهذا المكتب
         await loadTransactions(id);
       }
     } catch (e) {
@@ -132,26 +149,24 @@ class AgencyProvider with ChangeNotifier {
         initialBalance: initialBalance,
         isActive: isActive,
       );
-      // إعادة تحميل القائمة وتعيين الحالي
       await loadAgencies();
       await loadAgencyById(id);
       return true;
     } catch (e) {
       debugPrint('AgencyProvider.createAgency error: $e');
-      _setError('فشل إنشاء المكتب: $e');
+      _setError(e.toString().replaceAll('Exception:', ''));
       return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  /// تحديث بيانات المكتب (updates: Map<String,dynamic>)
+  /// تحديث بيانات المكتب
   Future<bool> updateAgency(String id, Map<String, dynamic> updates) async {
     _setLoading(true);
     _setError(null);
     try {
       await _service.updateAgency(id, updates);
-      // تحديث القوائم والحالي
       await loadAgencies();
       if (_currentAgency != null && _currentAgency!.id == id) {
         await loadAgencyById(id);
@@ -172,9 +187,9 @@ class AgencyProvider with ChangeNotifier {
     _setError(null);
     try {
       await _service.deleteAgency(id);
-      // إزالة من القوائم المحلية
       _agencies.removeWhere((a) => a.id == id);
       if (_currentAgency != null && _currentAgency!.id == id) _setCurrentAgency(null);
+      await loadTotalBalance();
       notifyListeners();
       return true;
     } catch (e) {
@@ -207,7 +222,7 @@ class AgencyProvider with ChangeNotifier {
   }
 
   // ============================
-  // عمليات المحفظة (شحن/خصم)
+  // عمليات المحفظة والسيولة
   // ============================
 
   /// شحن رصيد المكتب
@@ -216,9 +231,7 @@ class AgencyProvider with ChangeNotifier {
     _setError(null);
     try {
       await _service.creditWallet(id, amount, reason: reason, performedBy: performedBy);
-      // تحديث البيانات
-      await loadAgencyById(id);
-      await loadAgencies();
+      await loadTotalBalance();
       return true;
     } catch (e) {
       debugPrint('AgencyProvider.creditAgencyWallet error: $e');
@@ -235,16 +248,24 @@ class AgencyProvider with ChangeNotifier {
     _setError(null);
     try {
       await _service.debitWallet(id, amount, reason: reason, performedBy: performedBy);
-      // تحديث البيانات
-      await loadAgencyById(id);
-      await loadAgencies();
+      await loadTotalBalance();
       return true;
     } catch (e) {
       debugPrint('AgencyProvider.debitAgencyWallet error: $e');
-      _setError('فشل خصم من رصيد المكتب: $e');
+      _setError(e.toString().replaceAll('Exception:', ''));
       return false;
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// جلب إجمالي السيولة في كل المكاتب
+  Future<void> loadTotalBalance() async {
+    try {
+      _totalBalance = await _service.getTotalAgenciesBalance();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('AgencyProvider.loadTotalBalance error: $e');
     }
   }
 
@@ -254,16 +275,12 @@ class AgencyProvider with ChangeNotifier {
 
   /// جلب سجل المعاملات لمكتب معين
   Future<void> loadTransactions(String agencyId, {int limit = 200}) async {
-    _setLoading(true);
-    _setError(null);
     try {
       final list = await _service.fetchTransactions(agencyId, limit: limit);
       _setTransactions(list);
     } catch (e) {
       debugPrint('AgencyProvider.loadTransactions error: $e');
       _setError('فشل جلب سجل المعاملات: $e');
-    } finally {
-      _setLoading(false);
     }
   }
 
@@ -271,7 +288,7 @@ class AgencyProvider with ChangeNotifier {
   // وظائف إضافية مفيدة للواجهة
   // ============================
 
-  /// فلترة محلية للمكاتب حسب الاسم أو المدير أو الحالة
+  /// فلترة محلية سريعة للمكاتب المحملة مسبقاً
   void filterAgencies({String? query, bool? onlyActive}) {
     final q = query?.trim().toLowerCase();
     List<Agency> filtered = _agencies;
@@ -289,7 +306,7 @@ class AgencyProvider with ChangeNotifier {
     _setAgencies(filtered);
   }
 
-  /// إعادة تحميل القوائم المحلية من السيرفر (بدون فلترة)
+  /// إعادة تحميل القوائم المحلية من السيرفر
   Future<void> resetAndReload({bool onlyActive = false}) async {
     await loadAgencies(onlyActive: onlyActive);
   }
@@ -297,14 +314,22 @@ class AgencyProvider with ChangeNotifier {
   // ============================
   // دعم الاستماع في الوقت الحقيقي (Realtime)
   // ============================
-  /// ابدأ الاستماع للتغييرات في مجموعة المكاتب (Realtime)
-  /// - onData callback اختياري لتلقي التحديثات فورياً
+
+  /// الاستماع لمكتب واحد فقط (لتحديث الرصيد فوراً في شاشة التفاصيل)
+  void listenToAgency(String id) {
+    _currentAgencySub?.cancel();
+    _currentAgencySub = _service.getAgencyStream(id).listen((agency) {
+      _currentAgency = agency;
+      notifyListeners();
+    }, onError: (e) => debugPrint('AgencyProvider.listenToAgency error: $e'));
+  }
+
+  /// ابدأ الاستماع للتغييرات في كل المكاتب
   void startRealtimeListener({void Function(List<Agency>)? onData}) {
     stopRealtimeListener();
     try {
-      // التعديل هنا: نستخدم FirebaseFirestore.instance مباشرة
       _realtimeSub = FirebaseFirestore.instance
-          .collection('agencies') // الوصول لمجموعة المكاتب
+          .collection('agencies')
           .orderBy('createdAt', descending: true)
           .snapshots()
           .listen(
@@ -324,14 +349,13 @@ class AgencyProvider with ChangeNotifier {
       _setError('فشل بدء الاستماع في الوقت الحقيقي: $e');
     }
   }
+
   /// إيقاف الاستماع في الوقت الحقيقي
   void stopRealtimeListener() {
-    try {
-      _realtimeSub?.cancel();
-      _realtimeSub = null;
-    } catch (e) {
-      debugPrint('AgencyProvider.stopRealtimeListener error: $e');
-    }
+    _realtimeSub?.cancel();
+    _realtimeSub = null;
+    _currentAgencySub?.cancel();
+    _currentAgencySub = null;
   }
 
   // ============================
@@ -343,4 +367,3 @@ class AgencyProvider with ChangeNotifier {
     super.dispose();
   }
 }
-

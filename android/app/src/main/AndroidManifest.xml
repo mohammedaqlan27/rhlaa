@@ -5,7 +5,7 @@
     <application
         android:label="rhlaa"
         android:name="${Rhlaa}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/splSash">
         <activity
             android:name=".MainActivity"
             android:exported="true"

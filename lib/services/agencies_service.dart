@@ -13,11 +13,71 @@ class AgenciesService {
   CollectionReference get _col => _firestore.collection('agencies');
   CollectionReference get _transactionsCol => _firestore.collection('agency_transactions');
 
+  /// تحويل القيم إلى double بأمان لتجنب أخطاء النوع
   double _toDoubleSafe(dynamic v) => (v is num) ? v.toDouble() : (double.tryParse(v?.toString() ?? '0.0') ?? 0.0);
 
   // =============================================================
-  // 1. إدارة المكاتب (CRUD) مع التحقق
+  // 1. إدارة المكاتب (CRUD)
   // =============================================================
+
+  /// جلب كل المكاتب مع إمكانية الفلترة للمكاتب النشطة فقط
+  Future<List<Agency>> fetchAllAgencies({bool onlyActive = false}) async {
+    try {
+      Query q = _col.orderBy('createdAt', descending: true);
+      if (onlyActive) q = q.where('isActive', isEqualTo: true);
+      final snap = await q.get();
+      return snap.docs.map((d) => Agency.fromDoc(d)).toList();
+    } catch (e) {
+      debugPrint('Error fetchAllAgencies: $e');
+      return [];
+    }
+  }
+
+  /// جلب بيانات مكتب واحد حسب المعرف (ID)
+  Future<Agency?> getAgencyById(String id) async {
+    try {
+      final doc = await _col.doc(id).get();
+      if (!doc.exists) return null;
+      return Agency.fromDoc(doc);
+    } catch (e) {
+      debugPrint('Error getAgencyById: $e');
+      return null;
+    }
+  }
+
+  /// تحديث بيانات المكتب (مثل الاسم، الموقع، إلخ)
+  Future<void> updateAgency(String id, Map<String, dynamic> updates) async {
+    try {
+      updates['updatedAt'] = FieldValue.serverTimestamp();
+      await _col.doc(id).update(updates);
+    } catch (e) {
+      debugPrint('Error updateAgency: $e');
+      rethrow;
+    }
+  }
+
+  /// حذف المكتب نهائياً من قاعدة البيانات
+  Future<void> deleteAgency(String id) async {
+    try {
+      await _col.doc(id).delete();
+    } catch (e) {
+      debugPrint('Error deleteAgency: $e');
+      rethrow;
+    }
+  }
+
+  /// تفعيل أو تعطيل حساب المكتب
+  Future<void> setAgencyActive(String id, bool isActive) async {
+    try {
+      await _col.doc(id).update({
+        'isActive': isActive,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error setAgencyActive: $e');
+      rethrow;
+    }
+  }
 
   /// إنشاء مكتب جديد مع التحقق من عدم تكرار رقم الهاتف
   Future<String> createAgency({
@@ -29,7 +89,6 @@ class AgenciesService {
     bool isActive = true,
   }) async {
     try {
-      // التحقق من وجود رقم الهاتف مسبقاً
       final existing = await _col.where('mobileNumber', isEqualTo: mobileNumber).get();
       if (existing.docs.isNotEmpty) {
         throw Exception('رقم الهاتف مسجل لمكتب آخر بالفعل');
@@ -45,7 +104,7 @@ class AgenciesService {
         'isActive': isActive,
         'createdAt': now,
         'updatedAt': now,
-        'searchKey': agencyName.toLowerCase(), // للبحث السهل
+        'searchKey': agencyName.toLowerCase(),
       });
       return docRef.id;
     } catch (e) {
@@ -54,7 +113,11 @@ class AgenciesService {
     }
   }
 
-  /// جلب بيانات مكتب واحد (Stream) للتحديث اللحظي في الواجهة
+  // =============================================================
+  // 2. النظام المالي والاستماع اللحظي
+  // =============================================================
+
+  /// الاستماع لتحديثات مكتب معين في الوقت الحقيقي
   Stream<Agency?> getAgencyStream(String id) {
     return _col.doc(id).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -62,70 +125,61 @@ class AgenciesService {
     });
   }
 
-  /// البحث عن المكاتب بالاسم أو الهاتف
+  /// البحث عن المكاتب برقم الهاتف أو الاسم
   Future<List<Agency>> searchAgencies(String query) async {
-    final snap = await _col
-        .where('mobileNumber', isEqualTo: query) // بحث برقم الهاتف أولاً
-        .get();
+    try {
+      final snap = await _col.where('mobileNumber', isEqualTo: query).get();
+      if (snap.docs.isNotEmpty) return snap.docs.map((d) => Agency.fromDoc(d)).toList();
 
-    if (snap.docs.isNotEmpty) {
-      return snap.docs.map((d) => Agency.fromDoc(d)).toList();
+      final nameSnap = await _col
+          .where('searchKey', isGreaterThanOrEqualTo: query.toLowerCase())
+          .where('searchKey', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
+          .limit(10)
+          .get();
+      return nameSnap.docs.map((d) => Agency.fromDoc(d)).toList();
+    } catch (e) {
+      debugPrint('Error searchAgencies: $e');
+      return [];
     }
-
-    // إذا لم يجد بالهاتف، يبحث بالاسم (بداية الاسم)
-    final nameSnap = await _col
-        .where('searchKey', isGreaterThanOrEqualTo: query.toLowerCase())
-        .where('searchKey', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
-        .limit(10)
-        .get();
-
-    return nameSnap.docs.map((d) => Agency.fromDoc(d)).toList();
   }
 
-  // =============================================================
-  // 2. النظام المالي (Wallet & Transactions)
-  // =============================================================
-
-  /// عملية مالية موحدة (شحن أو خصم) لضمان تقليل تكرار الكود
+  /// دالة داخلية لإدارة عمليات المحفظة (شحن/خصم) بشكل آمن (Transaction)
   Future<void> _updateWalletTransaction({
     required String agencyId,
     required double amount,
-    required String type, // 'credit' or 'debit'
-    required String reason,
+    required String type,
+    required String? reason,
     String? performedBy,
   }) async {
     if (amount <= 0) throw Exception('المبلغ يجب أن يكون أكبر من صفر');
-
     final docRef = _col.doc(agencyId);
 
     await _firestore.runTransaction((tx) async {
       final snapshot = await tx.get(docRef);
       if (!snapshot.exists) throw Exception('المكتب غير موجود');
 
-      final currentBalance = _toDoubleSafe(snapshot.data()?['walletBalance']);
-      double newBalance;
+      // تصحيح: الوصول للبيانات كـ Map لضمان التوافق
+      final data = snapshot.data() as Map<String, dynamic>;
+      final currentBalance = _toDoubleSafe(data['walletBalance']);
 
-      if (type == 'credit') {
-        newBalance = currentBalance + amount;
-      } else {
-        if (currentBalance < amount) throw Exception('رصيد المكتب غير كافٍ');
-        newBalance = currentBalance - amount;
+      double newBalance = type == 'credit' ? currentBalance + amount : currentBalance - amount;
+
+      if (type == 'debit' && currentBalance < amount) {
+        throw Exception('رصيد المكتب غير كافٍ لإتمام العملية');
       }
 
-      // 1. تحديث رصيد المكتب
       tx.update(docRef, {
         'walletBalance': newBalance,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. تسجيل العملية المالية
       final txDoc = _transactionsCol.doc();
       tx.set(txDoc, {
         'id': txDoc.id,
         'agencyId': agencyId,
         'amount': amount,
         'type': type,
-        'reason': reason,
+        'reason': reason ?? (type == 'credit' ? 'شحن رصيد' : 'خصم رصيد'),
         'performedBy': performedBy ?? 'system',
         'createdAt': FieldValue.serverTimestamp(),
         'oldBalance': currentBalance,
@@ -135,40 +189,30 @@ class AgenciesService {
   }
 
   Future<void> creditWallet(String agencyId, double amount, {String? reason, String? performedBy}) {
-    return _updateWalletTransaction(
-      agencyId: agencyId,
-      amount: amount,
-      type: 'credit',
-      reason: reason ?? 'شحن رصيد يدوي',
-      performedBy: performedBy,
-    );
+    return _updateWalletTransaction(agencyId: agencyId, amount: amount, type: 'credit', reason: reason, performedBy: performedBy);
   }
 
   Future<void> debitWallet(String agencyId, double amount, {String? reason, String? performedBy}) {
-    return _updateWalletTransaction(
-      agencyId: agencyId,
-      amount: amount,
-      type: 'debit',
-      reason: reason ?? 'خصم رصيد يدوي',
-      performedBy: performedBy,
-    );
+    return _updateWalletTransaction(agencyId: agencyId, amount: amount, type: 'debit', reason: reason, performedBy: performedBy);
   }
 
-  // =============================================================
-  // 3. التقارير والإحصائيات
-  // =============================================================
-
-  /// جلب إجمالي أرصدة المكاتب (للمدير العام)
+  /// حساب إجمالي أرصدة جميع المكاتب (للتقارير الإدارية)
   Future<double> getTotalAgenciesBalance() async {
-    final snap = await _col.get();
-    double total = 0;
-    for (var doc in snap.docs) {
-      total += _toDoubleSafe(doc.data()?['walletBalance']);
+    try {
+      final snap = await _col.get();
+      double total = 0;
+      for (var doc in snap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        total += _toDoubleSafe(data['walletBalance']);
+      }
+      return total;
+    } catch (e) {
+      debugPrint('Error getTotalAgenciesBalance: $e');
+      return 0.0;
     }
-    return total;
   }
 
-  /// جلب سجل العمليات مع دعم الترتيب الزمني
+  /// جلب سجل المعاملات المالية لمكتب معين
   Future<List<AgencyTransaction>> fetchTransactions(String agencyId, {int limit = 50}) async {
     try {
       final snap = await _transactionsCol
@@ -178,12 +222,8 @@ class AgenciesService {
           .get();
       return snap.docs.map((d) => AgencyTransaction.fromDoc(d)).toList();
     } catch (e) {
-      debugPrint('Error fetching transactions: $e');
+      debugPrint('Error fetchTransactions: $e');
       return [];
     }
   }
-}
-
-extension on Object? {
-  operator [](String other) {}
 }
