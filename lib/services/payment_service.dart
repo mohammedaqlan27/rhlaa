@@ -148,7 +148,11 @@ class PaymentService {
     AgenciesService? agenciesService,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _notificationService = notificationService ?? NotificationService(),
-        _bookingService = bookingService ?? BookingService(),
+        _bookingService = bookingService ??
+            BookingService(
+              firestore: firestore ?? FirebaseFirestore.instance,
+              notificationService: notificationService ?? NotificationService(),
+            ),
         _agenciesService = agenciesService ?? AgenciesService();
 
   // ============================

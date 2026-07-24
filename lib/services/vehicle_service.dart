@@ -1,12 +1,16 @@
-// lib/services/vehicle_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import '../models/vehicle.dart';
 
 class VehicleService {
-  final CollectionReference _vehiclesRef = FirebaseFirestore.instance.collection('vehicles');
+  // تم إضافة حقن الاعتمادات هنا:
+  final FirebaseFirestore _firestore;
 
-  VehicleService();
+  VehicleService({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  // مرجع المجموعة يعتمد الآن على instance المحقون:
+  CollectionReference get _vehiclesRef => _firestore.collection('vehicles');
 
   /// جلب مركبات السائق/المالك بناءً على الحقول الجديدة:
   /// يبحث أولاً في حقل vehicleOwner ثم في حقل ownerId كاحتياط

@@ -1,0 +1,333 @@
+{
+  "users": {
+    "X0whWZW2ugWMrWippLugE9jIZ8X2": {
+      "fields": {
+        "agencyName": { "stringValue": "اسم المكتب" },
+        "agencyVehicles": { "arrayValue": { "values": [{ "stringValue": "v1" }, { "stringValue": "" }, { "stringValue": "" }] } },
+        "agencyVerified": { "booleanValue": false },
+        "averageRating": { "doubleValue": 0.0 },
+        "carOwnerOfficialName": { "stringValue": "محمد" },
+        "childrenCount": { "stringValue": "0" },
+        "createdAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "documents": { "mapValue": { "fields": { "dynamic": { "stringValue": "link" }, "ext": { "stringValue": "pdf" }, "type": { "stringValue": "identity_card" } } } },
+        "driverNotes": { "stringValue": "ملاحظات" },
+        "drivingLicenseNumber": { "stringValue": "12345" },
+        "email": { "stringValue": "test@example.com" },
+        "familyStatus": { "booleanValue": false },
+        "identityCardUrl": { "stringValue": "url" },
+        "isActiveDriver": { "booleanValue": false },
+        "isDriver": { "booleanValue": false },
+        "isIdVerified": { "booleanValue": false },
+        "mobileNumber": { "stringValue": "777000000" },
+        "name": { "stringValue": "محمد عبدالرحمن" },
+        "nickname": { "stringValue": "محمد" },
+        "plateNumber": { "stringValue": "0000" },
+        "profilePictureUrl": { "stringValue": "url" },
+        "ratingCount": { "integerValue": "0" },
+        "uid": { "stringValue": "user_sample_001" },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "userType": { "stringValue": "passenger" },
+        "vehicleIds": { "stringValue": "v1" },
+        "walletBalance": { "doubleValue": 0.0 }
+      },
+      "fcmTokens": {
+        "xLCUd6NwYXiCwmGw7PzG": {
+          "fields": {
+            "createdAt": { "timestampValue": "2026-07-13T00:00:00Z" },
+            "platform": { "stringValue": "android" }
+          }
+        }
+      }
+    }
+  },
+  "trips": {
+    "1JCcWgr6oqpyvurU1fCb": {
+      "fields": {
+        "BookingService": { "stringValue": "" },
+        "PdfService": { "stringValue": "" },
+        "agencyId": { "stringValue": "agency_id_example" },
+        "availableSeats": { "integerValue": "3" },
+        "cancellationPolicy": { "stringValue": "سياسة الإلغاء الخاصة بالرحلة" },
+        "carOwnerOfficialName": { "stringValue": "محمد" },
+        "carPlateNumber": { "stringValue": "7 777" },
+        "createdAt": { "timestampValue": "2026-06-03T07:56:30Z" },
+        "createdVia": { "stringValue": "driver_app" },
+        "date": { "timestampValue": "2026-06-15T00:00:00Z" },
+        "departureTime": { "timestampValue": "2026-06-15T00:00:00Z" },
+        "description": { "stringValue": "السعودية" },
+        "destination": { "stringValue": "" },
+        "distanceKm": { "doubleValue": 100.0 },
+        "driverId": { "stringValue": "0BNF94OAxsZiwF4n79QL3k4wi5M2" },
+        "driverName": { "stringValue": "aaa1@gmail.com" },
+        "driverRating": { "doubleValue": 0.0 },
+        "estimatedDuration": { "integerValue": "7" },
+        "flexibleWindow": { "stringValue": "" },
+        "govFeeAmount": { "doubleValue": 1000.0 },
+        "manifestGeneratedAt": { "timestampValue": "2026-06-15T11:16:40Z" },
+        "manifestStatus": { "stringValue": "pending_manifest" },
+        "manifestStoragePath": { "stringValue": "" },
+        "manifestUrl": { "stringValue": "رابط ملف الـ PDF" },
+        "origin": { "stringValue": "صنعاء" },
+        "price": { "doubleValue": 1000.0 },
+        "seatStatus": {
+          "arrayValue": {
+            "values": [
+              { "booleanValue": true },
+              { "booleanValue": true },
+              { "booleanValue": true }
+            ]
+          }
+        },
+        "status": { "stringValue": "active" },
+        "time": { "stringValue": "صباحًا" },
+        "title": { "stringValue": "رحلة خاصة" },
+        "totalSeats": { "integerValue": "3" },
+        "tripCategory": { "stringValue": "خارجية" },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "vehicleType": { "stringValue": "سيارة دفع رباعي" }
+      }
+    }
+  },
+  "ratings": {
+    "THDNcROcjOfWP8QXjGuO": {
+      "fields": {
+        "bookingId": { "stringValue": "booking001" },
+        "category": { "stringValue": "رحلة" },
+        "comment": { "stringValue": "تعليق" },
+        "createdAt": { "timestampValue": "2025-10-08T02:39:25Z" },
+        "driverId": { "stringValue": "" },
+        "fromUserId": { "stringValue": "user123" },
+        "note": { "stringValue": "رحلة ممتازة وسائق محترم" },
+        "passengerId": { "stringValue": "" },
+        "rating": { "stringValue": "" },
+        "score": { "doubleValue": 0.0 },
+        "tags": {
+          "arrayValue": {
+            "values": [
+              { "stringValue": "سلوك جيد" },
+              { "stringValue": "التزام بالوقت" }
+            ]
+          }
+        },
+        "toUserId": { "stringValue": "driver123" },
+        "tripId": { "stringValue": "t123" },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" }
+      }
+    }
+  },
+  "agencies": {
+    "yFIaZzLt5s1H37qtx63U": {
+      "fields": {
+        "agencyName": { "stringValue": "" },
+        "createdAt": { "timestampValue": "2026-07-08T00:00:00Z" },
+        "id": { "stringValue": "" },
+        "isActive": { "booleanValue": true },
+        "location": {
+          "mapValue": {
+            "fields": {
+              "GeoPoint": { "geoPointValue": { "latitude": 0, "longitude": 0 } },
+              "dynamic": { "nullValue": null }
+            }
+          }
+        },
+        "managerName": { "stringValue": "" },
+        "mobileNumber": { "stringValue": "" },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "walletBalance": { "doubleValue": 0.0 }
+      }
+    }
+  },
+  "payments": {
+    "iDlGdb2ZdqZDGz4ajQbA": {
+      "fields": {
+        "agencyCommissionAmount": { "doubleValue": 0.0 },
+        "agencyCommissionRate": { "doubleValue": 0.0 },
+        "agencyId": { "stringValue": "" },
+        "amount": { "doubleValue": 0.0 },
+        "amountPaid": { "doubleValue": 0.0 },
+        "appCommissionAmount": { "doubleValue": 2.0 },
+        "appCommissionRate": { "doubleValue": 0.04 },
+        "bookingId": { "stringValue": "" },
+        "calculatedAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "createdAt": { "timestampValue": "2026-07-08T05:12:33Z" },
+        "currency": { "stringValue": "YER" },
+        "driverId": { "stringValue": "" },
+        "driverNetAmount": { "doubleValue": 0.85 },
+        "gatewayResponse": { "mapValue": { "fields": { "dynamic": { "stringValue": "details" } } } },
+        "govFee": { "doubleValue": 0.0 },
+        "govFeePaidBy": { "stringValue": "driver" },
+        "notes": { "stringValue": "" },
+        "passengerId": { "stringValue": "" },
+        "paymentMethod": { "stringValue": "cash" },
+        "paymentStatus": { "stringValue": "pending" },
+        "platformReceives": { "doubleValue": 0.0 },
+        "rawProvider": { "mapValue": { "fields": { "rawProviderResponse": { "stringValue": "" } } } },
+        "refundReason": { "stringValue": "" },
+        "refundedAt": { "timestampValue": "2026-07-08T06:13:37Z" },
+        "roundingDelta": { "doubleValue": 0.0 },
+        "split": {
+          "mapValue": {
+            "fields": {
+              "CommissionResult": { "doubleValue": 0.0 },
+              "agencyCommissionAmount": { "doubleValue": 0.0 },
+              "appCommissionAmount": { "doubleValue": 0.0 },
+              "driverNetAmount": { "doubleValue": 0.0 },
+              "totalAmount": { "doubleValue": 0.0 }
+            }
+          }
+        },
+        "status": { "stringValue": "" },
+        "totalAmount": { "doubleValue": 0.0 },
+        "transactionId": { "stringValue": "" },
+        "updatedAt": { "timestampValue": "2026-07-08T05:12:59Z" }
+      }
+    }
+  },
+  "bookings": {
+    "j7l6fB5oF7bwD3tmdQMR": {
+      "fields": {
+        "BookingService": { "stringValue": "" },
+        "PdfService": { "stringValue": "" },
+        "amountPaid": { "doubleValue": 0.0 },
+        "bookedSeatsCount": { "integerValue": "1" },
+        "bookingStatus": { "stringValue": "confirmed" },
+        "canceledAt": { "timestampValue": "2026-07-13T00:00:00Z" },
+        "childrenCount": { "integerValue": "0" },
+        "createdAt": { "timestampValue": "2026-05-28T03:10:30Z" },
+        "driverId": { "stringValue": "" },
+        "isFamilyBooking": { "booleanValue": false },
+        "notes": { "stringValue": "" },
+        "paidAt": { "timestampValue": "2026-05-28T03:10:31Z" },
+        "passengerId": { "stringValue": "NbNVOZdgQlYcRSKxAgOHBbKuGNg2" },
+        "passengerNickname": { "stringValue": "" },
+        "paymentIntentId": { "stringValue": "" },
+        "paymentMethod": { "stringValue": "بطاقة إلكترونية" },
+        "paymentStatus": { "stringValue": "paid" },
+        "reservedUntil": { "stringValue": "" },
+        "seatIndexes": { "integerValue": "0" },
+        "seatNumber": { "integerValue": "1" },
+        "totalPrice": { "doubleValue": 0.0 },
+        "transactionId": { "stringValue": "manual-1779927030965" },
+        "tripId": { "stringValue": "testTrip" },
+        "updatedAt": { "timestampValue": "2026-05-28T03:10:31Z" }
+      }
+    }
+  },
+  "notifications": {
+    "L0Jk78iuHc5z9Y5lcBHE": {
+      "fields": {
+        "actionUrl": { "stringValue": "رابط شاشة" },
+        "actionUrl_deeplink": { "stringValue": "deeplink" },
+        "body": { "stringValue": "تم تأكيد حجزك للرحلة رقم trip001" },
+        "createdAt": { "timestampValue": "2026-05-25T00:00:00Z" },
+        "isRead": { "booleanValue": false },
+        "metadata": { "mapValue": { "fields": {} } },
+        "sendNotification": { "booleanValue": false },
+        "sendNotification_string": { "stringValue": "" },
+        "priority": { "stringValue": "high" },
+        "priority_desc": { "stringValue": "مستوى الأولوية" },
+        "title": { "stringValue": "حجز جديد" },
+        "transactionId": { "stringValue": "" },
+        "type": { "stringValue": "booking" },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "userId": { "stringValue": "" }
+      }
+    }
+  },
+  "agency_transactions": {
+    "transaction_sample_001": {
+      "fields": {
+        "agencyId": { "stringValue": "مرجع إلى وثيقة المكتب" },
+        "amount": { "doubleValue": 0.0 },
+        "createdAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "id": { "stringValue": "معرف المعاملة" },
+        "performedBy": { "stringValue": "من قام بالعملية" },
+        "reason": { "stringValue": "سبب المعاملة" },
+        "type": { "stringValue": "credit" }
+      }
+    }
+  },
+  "gov_fees": {
+    "bi5c7eIP0j7K5oBgQynz": {
+      "fields": {
+        "createdAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "destination": { "stringValue": "*" },
+        "distanceBased": { "booleanValue": false },
+        "distanceTiers": {
+          "mapValue": {
+            "fields": {
+              "amount": { "doubleValue": 0.0 },
+              "maxKm": { "doubleValue": 0.0 },
+              "minKm": { "doubleValue": 0.0 }
+            }
+          }
+        },
+        "exact": { "booleanValue": false },
+        "fixedAmount": { "doubleValue": 0.0 },
+        "isActive": { "booleanValue": false },
+        "origin": { "stringValue": "صنعاء" },
+        "priority": { "integerValue": "0" },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" }
+      }
+    }
+  },
+  "vehicles": {
+    "989TKBVnnZvEpgssflGH": {
+      "fields": {
+        "carOwnerOfficialName": { "stringValue": "" },
+        "color": { "stringValue": "ابيض" },
+        "createdAt": { "timestampValue": "2026-07-02T09:13:40Z" },
+        "driverId": { "stringValue": "0BNF94OAxsZiwF4n79QL3k4wi5M2" },
+        "driverName": { "stringValue": "" },
+        "extra": {
+          "mapValue": {
+            "fields": {
+              "0": { "stringValue": "" },
+              "1": { "nullValue": null }
+            }
+          }
+        },
+        "insuranceExpiryDate": { "timestampValue": "2027-01-08T00:00:00Z" },
+        "isVerified": { "booleanValue": true },
+        "lastInspectionDate": { "stringValue": "آخر فحص فني" },
+        "licenseNumber": { "stringValue": "098765" },
+        "makeModelYear": { "stringValue": "2023" },
+        "maxCapacity": { "integerValue": "7" },
+        "notes": { "stringValue": "" },
+        "ownerUserId": { "stringValue": "0BNF94OAxsZiwF4n79QL3k4wi5M2" },
+        "plateNumber": { "stringValue": "0000" },
+        "sGovernmentRegistered": { "booleanValue": true },
+        "updatedAt": { "timestampValue": "2026-07-12T00:00:00Z" },
+        "vehicleDocuments": {
+          "arrayValue": {
+            "values": [
+              { "stringValue": "روابط أو معرفات لمستندات المركبة" }
+            ]
+          }
+        },
+        "vehicleOwner": { "stringValue": "امجد محمد" },
+        "vehicleType": { "stringValue": "برادو" }
+      }
+    }
+  },
+  "user_notification_preferences": {
+    "g3BBCipijZMMlY3DmKFt": {
+      "fields": {
+        "locale": { "stringValue": "ar" },
+        "marketing": { "booleanValue": false },
+        "reminder_hours": {
+          "arrayValue": {
+            "values": [
+              { "integerValue": "1" },
+              { "integerValue": "2" },
+              { "integerValue": "3" },
+              { "integerValue": "8" },
+              { "integerValue": "24" }
+            ]
+          }
+        },
+        "transactional": { "booleanValue": false }
+      }
+    }
+  }
+}

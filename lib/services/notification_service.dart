@@ -1,18 +1,23 @@
-// lib/services/notification_service.dart
 import 'dart:async';
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // ✅ هذا هو الصحيحimport 'package:flutter/foundation.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import '../models/notification_model.dart';
 
 class NotificationService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  // حقن الاعتمادات
+  final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
+
   final String collectionName = 'notifications';
   final String scheduledCollection = 'scheduled_notifications';
 
-  NotificationService();
+  // Constructor مع قيم افتراضية لسهولة الاستخدام والقدرة على عمل Mocks
+  NotificationService({
+    FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ?? FirebaseFunctions.instance;
 
   // -----------------------
   // Low-level: write notification doc
@@ -48,7 +53,7 @@ class NotificationService {
   }
 
   // -----------------------
-  // Callable Cloud Function wrapper (send push)
+  // Callable Cloud Function wrapper
   // -----------------------
   Future<void> _callSendNotificationFunction({
     required String notificationId,
@@ -68,12 +73,11 @@ class NotificationService {
       });
     } catch (e, st) {
       debugPrint('NotificationService._callSendNotificationFunction error: $e\n$st');
-      // لا نرمي هنا لأن حفظ الإشعار يجب أن ينجح حتى لو فشل الإرسال
     }
   }
 
   // -----------------------
-  // Public: send notification (write + optional push)
+  // Public: send notification
   // -----------------------
   Future<void> sendNotification({
     required String userId,
@@ -115,7 +119,7 @@ class NotificationService {
   }
 
   // -----------------------
-  // Schedule a notification (writes to scheduled_notifications)
+  // Schedule a notification
   // -----------------------
   Future<void> scheduleNotification({
     required String userId,
@@ -141,7 +145,7 @@ class NotificationService {
   }
 
   // -----------------------
-  // Templates / helpers (قوالب جاهزة)
+  // Templates / helpers
   // -----------------------
   Future<void> sendBookingPendingPaymentReminder({
     required String userId,
@@ -248,7 +252,6 @@ class NotificationService {
     final body = 'وصلت إلى وجهتك. شكرًا لاستخدامك خدمتنا. نرجو تقييم السائق.';
     final metadata = {'screen': 'rating', 'tripId': tripId, 'bookingId': bookingId};
     await sendNotification(userId: userId, title: title, body: body, type: 'arrived', metadata: metadata);
-    // طلب تقييم بعد قليل (مثال: بعد 1 دقيقة)
     final sendAt = DateTime.now().add(Duration(minutes: 1));
     await scheduleNotification(
       userId: userId,
@@ -294,7 +297,7 @@ class NotificationService {
   }
 
   // -----------------------
-  // Existing helper methods (get, stream, markAsRead, delete, unread count)
+  // Existing helper methods
   // -----------------------
   Future<List<AppNotification>> getNotificationsOnce({
     required String userId,
