@@ -1,28 +1,40 @@
-// lib/providers/agencies_provider.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/agencies_service.dart';
 import '../models/agency.dart';
 import '../models/agency_transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AgenciesProvider with ChangeNotifier {
   final AgenciesService _service;
 
   AgenciesProvider({AgenciesService? service}) : _service = service ?? AgenciesService();
 
+  // --- الحالة الداخلية (State) ---
   bool _isLoading = false;
   String? _error;
   List<Agency> _agencies = [];
+  List<Agency> _filteredAgencies = []; // للبحث والفلترة
   Agency? _currentAgency;
   List<AgencyTransaction> _transactions = [];
+  double _totalBalance = 0.0; // إجمالي السيولة
 
-  // Getters
+  // الاشتراكات اللحظية (Real-time Subscriptions)
+  StreamSubscription? _realtimeSub;
+  StreamSubscription? _currentAgencySub;
+
+  // --- Getters ---
   bool get isLoading => _isLoading;
   String? get error => _error;
-  List<Agency> get agencies => List.unmodifiable(_agencies);
+
+  // عرض القائمة المفلترة إذا وجد بحث، وإلا عرض القائمة الكاملة
+  List<Agency> get agencies => _filteredAgencies.isEmpty && _error == null ? _agencies : _filteredAgencies;
+
   Agency? get currentAgency => _currentAgency;
   List<AgencyTransaction> get transactions => List.unmodifiable(_transactions);
+  double get totalBalance => _totalBalance;
 
-  // Internal helpers
+  // --- Internal helpers ---
   void _setLoading(bool v) {
     _isLoading = v;
     notifyListeners();
@@ -35,6 +47,7 @@ class AgenciesProvider with ChangeNotifier {
 
   void _setAgencies(List<Agency> list) {
     _agencies = list;
+    _filteredAgencies = list;
     notifyListeners();
   }
 
@@ -48,7 +61,13 @@ class AgenciesProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Public API
+  void clearError() {
+    _setError(null);
+  }
+
+  // =============================================================
+  // 1. عمليات CRUD الأساسية (نفس خدماتك الأصلية دون حذف)
+  // =============================================================
 
   Future<void> loadAgencies({bool onlyActive = false}) async {
     _setLoading(true);
@@ -56,6 +75,7 @@ class AgenciesProvider with ChangeNotifier {
     try {
       final list = await _service.fetchAllAgencies(onlyActive: onlyActive);
       _setAgencies(list);
+      await loadTotalBalance(); // تحديث السيولة تلقائياً
     } catch (e) {
       _setError('فشل جلب المكاتب: $e');
     } finally {
@@ -72,6 +92,7 @@ class AgenciesProvider with ChangeNotifier {
         _setError('المكتب غير موجود');
       } else {
         _setCurrentAgency(a);
+        listenToAgency(id); // تفعيل التحديث اللحظي للمكتب المختار
         await loadTransactions(id);
       }
     } catch (e) {
@@ -99,10 +120,9 @@ class AgenciesProvider with ChangeNotifier {
         initialBalance: initialBalance,
       );
       await loadAgencies();
-      await loadAgencyById(id);
       return true;
     } catch (e) {
-      _setError('فشل إنشاء المكتب: $e');
+      _setError(e.toString().replaceAll('Exception:', ''));
       return false;
     } finally {
       _setLoading(false);
@@ -163,13 +183,16 @@ class AgenciesProvider with ChangeNotifier {
     }
   }
 
+  // =============================================================
+  // 2. عمليات المحفظة والسيولة (نفس خدماتك الأصلية)
+  // =============================================================
+
   Future<bool> creditAgencyWallet(String id, double amount, {String? reason, String? performedBy}) async {
     _setLoading(true);
     _setError(null);
     try {
       await _service.creditWallet(id, amount, reason: reason, performedBy: performedBy);
-      await loadAgencyById(id);
-      await loadAgencies();
+      await loadTotalBalance();
       return true;
     } catch (e) {
       _setError('فشل شحن رصيد المكتب: $e');
@@ -184,31 +207,79 @@ class AgenciesProvider with ChangeNotifier {
     _setError(null);
     try {
       await _service.debitWallet(id, amount, reason: reason, performedBy: performedBy);
-      await loadAgencyById(id);
-      await loadAgencies();
+      await loadTotalBalance();
       return true;
     } catch (e) {
-      _setError('فشل خصم من رصيد المكتب: $e');
+      _setError(e.toString().replaceAll('Exception:', ''));
       return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  Future<void> loadTransactions(String agencyId, {int limit = 100}) async {
+  Future<void> loadTotalBalance() async {
+    _totalBalance = await _service.getTotalAgenciesBalance();
+    notifyListeners();
+  }
+
+  // =============================================================
+  // 3. البحث والفلترة وسجل المعاملات
+  // =============================================================
+
+  /// البحث في السيرفر (ميزة احترافية مضافة)
+  Future<void> searchAgencies(String query) async {
+    if (query.isEmpty) {
+      _filteredAgencies = _agencies;
+      notifyListeners();
+      return;
+    }
     _setLoading(true);
-    _setError(null);
     try {
-      final list = await _service.fetchTransactions(agencyId, limit: limit);
-      _setTransactions(list);
+      _filteredAgencies = await _service.searchAgencies(query);
     } catch (e) {
-      _setError('فشل جلب سجل المعاملات: $e');
+      _setError('خطأ في البحث: $e');
     } finally {
       _setLoading(false);
     }
   }
 
-  void clearError() {
-    _setError(null);
+  Future<void> loadTransactions(String agencyId, {int limit = 100}) async {
+    try {
+      final list = await _service.fetchTransactions(agencyId, limit: limit);
+      _setTransactions(list);
+    } catch (e) {
+      _setError('فشل جلب سجل المعاملات: $e');
+    }
+  }
+
+  // =============================================================
+  // 4. الاستماع اللحظي (Real-time)
+  // =============================================================
+
+  void listenToAgency(String id) {
+    _currentAgencySub?.cancel();
+    _currentAgencySub = _service.getAgencyStream(id).listen((agency) {
+      _currentAgency = agency;
+      notifyListeners();
+    });
+  }
+
+  void startRealtimeListener() {
+    _realtimeSub?.cancel();
+    _realtimeSub = FirebaseFirestore.instance
+        .collection('agencies')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snap) {
+      _agencies = snap.docs.map((d) => Agency.fromDoc(d)).toList();
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSub?.cancel();
+    _currentAgencySub?.cancel();
+    super.dispose();
   }
 }
