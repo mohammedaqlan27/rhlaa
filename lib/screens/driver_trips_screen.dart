@@ -65,8 +65,8 @@ class _DriverTripsScreenState extends State<DriverTripsScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => EditTripScreen(
-                            tripId: trip.id,
-                            trip: trip,
+                            tripId: trip.id, // نكتفي فقط بإرسال الـ ID
+                            // تم حذف سطر trip: trip من هنا
                           ),
                         ),
                       ).then((_) {

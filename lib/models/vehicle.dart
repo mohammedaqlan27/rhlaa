@@ -1,168 +1,248 @@
 // lib/models/vehicle.dart
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// نموذج Vehicle موحّد وآمن للقراءة والكتابة إلى Firestore.
+/// يدعم أسماء الحقول البديلة (camelCase / snake_case) ويتعامل مع أنواع متعددة بأمان.
 class Vehicle {
   final String id;
-  final String driverId;
-  final String makeModelYear;
-  final String? vehicleType;
-  final String? color;
-  final int maxCapacity;
   final String plateNumber;
-  final String? licenseNumber;
-  final String vehicleOwner;
+  final String vehicleOwner; // userId الموحد الحالي
+  final String? ownerId;     // حقل احتياطي في المستندات القديمة
+  final String? driverId;    // مرجع اختياري للسائق المرتبط بالمركبة
+  final String? driverName;
+  final String vehicleType;  // مثال: 'sedan', 'van', 'motorbike'
+  final String makeModelYear;
+  final String color;
+  final int maxCapacity;     // أقصى عدد ركاب
+  final String licenseNumber;
   final bool isVerified;
+  final bool sGovernmentRegistered;
   final String? notes;
+  final Map<String, dynamic>? extra;
+  final List<String> vehicleDocuments;
+  final Timestamp? insuranceExpiryDate;
+  final String? lastInspectionDate;
+  final String? carOwnerOfficialName;
   final Timestamp? createdAt;
+  final Timestamp? updatedAt;
 
   Vehicle({
     required this.id,
-    required this.driverId,
-    required this.makeModelYear,
-    required this.maxCapacity,
-    required this.plateNumber,
-    required this.vehicleOwner,
-    this.vehicleType,
-    this.color,
-    this.licenseNumber,
+    this.plateNumber = '',
+    this.vehicleOwner = '',
+    this.ownerId,
+    this.driverId,
+    this.driverName,
+    this.vehicleType = '',
+    this.makeModelYear = '',
+    this.color = '',
+    this.maxCapacity = 0,
+    this.licenseNumber = '',
     this.isVerified = false,
+    this.sGovernmentRegistered = false,
     this.notes,
+    this.extra,
+    this.vehicleDocuments = const [],
+    this.insuranceExpiryDate,
+    this.lastInspectionDate,
+    this.carOwnerOfficialName,
     this.createdAt,
+    this.updatedAt,
   });
 
-  /// توافقية: بعض الأكواد قد تستخدم ownerUserId
-  String get ownerUserId => driverId;
-
+  /// تحويل الكائن إلى Map للحفظ في Firestore
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
+      'plateNumber': plateNumber,
+      'vehicleOwner': vehicleOwner,
+      'ownerId': ownerId,
       'driverId': driverId,
-      'ownerUserId': driverId,
-      'makeModelYear': makeModelYear,
+      'driverName': driverName,
       'vehicleType': vehicleType,
+      'makeModelYear': makeModelYear,
       'color': color,
       'maxCapacity': maxCapacity,
-      'plateNumber': plateNumber,
-      'plate_number': plateNumber,
       'licenseNumber': licenseNumber,
-      'vehicleOwner': vehicleOwner,
-      'vehicle_owner': vehicleOwner,
-      'isverified': isVerified,
       'isVerified': isVerified,
+      'sGovernmentRegistered': sGovernmentRegistered,
       'notes': notes,
+      'extra': extra,
+      'vehicleDocuments': vehicleDocuments,
+      'insuranceExpiryDate': insuranceExpiryDate,
+      'lastInspectionDate': lastInspectionDate,
+      'carOwnerOfficialName': carOwnerOfficialName,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-    }..removeWhere((k, v) => v == null);
+      'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
+    };
+    map.removeWhere((k, v) => v == null);
+    return map;
   }
 
+  /// مساعدة لتحويل قيمة قد تكون JSON نصي إلى Map
+  static Map<String, dynamic>? _tryParseExtra(dynamic v) {
+    if (v == null) return null;
+    if (v is Map<String, dynamic>) return v;
+    if (v is Map) return Map<String, dynamic>.from(v);
+    if (v is String) {
+      final s = v.trim();
+      if (s.isEmpty) return null;
+      try {
+        final decoded = json.decode(s);
+        if (decoded is Map<String, dynamic>) return decoded;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// إنشاء نموذج من مستند Firestore مع دعم camelCase و snake_case وأنواع متعددة
   factory Vehicle.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String _getString(List<String> keys, [String fallback = '']) {
-      for (final k in keys) {
+    String s(List<String> keys, [String fallback = '']) {
+      for (var k in keys) {
         final v = data[k];
-        if (v != null) return v.toString();
+        if (v != null && v.toString().isNotEmpty) return v.toString();
       }
       return fallback;
     }
 
-    int _getInt(List<String> keys, [int fallback = 0]) {
-      for (final k in keys) {
+    int i(List<String> keys, [int fallback = 0]) {
+      for (var k in keys) {
         final v = data[k];
         if (v is int) return v;
-        if (v is num) return v.toInt();
-        if (v is String) {
-          final parsed = int.tryParse(v.replaceAll(RegExp(r'[^\d]'), ''));
-          if (parsed != null) return parsed;
-        }
+        if (v is double) return v.toInt();
+        if (v is String) return int.tryParse(v) ?? fallback;
       }
       return fallback;
     }
 
-    bool _getBool(List<String> keys, [bool fallback = false]) {
-      for (final k in keys) {
+    bool b(List<String> keys, [bool fallback = false]) {
+      for (var k in keys) {
         final v = data[k];
         if (v is bool) return v;
-        if (v is int) return v != 0;
+        if (v is num) return v != 0;
         if (v is String) {
-          final s = v.toLowerCase();
-          if (s == 'true' || s == '1') return true;
-          if (s == 'false' || s == '0') return false;
+          final low = v.toLowerCase();
+          if (low == 'true' || low == '1') return true;
+          if (low == 'false' || low == '0') return false;
         }
       }
       return fallback;
     }
 
-    Timestamp? _getTimestampNullable(List<String> keys) {
-      for (final k in keys) {
+    Timestamp? ts(List<String> keys) {
+      for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
-        if (v is DateTime) return Timestamp.fromDate(v);
         if (v is String) {
           final parsed = DateTime.tryParse(v);
           if (parsed != null) return Timestamp.fromDate(parsed);
+        }
+        if (v is int) {
+          try {
+            return Timestamp.fromMillisecondsSinceEpoch(v);
+          } catch (_) {}
         }
       }
       return null;
     }
 
-    final driverId = _getString(['driverId', 'ownerUserId', 'driver_id'], '');
-    final makeModelYear = _getString(['makeModelYear', 'make_model_year', 'makeModel'], 'غير محدد');
-    final vehicleType = _getString(['vehicleType', 'vehicle_type'], '');
-    final color = _getString(['color'], '');
-    final licenseNumber = _getString(['licenseNumber', 'license_number'], '');
-    final notes = _getString(['notes'], '');
-    final maxCapacity = _getInt(['maxCapacity', 'max_capacity'], 0);
-    final plateNumber = _getString(['plateNumber', 'plate_number', 'plate'], '');
-    final vehicleOwner = _getString(['vehicleOwner', 'vehicle_owner'], 'غير محدد');
-    final isVerified = _getBool(['isverified', 'isVerified'], false);
-    final createdAt = _getTimestampNullable(['createdAt', 'created_at', 'created']);
+    List<String> list(List<String> keys) {
+      for (var k in keys) {
+        final v = data[k];
+        if (v is List) {
+          return v.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList();
+        }
+      }
+      return [];
+    }
+
+    Map<String, dynamic>? map(List<String> keys) {
+      for (var k in keys) {
+        final v = data[k];
+        final parsed = _tryParseExtra(v);
+        if (parsed != null) return parsed;
+      }
+      return null;
+    }
 
     return Vehicle(
       id: doc.id,
-      driverId: driverId,
-      makeModelYear: makeModelYear,
-      vehicleType: vehicleType.isNotEmpty ? vehicleType : null,
-      color: color.isNotEmpty ? color : null,
-      maxCapacity: maxCapacity,
-      plateNumber: plateNumber,
-      licenseNumber: licenseNumber.isNotEmpty ? licenseNumber : null,
-      vehicleOwner: vehicleOwner,
-      isVerified: isVerified,
-      notes: notes.isNotEmpty ? notes : null,
-      createdAt: createdAt,
+      plateNumber: s(['plateNumber', 'plate_number', 'plate']),
+      vehicleOwner: s(['vehicleOwner', 'vehicle_owner', 'ownerUserId', 'owner']),
+      ownerId: s(['ownerId', 'owner']),
+      driverId: s(['driverId', 'driver_id']),
+      driverName: s(['driverName']),
+      vehicleType: s(['vehicleType', 'vehicle_type', 'type']),
+      makeModelYear: s(['makeModelYear', 'make_model_year', 'makeModel', 'modelYear']),
+      color: s(['color']),
+      maxCapacity: i(['maxCapacity', 'max_capacity', 'capacity']),
+      licenseNumber: s(['licenseNumber', 'license_number', 'registrationNumber']),
+      isVerified: b(['isVerified', 'is_verified', 'verified']),
+      sGovernmentRegistered: b(['sGovernmentRegistered', 'governmentRegistered']),
+      notes: s(['notes', 'note', 'description']).isNotEmpty ? s(['notes', 'note', 'description']) : null,
+      extra: map(['extra', 'meta', 'metadata']),
+      vehicleDocuments: list(['vehicleDocuments']),
+      insuranceExpiryDate: ts(['insuranceExpiryDate']),
+      lastInspectionDate: s(['lastInspectionDate']),
+      carOwnerOfficialName: s(['carOwnerOfficialName']),
+      createdAt: ts(['createdAt', 'created_at', 'created']),
+      updatedAt: ts(['updatedAt', 'updated_at']),
     );
   }
 
   Vehicle copyWith({
     String? id,
+    String? plateNumber,
+    String? vehicleOwner,
+    String? ownerId,
     String? driverId,
-    String? makeModelYear,
+    String? driverName,
     String? vehicleType,
+    String? makeModelYear,
     String? color,
     int? maxCapacity,
-    String? plateNumber,
     String? licenseNumber,
-    String? vehicleOwner,
     bool? isVerified,
+    bool? sGovernmentRegistered,
     String? notes,
+    Map<String, dynamic>? extra,
+    List<String>? vehicleDocuments,
+    Timestamp? insuranceExpiryDate,
+    String? lastInspectionDate,
+    String? carOwnerOfficialName,
     Timestamp? createdAt,
+    Timestamp? updatedAt,
   }) {
     return Vehicle(
       id: id ?? this.id,
+      plateNumber: plateNumber ?? this.plateNumber,
+      vehicleOwner: vehicleOwner ?? this.vehicleOwner,
+      ownerId: ownerId ?? this.ownerId,
       driverId: driverId ?? this.driverId,
-      makeModelYear: makeModelYear ?? this.makeModelYear,
+      driverName: driverName ?? this.driverName,
       vehicleType: vehicleType ?? this.vehicleType,
+      makeModelYear: makeModelYear ?? this.makeModelYear,
       color: color ?? this.color,
       maxCapacity: maxCapacity ?? this.maxCapacity,
-      plateNumber: plateNumber ?? this.plateNumber,
       licenseNumber: licenseNumber ?? this.licenseNumber,
-      vehicleOwner: vehicleOwner ?? this.vehicleOwner,
       isVerified: isVerified ?? this.isVerified,
+      sGovernmentRegistered: sGovernmentRegistered ?? this.sGovernmentRegistered,
       notes: notes ?? this.notes,
+      extra: extra ?? this.extra,
+      vehicleDocuments: vehicleDocuments ?? this.vehicleDocuments,
+      insuranceExpiryDate: insuranceExpiryDate ?? this.insuranceExpiryDate,
+      lastInspectionDate: lastInspectionDate ?? this.lastInspectionDate,
+      carOwnerOfficialName: carOwnerOfficialName ?? this.carOwnerOfficialName,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   @override
-  String toString() =>
-      'Vehicle(ID: $id, Model: $makeModelYear, Plate: $plateNumber, Owner: $vehicleOwner, Verified: $isVerified)';
+  String toString() {
+    return 'Vehicle(id: $id, plate: $plateNumber, owner: $vehicleOwner, type: $vehicleType, capacity: $maxCapacity)';
+  }
 }

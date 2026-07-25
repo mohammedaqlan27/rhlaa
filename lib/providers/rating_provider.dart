@@ -21,13 +21,16 @@ class RatingProvider with ChangeNotifier {
   List<Rating> get userRatings => _userRatings;
 
   /// إضافة تقييم جديد أو تحديث تقييم سابق لرحلة محددة
+  /// score يمكن أن يكون قيمة عشرية (مثلاً 4.5)
   Future<bool> submitOrUpdateRating({
     required String tripId,
     required String bookingId,
-    required String passengerId,
-    required String driverId,
-    required int score,
+    required String fromUserId, // المقيّم (مثلاً الراكب)
+    required String toUserId,   // المُقيَّم (مثلاً السائق)
+    required double score,
+    String? ratingLabel, // وصف نصي اختياري مثل "excellent" أو "جيد"
     String? comment,
+    String? note,
   }) async {
     _setLoading(true);
     _errorMessage = null;
@@ -36,15 +39,17 @@ class RatingProvider with ChangeNotifier {
       final success = await _ratingService.addOrUpdateRating(
         tripId: tripId,
         bookingId: bookingId,
-        passengerId: passengerId,
-        driverId: driverId,
+        fromUserId: fromUserId,
+        toUserId: toUserId,
         score: score,
+        ratingLabel: ratingLabel,
         comment: comment,
+        note: note,
       );
 
       if (success) {
         // تحديث المتوسط الحسابي محلياً فور النجاح
-        await fetchAverageRating(driverId);
+        await fetchAverageRating(toUserId);
         _setLoading(false);
         return true;
       } else {
@@ -80,12 +85,13 @@ class RatingProvider with ChangeNotifier {
     );
   }
 
-  /// جلب المتوسط الحسابي لتقييمات السائق لتحديث الـ Profile
+  /// جلب المتوسط الحسابي لتقييمات المستخدم لتحديث الـ Profile
   Future<void> fetchAverageRating(String userId) async {
     try {
-      _averageRating = await _ratingService.getAverageRatingFromUserDoc(userId);      notifyListeners();
+      _averageRating = await _ratingService.getAverageRatingFromUserDoc(userId);
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error fetching average rating: $e');
+      debugPrint('RatingProvider.fetchAverageRating error: $e');
     }
   }
 

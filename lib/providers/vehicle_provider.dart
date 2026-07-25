@@ -16,6 +16,19 @@ class VehicleProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  VehicleProvider();
+
+  void _setLoading(bool v) {
+    _isLoading = v;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  /// جلب مركبات السائق/المالك بناءً على الحقل الموحد vehicleOwner
   Future<void> fetchDriverVehicles(String driverId) async {
     _setLoading(true);
     _errorMessage = null;
@@ -30,32 +43,41 @@ class VehicleProvider with ChangeNotifier {
     }
   }
 
+  /// اختيار مركبة حسب المعرف. إذا لم توجد، ننشئ كائن مؤقت بالحقل id فقط
   void selectVehicleById(String? id) {
     if (id == null) {
       _selectedVehicle = null;
     } else {
-      _selectedVehicle = _vehicles.firstWhere(
-            (v) => v.id == id,
-        orElse: () => _selectedVehicle ?? Vehicle(
+      try {
+        _selectedVehicle = _vehicles.firstWhere((v) => v.id == id);
+      } catch (_) {
+        // إنشاء مركبة افتراضية مؤقتة للحفاظ على نوعية البيانات
+        _selectedVehicle = Vehicle(
           id: id,
-          driverId: '',
-          makeModelYear: '',
-          maxCapacity: 0,
           plateNumber: '',
           vehicleOwner: '',
-        ),
-      );
+          vehicleType: '',
+          makeModelYear: '',
+          color: '',
+          maxCapacity: 0,
+          licenseNumber: '',
+          isVerified: false,
+          notes: '',
+        );
+      }
     }
     notifyListeners();
   }
 
+  /// إضافة مركبة جديدة، يعيد معرف المستند عند النجاح
   Future<String?> addVehicle(Vehicle vehicle) async {
     _setLoading(true);
     _errorMessage = null;
     try {
       final id = await _vehicleService.createVehicle(vehicle);
       if (id != null) {
-        await fetchDriverVehicles(vehicle.driverId);
+        // إعادة جلب قائمة المركبات للمالك/السائق
+        await fetchDriverVehicles(vehicle.vehicleOwner);
         return id;
       } else {
         _errorMessage = 'تعذر إضافة المركبة';
@@ -70,12 +92,16 @@ class VehicleProvider with ChangeNotifier {
     }
   }
 
+  /// تحديث مركبة موجودة
   Future<bool> updateVehicle(String vehicleId, Vehicle updated) async {
     _setLoading(true);
+    _errorMessage = null;
     try {
       final ok = await _vehicleService.updateVehicle(vehicleId, updated);
       if (ok) {
-        await fetchDriverVehicles(updated.driverId);
+        // إعادة جلب المركبات للمالك/السائق لضمان التزامن
+        await fetchDriverVehicles(updated.vehicleOwner);
+        // تحديث المحدد محلياً إن كان هو نفسه
         if (_selectedVehicle?.id == vehicleId) {
           _selectedVehicle = updated.copyWith(id: vehicleId);
         }
@@ -92,8 +118,10 @@ class VehicleProvider with ChangeNotifier {
     }
   }
 
+  /// حذف مركبة
   Future<bool> removeVehicle(String vehicleId, String driverId) async {
     _setLoading(true);
+    _errorMessage = null;
     try {
       final ok = await _vehicleService.deleteVehicle(vehicleId);
       if (ok) {
@@ -111,15 +139,5 @@ class VehicleProvider with ChangeNotifier {
     } finally {
       _setLoading(false);
     }
-  }
-
-  void _setLoading(bool v) {
-    _isLoading = v;
-    notifyListeners();
-  }
-
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
   }
 }

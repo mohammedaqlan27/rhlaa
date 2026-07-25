@@ -19,7 +19,7 @@ class PassengerCalendarScreen extends StatefulWidget {
 class _PassengerCalendarScreenState extends State<PassengerCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  String _selectedVehicleFilter = 'الكل';
+  final String _selectedVehicleFilter = 'الكل';
 
   static const Color _logoBlue = Color(0xFF1E70B8);
   static const Color _logoTeal = Color(0xFF17A5A3);

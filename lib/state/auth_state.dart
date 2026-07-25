@@ -160,7 +160,7 @@ class AuthState with ChangeNotifier {
   Future<void> _loadUserProfile(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
 
       if (data != null) {
         // دعم عدة تسميات للحقل لأن البنية قد تختلف بين المشاريع

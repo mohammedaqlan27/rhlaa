@@ -60,7 +60,7 @@ class _RatingScreenState extends State<RatingScreen> {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('users').doc(_targetUserId).get();
       if (snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>? ?? {};
+        final data = snapshot.data() ?? {};
         setState(() {
           targetUserName = (data['nickname'] as String?) ?? (data['displayName'] as String?) ?? (data['name'] as String?) ?? '';
         });

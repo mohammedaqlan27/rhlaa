@@ -1,1 +1,121 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"rhlaa-app","appId":"1:644270097493:android:be4f5e0f71628d43bfc0dc","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"rhlaa-app","configurations":{"android":"1:644270097493:android:be4f5e0f71628d43bfc0dc","ios":"1:644270097493:ios:da4ebe78ce5dfa2fbfc0dc","macos":"1:644270097493:ios:da4ebe78ce5dfa2fbfc0dc","web":"1:644270097493:web:009bc187f49d43adbfc0dc","windows":"1:644270097493:web:009bc187f49d43adbfc0dc"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "rhlaa-app",
+          "appId": "1:644270097493:android:be4f5e0f71628d43bfc0dc",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "rhlaa-app",
+          "configurations": {
+            "android": "1:644270097493:android:be4f5e0f71628d43bfc0dc",
+            "ios": "1:644270097493:ios:da4ebe78ce5dfa2fbfc0dc",
+            "macos": "1:644270097493:ios:da4ebe78ce5dfa2fbfc0dc",
+            "web": "1:644270097493:web:009bc187f49d43adbfc0dc",
+            "windows": "1:644270097493:web:009bc187f49d43adbfc0dc"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ],
+      "source": "functions"
+    },
+    {
+      "source": "main",
+      "codebase": "main",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ],
+  "emulators": {
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5002
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 4002
+    },
+    "auth": {
+      "port": 9099
+    },
+    "database": {
+      "port": 9000
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "pubsub": {
+      "port": 8085
+    },
+    "tasks": {
+      "port": 9499
+    },
+    "singleProjectMode": true
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "europe-west3",
+    "rules": "y",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "extensions": {},
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Rhlaa",
+        "supportEmail": "abdulrahmanaaqlan10@gmail.com"
+      }
+    }
+  }
+}

@@ -2,39 +2,45 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AppUser {
   // 1. التعريف الأساسي
-  final String id;
-  final String uid;
+  final String id; // معرف المستند في Firestore
+  final String uid; // معرف المستخدم (FirebaseAuth UID)
   final String name;
   final String nickname;
   final String email;
-  final String userType;
+  final String userType; // driver أو passenger أو agency
   final String? profilePictureUrl;
   final String? mobileNumber;
   final double averageRating;
   final int ratingCount;
   final Timestamp? createdAt;
+  final Timestamp? updatedAt;
 
-  // 2. بيانات الراكب / الأسرة
+  // 2. بيانات الأسرة / الراكب
   final bool familyStatus;
-  final int childrenCount; // سيتم تحويلها من double إلى int عند القراءة
+  final int childrenCount;
 
   // 3. بيانات التحقق والهوية
   final bool isIdVerified;
-  final String? fullNameId;
   final String? idNumber;
-  final String? idType;
-  final String? idIssueLocation;
-  final DateTime? idIssueDate;
-  final DateTime? idExpiryDate;
   final String? identityCardUrl;
-  final Map<String, String>? documents;
+  final Map<String, dynamic>? documents;
 
   // 4. بيانات السائق والمركبة
-  final List<String> vehicleIds;
+  final bool isDriver;
+  final bool isActiveDriver;
   final String? drivingLicenseNumber;
   final String? driverNotes;
   final String? plateNumber;
   final String? carOwnerOfficialName;
+  final List<String> vehicleIds;
+
+  // 5. بيانات المكتب/الوكالة
+  final String? agencyName;
+  final bool agencyVerified;
+  final List<String> agencyVehicles;
+
+  // 6. بيانات إضافية
+  final double walletBalance;
 
   AppUser({
     required this.id,
@@ -48,22 +54,24 @@ class AppUser {
     this.averageRating = 0.0,
     this.ratingCount = 0,
     this.createdAt,
+    this.updatedAt,
     this.familyStatus = false,
     this.childrenCount = 0,
     this.isIdVerified = false,
-    this.fullNameId,
     this.idNumber,
-    this.idType,
-    this.idIssueLocation,
-    this.idIssueDate,
-    this.idExpiryDate,
     this.identityCardUrl,
     this.documents,
-    this.vehicleIds = const [],
+    this.isDriver = false,
+    this.isActiveDriver = false,
     this.drivingLicenseNumber,
     this.driverNotes,
     this.plateNumber,
     this.carOwnerOfficialName,
+    this.vehicleIds = const [],
+    this.agencyName,
+    this.agencyVerified = false,
+    this.agencyVehicles = const [],
+    this.walletBalance = 0.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -78,103 +86,65 @@ class AppUser {
       'averageRating': averageRating,
       'ratingCount': ratingCount,
       'familyStatus': familyStatus,
-      'childrenCount': childrenCount.toDouble(), // نرسلها double كما هي في Firestore
+      'childrenCount': childrenCount,
       'isIdVerified': isIdVerified,
-      'fullNameId': fullNameId,
       'idNumber': idNumber,
-      'idType': idType,
-      'idIssueLocation': idIssueLocation,
-      'idIssueDate': idIssueDate != null ? Timestamp.fromDate(idIssueDate!) : null,
-      'idExpiryDate': idExpiryDate != null ? Timestamp.fromDate(idExpiryDate!) : null,
       'identityCardUrl': identityCardUrl,
       'documents': documents,
-      'vehicleIds': vehicleIds,
+      'isDriver': isDriver,
+      'isActiveDriver': isActiveDriver,
       'drivingLicenseNumber': drivingLicenseNumber,
       'driverNotes': driverNotes,
       'plateNumber': plateNumber,
       'carOwnerOfficialName': carOwnerOfficialName,
+      'vehicleIds': vehicleIds,
+      'agencyName': agencyName,
+      'agencyVerified': agencyVerified,
+      'agencyVehicles': agencyVehicles,
+      'walletBalance': walletBalance,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
     };
   }
 
   factory AppUser.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    String? _s(List<String> keys) {
-      for (var k in keys) {
-        if (data[k] != null && data[k].toString().isNotEmpty) return data[k].toString();
-      }
-      return null;
-    }
-
-    int _i(List<String> keys, [int fallback = 0]) {
-      for (var k in keys) {
-        var v = data[k];
-        if (v is num) return v.toInt();
-        if (v is String) return int.tryParse(v) ?? fallback;
-      }
-      return fallback;
-    }
-
-    double _d(List<String> keys, [double fallback = 0.0]) {
-      for (var k in keys) {
-        var v = data[k];
-        if (v is num) return v.toDouble();
-        if (v is String) return double.tryParse(v) ?? fallback;
-      }
-      return fallback;
-    }
-
-    bool _b(List<String> keys, [bool fallback = false]) {
-      for (var k in keys) {
-        var v = data[k];
-        if (v is bool) return v;
-        if (v is String) return v.toLowerCase() == 'true';
-        if (v is num) return v == 1;
-      }
-      return fallback;
-    }
-
-    DateTime? _dt(List<String> keys) {
-      for (var k in keys) {
-        var v = data[k];
-        if (v is Timestamp) return v.toDate();
-        if (v is String) return DateTime.tryParse(v);
-      }
-      return null;
-    }
-
     return AppUser(
       id: doc.id,
-      uid: _s(['uid', 'Id']) ?? doc.id,
-      name: _s(['name', 'fullName']) ?? '',
-      nickname: _s(['nickname', 'displayName']) ?? '',
-      email: _s(['email']) ?? '',
-      userType: _s(['userType', 'user_type'])?.toLowerCase() ?? 'passenger',
-      profilePictureUrl: _s(['profilePictureUrl']),
-      mobileNumber: _s(['mobileNumber']),
-      averageRating: _d(['averageRating']),
-      ratingCount: _i(['ratingCount']),
+      uid: data['uid'] ?? doc.id,
+      name: data['name'] ?? '',
+      nickname: data['nickname'] ?? '',
+      email: data['email'] ?? '',
+      userType: (data['userType'] ?? 'passenger').toString().toLowerCase(),
+      profilePictureUrl: data['profilePictureUrl'],
+      mobileNumber: data['mobileNumber'],
+      averageRating: (data['averageRating'] is num) ? (data['averageRating'] as num).toDouble() : 0.0,
+      ratingCount: (data['ratingCount'] is num) ? (data['ratingCount'] as num).toInt() : 0,
       createdAt: data['createdAt'] is Timestamp ? data['createdAt'] : null,
-      familyStatus: _b(['familyStatus']),
-      childrenCount: _i(['childrenCount']),
-      isIdVerified: _b(['isIdVerified']),
-      fullNameId: _s(['fullNameId']),
-      idNumber: _s(['idNumber']),
-      idType: _s(['idType']),
-      idIssueLocation: _s(['idIssueLocation']),
-      idIssueDate: _dt(['idIssueDate']),
-      idExpiryDate: _dt(['idExpiryDate']),
-      identityCardUrl: _s(['identityCardUrl']),
-      documents: data['documents'] != null ? Map<String, String>.from(data['documents']) : null,
+      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] : null,
+      familyStatus: data['familyStatus'] ?? false,
+      childrenCount: (data['childrenCount'] is num)
+          ? (data['childrenCount'] as num).toInt()
+          : int.tryParse(data['childrenCount']?.toString() ?? '0') ?? 0,
+      isIdVerified: data['isIdVerified'] ?? false,
+      idNumber: data['idNumber'],
+      identityCardUrl: data['identityCardUrl'],
+      documents: data['documents'],
+      isDriver: data['isDriver'] ?? false,
+      isActiveDriver: data['isActiveDriver'] ?? false,
+      drivingLicenseNumber: data['drivingLicenseNumber'],
+      driverNotes: data['driverNotes'],
+      plateNumber: data['plateNumber'] ?? data['carPlateNumber'],
+      carOwnerOfficialName: data['carOwnerOfficialName'],
       vehicleIds: data['vehicleIds'] != null ? List<String>.from(data['vehicleIds']) : [],
-      drivingLicenseNumber: _s(['drivingLicenseNumber']),
-      driverNotes: _s(['driverNotes']),
-      plateNumber: _s(['plateNumber']),
-      carOwnerOfficialName: _s(['carOwnerOfficialName']),
+      agencyName: data['agencyName'],
+      agencyVerified: data['agencyVerified'] ?? false,
+      agencyVehicles: data['agencyVehicles'] != null ? List<String>.from(data['agencyVehicles']) : [],
+      walletBalance: (data['walletBalance'] is num) ? (data['walletBalance'] as num).toDouble() : 0.0,
     );
   }
 
-  bool get isDriver => userType.toLowerCase() == 'driver';
-  bool get isPassenger => userType.toLowerCase() == 'passenger';
+  bool get isPassenger => userType == 'passenger';
+  bool get isAgency => userType == 'agency';
 }

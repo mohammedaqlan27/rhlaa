@@ -27,7 +27,6 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
   @override
   void initState() {
     super.initState();
-    // جلب البيانات عند فتح الشاشة من خلال الـ Provider بطريقة آمنة بعد بناء الشجرة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<TripProvider>(context, listen: false);
       provider.fetchAvailableTrips();
@@ -37,9 +36,7 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
   Future<void> _onRefresh() async {
     try {
       await Provider.of<TripProvider>(context, listen: false).fetchAvailableTrips();
-    } catch (_) {
-      // يمكن إضافة لوج هنا إذا رغبت
-    }
+    } catch (_) {}
   }
 
   @override
@@ -60,29 +57,25 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              // فتح فلتر لاحقاً
-            },
+            onPressed: () {},
           ),
         ],
       ),
       body: Consumer<TripProvider>(
         builder: (context, tripProvider, child) {
-          // حالة التحميل
           if (tripProvider.isLoading) {
             return Center(child: CircularProgressIndicator(color: primaryColor));
           }
 
-          // حالة وجود خطأ
           if (tripProvider.errorMessage != null && tripProvider.errorMessage!.isNotEmpty) {
             return _buildErrorState(tripProvider.errorMessage!);
           }
 
-          // تصفية الرحلات محلياً لضمان السرعة وتجنب مشاكل الـ Indexes في Firestore
-          final allTrips = tripProvider.availableTrips;
+          final allTrips = tripProvider.availableTrips ?? <Trip>[];
           final filteredTrips = allTrips.where((trip) {
             final matchesDest = widget.destination.isEmpty ||
-                trip.destination.trim().toLowerCase() == widget.destination.trim().toLowerCase();
+                (trip.destination ?? '').trim().toLowerCase() ==
+                    widget.destination.trim().toLowerCase();
             final matchesCat = widget.tripCategory == null ||
                 widget.tripCategory!.isEmpty ||
                 trip.tripCategory == widget.tripCategory;
@@ -197,7 +190,7 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
       ),
       child: BottomNavigationBar(
-        currentIndex: 1, // نحن الآن في شاشة الرحلات
+        currentIndex: 1,
         selectedItemColor: const Color(0xFF4A7DAB),
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,

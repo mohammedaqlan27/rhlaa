@@ -49,8 +49,9 @@ class _VehicleScreenState extends State<VehicleScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final data = doc.data() as Map<String, dynamic>? ?? {};
-      _vehicleOwnerController.text = (data['vehicle_owner'] ?? data['vehicleOwner'] ?? '') as String;
+      final data = doc.data() ?? {};
+      // try multiple possible field names for backward compatibility
+      _vehicleOwnerController.text = (data['vehicle_owner'] ?? data['vehicleOwner'] ?? data['name'] ?? '') as String;
       setState(() {});
     } catch (_) {}
   }
@@ -76,16 +77,16 @@ class _VehicleScreenState extends State<VehicleScreen> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('المركبة غير موجودة')));
         return;
       }
-      final data = doc.data() as Map<String, dynamic>? ?? {};
+      final data = doc.data() ?? {};
       _plateController.text = (data['plateNumber'] as String?) ?? (data['plate_number'] as String?) ?? '';
-      _vehicleTypeController.text = (data['vehicleType'] as String?) ?? '';
-      _makeModelYearController.text = (data['makeModelYear'] as String?) ?? '';
-      _maxCapacityController.text = (data['maxCapacity']?.toString()) ?? '';
+      _vehicleTypeController.text = (data['vehicleType'] as String?) ?? (data['vehicle_type'] as String?) ?? '';
+      _makeModelYearController.text = (data['makeModelYear'] as String?) ?? (data['make_model_year'] as String?) ?? '';
+      _maxCapacityController.text = (data['maxCapacity']?.toString()) ?? (data['max_capacity']?.toString()) ?? '';
       _colorController.text = (data['color'] as String?) ?? '';
-      _notesController.text = (data['notes'] as String?) ?? '';
+      _notesController.text = (data['notes'] as String?) ?? (data['note'] as String?) ?? '';
       _vehicleOwnerController.text = (data['vehicleOwner'] as String?) ?? (data['vehicle_owner'] as String?) ?? '';
       _licenseNumberController.text = (data['licenseNumber']?.toString()) ?? (data['license_number']?.toString()) ?? '';
-      _isVerified = (data['isverified'] as bool?) ?? (data['isVerified'] as bool?) ?? false;
+      _isVerified = (data['isVerified'] as bool?) ?? (data['is_verified'] as bool?) ?? false;
       setState(() {});
     } catch (e) {
       debugPrint('VehicleScreen._loadVehicle error: $e');
@@ -98,6 +99,61 @@ class _VehicleScreenState extends State<VehicleScreen> {
   String? _requiredValidator(String label, String? val) {
     if (val == null || val.trim().isEmpty) return 'يرجى إدخال $label';
     return null;
+  }
+
+  /// بحث سريع عن مركبة حسب رقم اللوحة وملء الحقول إن وُجدت
+  Future<void> _findByPlate() async {
+    final plate = _plateController.text.trim();
+    if (plate.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل رقم اللوحة أولاً')));
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      final q = await FirebaseFirestore.instance
+          .collection('vehicles')
+          .where('plateNumber', isEqualTo: plate)
+          .limit(1)
+          .get();
+
+      if (q.docs.isEmpty) {
+        // try snake_case fallback
+        final q2 = await FirebaseFirestore.instance
+            .collection('vehicles')
+            .where('plate_number', isEqualTo: plate)
+            .limit(1)
+            .get();
+        if (q2.docs.isEmpty) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لم نعثر على مركبة بهذا الرقم')));
+          return;
+        } else {
+          final doc = q2.docs.first;
+          _populateFieldsFromVehicleDoc(doc.data(), doc.id);
+        }
+      } else {
+        final doc = q.docs.first;
+        _populateFieldsFromVehicleDoc(doc.data(), doc.id);
+      }
+    } catch (e) {
+      debugPrint('VehicleScreen._findByPlate error: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء البحث: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _populateFieldsFromVehicleDoc(Map<String, dynamic> data, String id) {
+    _vehicleId = id;
+    _plateController.text = (data['plateNumber'] as String?) ?? (data['plate_number'] as String?) ?? _plateController.text;
+    _vehicleTypeController.text = (data['vehicleType'] as String?) ?? (data['vehicle_type'] as String?) ?? '';
+    _makeModelYearController.text = (data['makeModelYear'] as String?) ?? (data['make_model_year'] as String?) ?? '';
+    _maxCapacityController.text = (data['maxCapacity']?.toString()) ?? (data['max_capacity']?.toString()) ?? '';
+    _colorController.text = (data['color'] as String?) ?? '';
+    _notesController.text = (data['notes'] as String?) ?? (data['note'] as String?) ?? '';
+    _vehicleOwnerController.text = (data['vehicleOwner'] as String?) ?? (data['vehicle_owner'] as String?) ?? '';
+    _licenseNumberController.text = (data['licenseNumber']?.toString()) ?? (data['license_number']?.toString()) ?? '';
+    _isVerified = (data['isVerified'] as bool?) ?? (data['is_verified'] as bool?) ?? false;
+    setState(() {});
   }
 
   Future<void> _saveVehicle() async {
@@ -123,16 +179,16 @@ class _VehicleScreenState extends State<VehicleScreen> {
 
       final vehicle = Vehicle(
         id: _vehicleId ?? '',
-        driverId: uid,
-        makeModelYear: makeModelYear,
-        maxCapacity: maxCapacity,
         plateNumber: plate,
         vehicleOwner: vehicleOwner,
-        vehicleType: vehicleType.isNotEmpty ? vehicleType : null,
-        color: color.isNotEmpty ? color : null,
-        licenseNumber: licenseNumber.isNotEmpty ? licenseNumber : null,
+        vehicleType: vehicleType,
+        makeModelYear: makeModelYear,
+        color: color,
+        maxCapacity: maxCapacity,
+        licenseNumber: licenseNumber,
         isVerified: _isVerified,
         notes: notes.isNotEmpty ? notes : null,
+        createdAt: null,
       );
 
       final vehicleProvider = context.read<VehicleProvider>();
@@ -140,14 +196,15 @@ class _VehicleScreenState extends State<VehicleScreen> {
       if (_vehicleId != null && _vehicleId!.isNotEmpty) {
         final ok = await vehicleProvider.updateVehicle(_vehicleId!, vehicle);
         if (ok) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث بيانات المركبة')));
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث بيانات المركبة')));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في تحديث المركبة')));
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في تحديث المركبة')));
         }
       } else {
         final id = await vehicleProvider.addVehicle(vehicle);
         if (id != null) {
           _vehicleId = id;
+          // ربط المركبة بحساب المستخدم
           await FirebaseFirestore.instance.collection('users').doc(uid).set({
             'vehicleIds': FieldValue.arrayUnion([id]),
             'plate_number': plate,
@@ -155,9 +212,9 @@ class _VehicleScreenState extends State<VehicleScreen> {
             'carPlateNumber': plate,
             'vehicleOwner': vehicleOwner,
           }, SetOptions(merge: true));
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إضافة المركبة بنجاح')));
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إضافة المركبة بنجاح')));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في إضافة المركبة')));
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ فشل في إضافة المركبة')));
         }
       }
 
@@ -190,7 +247,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يجب تسجيل الدخول أولاً')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يجب تسجيل الدخول أولاً')));
         return;
       }
 
@@ -249,13 +306,25 @@ class _VehicleScreenState extends State<VehicleScreen> {
                 key: _formKey,
                 child: ListView(
                   children: [
-                    TextFormField(
-                      controller: _plateController,
-                      decoration: const InputDecoration(
-                        labelText: 'رقم لوحة السيارة',
-                        prefixIcon: Icon(Icons.confirmation_number),
-                      ),
-                      validator: (v) => _requiredValidator('رقم لوحة السيارة', v),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _plateController,
+                            decoration: const InputDecoration(
+                              labelText: 'رقم لوحة السيارة',
+                              prefixIcon: Icon(Icons.confirmation_number),
+                            ),
+                            validator: (v) => _requiredValidator('رقم لوحة السيارة', v),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'ابحث باللوحة',
+                          onPressed: _isLoading ? null : _findByPlate,
+                          icon: const Icon(Icons.search),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -314,7 +383,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
                         labelText: 'رقم رخصة المركبة / ترخيص (اختياري)',
                         prefixIcon: Icon(Icons.card_membership),
                       ),
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.text,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
