@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../widgets/app_card.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_text_field.dart';
+import '../widgets/shared/app_card.dart';
+import '../widgets/shared/custom_button.dart';
+import '../widgets/shared/custom_text_field.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -17,12 +17,13 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  // المتحكمات
   final _nicknameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _avatarController = TextEditingController();
-
   final _idNumberController = TextEditingController();
-  final _PlateController = TextEditingController();
+  final _plateController = TextEditingController();
   final _carOwnerController = TextEditingController();
   final _drivingLicenseController = TextEditingController();
 
@@ -30,9 +31,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = false;
   String? _userType;
 
-  static const Color _logoBlue = Color(0xFF1E70B8);
-  static const Color _logoTeal = Color(0xFF17A5A3);
-  static const Color _baseBg = Color(0xFFF1F5F9);
+  // لوحة الألوان المعتمدة (Design System)
+  static const Color _primaryBlue = Color(0xFF1E70B8);
+  static const Color _accentTeal = Color(0xFF17A5A3);
+  static const Color _surfaceWhite = Color(0xFFFFFFFF);
+  static const Color _backgroundGrey = Color(0xFFF8FAFC);
+  static const Color _textDark = Color(0xFF1E293B);
 
   @override
   void initState() {
@@ -42,13 +46,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    _nicknameController.dispose();
-    _phoneController.dispose();
-    _avatarController.dispose();
-    _idNumberController.dispose();
-    _PlateController.dispose();
-    _carOwnerController.dispose();
-    _drivingLicenseController.dispose();
+    for (var controller in [
+      _nicknameController, _phoneController, _avatarController,
+      _idNumberController, _plateController, _carOwnerController,
+      _drivingLicenseController
+    ]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -56,47 +60,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
+    setState(() => _isLoading = true);
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      if (!doc.exists) return;
+      if (doc.exists) {
+        final data = doc.data() ?? {};
 
-      final data = doc.data() ?? {};
-
-      String? readString(List<String> keys) {
-        for (final k in keys) {
-          final v = data[k];
-          if (v is String && v.trim().isNotEmpty) return v.trim();
-        }
-        return null;
+        _nicknameController.text = data['nickname'] ?? data['name'] ?? '';
+        _phoneController.text = data['mobileNumber'] ?? data['phone'] ?? '';
+        _avatarController.text = data['profilePictureUrl'] ?? '';
+        _idNumberController.text = data['idNumber'] ?? '';
+        _plateController.text = data['carPlateNumber'] ?? data['PlateNumber'] ?? '';
+        _carOwnerController.text = data['carOwnerOfficialName'] ?? '';
+        _drivingLicenseController.text = data['drivingLicenseNumber'] ?? '';
+        _userType = data['userType']?.toString().toLowerCase();
       }
-
-      _nicknameController.text = readString(['nickname', 'name']) ?? '';
-      _phoneController.text = readString(['mobileNumber', 'phone']) ?? '';
-      _avatarController.text = readString(['profilePictureUrl']) ?? '';
-      _idNumberController.text = readString(['idNumber', 'fullNameId']) ?? '';
-      _PlateController.text = readString(['PlateNumber', 'plateNumber']) ?? '';
-      _carOwnerController.text = readString(['carOwnerOfficialName', 'vehicleOwner']) ?? '';
-      _drivingLicenseController.text = readString(['drivingLicenseNumber', 'licenseNumber']) ?? '';
-      _userType = readString(['userType']);
-
-      setState(() {});
     } catch (e) {
-      debugPrint('EditProfileScreen._loadUserData error: $e');
+      debugPrint('Error loading user data: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    try {
-      final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200, imageQuality: 85);
-      if (picked != null) {
-        setState(() {
-          _selectedImage = File(picked.path);
-          _avatarController.text = picked.path;
-        });
-      }
-    } catch (e) {
-      debugPrint('EditProfileScreen._pickImage error: $e');
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked != null) {
+      setState(() {
+        _selectedImage = File(picked.path);
+        _avatarController.text = picked.path;
+      });
     }
   }
 
@@ -104,40 +97,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      setState(() => _isLoading = false);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً', style: TextStyle(fontFamily: 'Cairo'))));
-      }
-      return;
-    }
 
     try {
+      final bool isDriver = _userType == 'driver' || _userType == 'سائق';
+
       final updateData = <String, dynamic>{
         'nickname': _nicknameController.text.trim(),
         'mobileNumber': _phoneController.text.trim(),
         'profilePictureUrl': _avatarController.text.trim(),
         'idNumber': _idNumberController.text.trim(),
-        'carPlateNumber': _PlateController.text.trim(),
-        'carOwnerOfficialName': _carOwnerController.text.trim(),
-        'drivingLicenseNumber': _drivingLicenseController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      updateData.removeWhere((key, value) => value == null || (value is String && value.isEmpty));
+      // إضافة بيانات المركبة فقط إذا كان المستخدم سائقاً
+      if (isDriver) {
+        updateData.addAll({
+          'carPlateNumber': _plateController.text.trim(),
+          'carOwnerOfficialName': _carOwnerController.text.trim(),
+          'drivingLicenseNumber': _drivingLicenseController.text.trim(),
+        });
+      }
 
       await FirebaseFirestore.instance.collection('users').doc(uid).update(updateData);
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تحديث ملفك الشخصي بنجاح', style: TextStyle(fontFamily: 'Cairo'))));
-      Navigator.of(context).pop();
-    } catch (e) {
-      debugPrint('EditProfileScreen._saveChanges error: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل التحديث: $e', style: const TextStyle(fontFamily: 'Cairo'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم حفظ التغييرات بنجاح', style: TextStyle(fontFamily: 'Cairo'))),
+        );
+        Navigator.pop(context);
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ خطأ في الحفظ: $e')),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -145,128 +138,172 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final phoneRegex = RegExp(r'^(?:\+?\d{7,15})$');
-    final bool isDriver = (_userType?.toLowerCase().contains('driver') ?? false) || (_userType?.contains('سائق') ?? false);
+    final bool isDriver = _userType == 'driver' || _userType == 'سائق';
 
     return Scaffold(
-      backgroundColor: _baseBg,
+      backgroundColor: _backgroundGrey,
       appBar: AppBar(
-        title: const Text('تعديل الملف الشخصي', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold)),
-        backgroundColor: _baseBg,
-        foregroundColor: _logoBlue,
         elevation: 0,
+        backgroundColor: _surfaceWhite,
+        title: const Text('تعديل الحساب',
+            style: TextStyle(color: _textDark, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 18)),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: _textDark, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_logoBlue)))
-          : Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          children: [
-            // حاوية نيومورفية بيضاوية للصورة الشخصية
-            Center(
-              child: GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: _baseBg,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFFCBD5E1).withOpacity(0.6), blurRadius: 12, offset: const Offset(4, 4)),
-                      const BoxShadow(color: Colors.white, blurRadius: 12, offset: Offset(-4, -4)),
+          ? const Center(child: CircularProgressIndicator(color: _primaryBlue))
+          : SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildHeaderSection(),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionHeader('المعلومات الشخصية', Icons.person_outline),
+                    _buildBasicInfoFields(),
+
+                    if (isDriver) ...[
+                      const SizedBox(height: 24),
+                      _buildSectionHeader('بيانات التوثيق والمركبة', Icons.directions_car_filled_outlined),
+                      _buildDriverFields(),
                     ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 52,
-                    backgroundColor: _logoBlue.withOpacity(0.1),
-                    backgroundImage: _selectedImage != null
-                        ? FileImage(_selectedImage!)
-                        : (_avatarController.text.isNotEmpty && !_avatarController.text.startsWith('/')
-                        ? NetworkImage(_avatarController.text)
-                        : null) as ImageProvider<Object>?,
-                    child: _selectedImage == null && (_avatarController.text.isEmpty || _avatarController.text.startsWith('/'))
-                        ? const Icon(Icons.camera_enhance_rounded, size: 32, color: _logoBlue)
-                        : null,
-                  ),
+
+                    const SizedBox(height: 40),
+                    CustomButton(
+                      onPressed: _saveChanges,
+                      text: 'حفظ التغييرات',
+                      icon: Icons.check_circle_outline,
+                    ),
+                    const SizedBox(height: 30),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // كارت نيومورفي للبيانات الشخصية الأساسية
-            AppCard(
-              margin: EdgeInsets.zero,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  CustomTextField(controller: _nicknameController, label: 'الاسم الكامل', prefixIcon: Icons.person_rounded),
-                  const SizedBox(height: 16),
-                  CustomTextField(
-                    controller: _phoneController,
-                    label: 'رقم الهاتف',
-                    prefixIcon: Icons.phone_android_rounded,
-                    keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'يرجى إدخال رقم الهاتف';
-                      if (!phoneRegex.hasMatch(value.trim())) return 'رقم الهاتف غير صحيح';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  CustomTextField(controller: _idNumberController, label: 'رقم البطاقة الشخصية / جواز السفر', prefixIcon: Icons.badge_rounded),
-                  const SizedBox(height: 16),
-                  CustomTextField(
-                      controller: _avatarController,
-                      label: 'رابط الصورة الشخصية (اختياري)',
-                      prefixIcon: Icons.link_rounded,
-                      keyboardType: TextInputType.url,
-                      validator: (val) => null
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // قسم بيانات المركبة (يظهر بشكل أوضح ومخصص للسائقين)
-            Padding(
-              padding: const EdgeInsets.only(right: 6, bottom: 8),
-              child: Text(
-                  'بيانات المركبة والتوثيق',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: isDriver ? _logoTeal : Colors.black54)
-              ),
-            ),
-
-            AppCard(
-              margin: EdgeInsets.zero,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  CustomTextField(
-                    controller: _PlateController,
-                    label: 'رقم لوحة السيارة ${isDriver ? "(مطلوب للقيادة)" : "(اختياري)"}',
-                    prefixIcon: Icons.pin_rounded,
-                    validator: (val) => isDriver && (val == null || val.isEmpty) ? 'بيانات اللوحة مطلوبة كابتن!' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  CustomTextField(controller: _carOwnerController, label: 'اسم مالك المركبة الرسمي', prefixIcon: Icons.assignment_ind_rounded, validator: (val) => null),
-                  const SizedBox(height: 16),
-                  CustomTextField(controller: _drivingLicenseController, label: 'رقم رخصة القيادة', prefixIcon: Icons.card_membership_rounded, validator: (val) => null),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // زر الحفظ النيومورفي المطور
-            CustomButton(
-              onPressed: _saveChanges,
-              text: 'حفظ التغييرات الجديدة',
-              icon: Icons.save_rounded,
-            ),
-            const SizedBox(height: 20),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 30),
+      decoration: const BoxDecoration(
+        color: _surfaceWhite,
+        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(32), bottomRight: Radius.circular(32)),
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _primaryBlue.withOpacity(0.2), width: 4),
+                ),
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundColor: _backgroundGrey,
+                  backgroundImage: _selectedImage != null
+                      ? FileImage(_selectedImage!)
+                      : (_avatarController.text.isNotEmpty ? NetworkImage(_avatarController.text) : null) as ImageProvider?,
+                  child: _avatarController.text.isEmpty && _selectedImage == null
+                      ? const Icon(Icons.person, size: 60, color: Colors.grey)
+                      : null,
+                ),
+              ),
+              GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(color: _primaryBlue, shape: BoxShape.circle),
+                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(_userType == 'driver' ? 'حساب كابتن' : 'حساب مسافر',
+              style: TextStyle(color: _accentTeal, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16, right: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: _primaryBlue),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: _textDark)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBasicInfoFields() {
+    return AppCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          CustomTextField(
+            controller: _nicknameController,
+            label: 'الاسم بالكامل',
+            prefixIcon: Icons.badge_outlined,
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _phoneController,
+            label: 'رقم الجوال',
+            prefixIcon: Icons.phone_android,
+            keyboardType: TextInputType.phone,
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _idNumberController,
+            label: 'رقم الهوية / جواز السفر',
+            prefixIcon: Icons.fingerprint,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDriverFields() {
+    return AppCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          CustomTextField(
+            controller: _plateController,
+            label: 'رقم لوحة المركبة',
+            prefixIcon: Icons.numbers,
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _carOwnerController,
+            label: 'اسم مالك المركبة',
+            prefixIcon: Icons.person_search,
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _drivingLicenseController,
+            label: 'رقم رخصة القيادة',
+            prefixIcon: Icons.card_membership,
+          ),
+        ],
       ),
     );
   }

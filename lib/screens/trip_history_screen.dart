@@ -17,163 +17,240 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   String? userId;
   bool _isExporting = false;
 
+  // لوحة الألوان الموحدة للتطبيق
+  static const Color _primaryBlue = Color(0xFF1E70B8);
+  static const Color _accentTeal = Color(0xFF17A5A3);
+  static const Color _bgGrey = Color(0xFFF8FAFC);
+  static const Color _textDark = Color(0xFF1E293B);
+
   @override
   void initState() {
     super.initState();
     userId = FirebaseAuth.instance.currentUser?.uid;
+    _loadData();
+  }
+
+  void _loadData() {
     if (userId != null) {
-      // استدعاء دالة جلب الرحلات من ملف utils/trip_exporter.dart
       _tripsFuture = exporter_service.TripExporter.fetchTrips(userId!);
     } else {
       _tripsFuture = Future.value(<Trip>[]);
     }
   }
 
+  // تحسين تصميم بطاقة الرحلة (نقطة 3: تفاصيل الرحلة)
   Widget _buildTripCard(BuildContext context, Trip trip) {
     final dateText = trip.date != null
         ? '${trip.date!.year}-${trip.date!.month.toString().padLeft(2, '0')}-${trip.date!.day.toString().padLeft(2, '0')}'
-        : (trip.departureTime != null
-            ? '${trip.departureTime!.year}-${trip.departureTime!.month.toString().padLeft(2, '0')}-${trip.departureTime!.day.toString().padLeft(2, '0')}'
-            : 'غير محدد');
+        : 'تاريخ غير محدد';
 
-    final title = (trip.title ?? '').isNotEmpty ? trip.title : '${trip.origin} → ${trip.destination}';
+    // تحديد لون الحالة (Micro-interaction)
+    Color statusColor = _accentTeal;
+    String statusLabel = trip.status.isNotEmpty ? trip.status : 'مكتملة';
+    if (statusLabel.contains('ملغى') || statusLabel.contains('Cancelled')) {
+      statusColor = Colors.redAccent;
+    }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('🚗 $title', style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text('📍 من: ${trip.origin}  →  إلى: ${trip.destination}'),
-          Text('📅 التاريخ: $dateText'),
-          Text('🕒 الوقت: ${trip.time ?? 'غير محدد'}'),
-          const SizedBox(height: 12),
-          Row(children: [
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TripDetailsScreen(trip: trip),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          children: [
+            // الجزء العلوي: المسار والحالة
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: _primaryBlue.withOpacity(0.05),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${trip.origin} ➔ ${trip.destination}',
+                      style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: _primaryBlue),
+                    ),
                   ),
-                );
-              },
-              icon: const Icon(Icons.info_outline),
-              label: const Text('عرض التفاصيل'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                  _buildStatusBadge(statusLabel, statusColor),
+                ],
+              ),
             ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: () {
-                // مكان لفتح شاشة التقييم أو أي إجراء آخر
-              },
-              icon: const Icon(Icons.rate_review),
-              label: const Text('تقييم'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+            // الجزء الأوسط: التفاصيل التقنية
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildDetailRow(Icons.calendar_today_outlined, 'التاريخ', dateText),
+                  const SizedBox(height: 8),
+                  _buildDetailRow(Icons.access_time_rounded, 'وقت الانطلاق', trip.time ?? 'غير محدد'),
+                  const SizedBox(height: 8),
+                  _buildDetailRow(Icons.directions_car_filled_outlined, 'نوع المركبة', trip.vehicleType.isNotEmpty ? trip.vehicleType : 'خصوصي'),
+                  const Divider(height: 30),
+                  // الأزرار التفاعلية
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          label: 'التفاصيل',
+                          icon: Icons.info_outline,
+                          color: _primaryBlue,
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip))),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildActionButton(
+                          label: 'تقييم',
+                          icon: Icons.star_border_rounded,
+                          color: _accentTeal,
+                          onTap: () { /* فتح شاشة التقييم */ },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ]),
-        ]),
+          ],
+        ),
       ),
     );
   }
 
+  Widget _buildStatusBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey),
+        const SizedBox(width: 8),
+        Text('$label: ', style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
+        Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({required String label, required IconData icon, required Color color, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(border: Border.all(color: color.withOpacity(0.3)), borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: color, fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // دالة التصدير (تم الحفاظ عليها كما هي مع تحسين الـ UI)
   Future<void> _exportTrips(BuildContext context) async {
-    if (userId == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ يجب تسجيل الدخول أولاً لتصدير الرحلات')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isExporting = true;
-    });
-
+    if (userId == null) return;
+    setState(() => _isExporting = true);
     try {
-      // جلب الرحلات من الخدمة ثم تصديرها
       final trips = await exporter_service.TripExporter.fetchTrips(userId!);
-      if (!mounted) return;
-
-      if (trips.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لا توجد رحلات لتصدير.')),
-        );
-      } else {
-        // استدعاء دالة التصدير الموجودة في utils/trip_exporter.dart
-        await exporter_service.TripExporter.exportToExcel(context, trips);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ تم تصدير الملف بنجاح')),
-        );
+      if (mounted) {
+        if (trips.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا توجد رحلات لتصديرها')));
+        } else {
+          await exporter_service.TripExporter.exportToExcel(context, trips);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تصدير الملف بنجاح')));
+        }
       }
-    } catch (e, st) {
-      debugPrint('TripHistoryScreen._exportTrips error: $e\n$st');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ أثناء التصدير: $e')),
-      );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isExporting = false;
-      });
+      if (mounted) setState(() => _isExporting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (userId == null) {
-      return const Scaffold(
-        body: Center(child: Text('❌ يجب تسجيل الدخول لعرض السجل')),
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text('📜 سجل الرحلات'), backgroundColor: Colors.blue.shade900),
+      backgroundColor: _bgGrey,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: _primaryBlue, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('سجل الرحلات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _textDark, fontSize: 18)),
+      ),
       body: FutureBuilder<List<Trip>>(
         future: _tripsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: _primaryBlue));
           }
 
           final trips = snapshot.data ?? [];
           if (trips.isEmpty) {
-            return const Center(child: Text('لا توجد رحلات في السجل.'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history_rounded, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  const Text('سجل الرحلات فارغ حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+                ],
+              ),
+            );
           }
 
           return Column(
             children: [
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: trips.length,
-                  itemBuilder: (context, index) => _buildTripCard(context, trips[index]),
+                child: RefreshIndicator(
+                  onRefresh: () async => setState(() => _loadData()),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: trips.length,
+                    itemBuilder: (context, index) => _buildTripCard(context, trips[index]),
+                  ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(children: [
-                  ElevatedButton.icon(
-                    onPressed: _isExporting ? null : () => _exportTrips(context),
-                    icon: _isExporting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.table_chart),
-                    label: Text(_isExporting ? 'جارٍ التصدير...' : '📤 تصدير إلى Excel'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      minimumSize: const Size.fromHeight(50),
-                    ),
-                  ),
-                ]),
-              ),
+              // زر التصدير الاحترافي في الأسفل
+              _buildExportSection(),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildExportSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      child: ElevatedButton.icon(
+        onPressed: _isExporting ? null : () => _exportTrips(context),
+        icon: _isExporting
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.table_chart_outlined),
+        label: Text(_isExporting ? 'جاري التصدير...' : 'تصدير السجل إلى Excel', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green[600],
+          foregroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(55),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+        ),
       ),
     );
   }

@@ -225,3 +225,172 @@ lib/pages_tester.dart — صفحة اختبارية لتجربة جميع الش
 1. **تثبيت الاعتماديات**
    ```bash
    flutter pub get
+# تقرير شامل لمشروع إدارة الرحلات والحجوزات
+
+**التاريخ:** 27 يوليو 2026  
+**المكان:** صنعاء – اليمن  
+**المشروع:** نظام إدارة الرحلات والحجوزات (Flutter + Firebase)
+
+---
+
+## 1. النماذج (Models) المضافة والمصححة
+- [Trip](ca://s?q=عرض_تفاصيل_Trip_model): نموذج الرحلة مع الحقول الكاملة (المقاعد، السعر، الحالة، المكتب، إلخ).
+- [Booking](ca://s?q=عرض_تفاصيل_Booking_model): نموذج الحجز مع دعم camelCase/snake_case وحالة الدفع.
+- [GovFeeRule](ca://s?q=عرض_تفاصيل_GovFeeRule_model): قاعدة الرسوم الحكومية مع شرائح المسافة وحساب تلقائي للرسوم.
+- [Agency](ca://s?q=عرض_تفاصيل_Agency_model): نموذج المكتب مع بيانات المدير، الموقع، الرصيد، وحالة النشاط.
+- [AgencyTransaction](ca://s?q=عرض_تفاصيل_AgencyTransaction_model): نموذج المعاملة المالية للمكتب (credit/debit).
+- [AppUser](ca://s?q=عرض_تفاصيل_AppUser_model): نموذج المستخدم مع بيانات السائق/المسافر/المكتب والتحقق من الهوية.
+- [Rating](ca://s?q=عرض_تفاصيل_Rating_model): نموذج التقييم مع النص، الدرجة الرقمية، التعليقات والوسوم.
+- [Vehicle](ca://s?q=عرض_تفاصيل_Vehicle_model): نموذج المركبة مع بيانات اللوحة، النوع، السعة، الوثائق، وحالة التحقق.
+
+---
+
+## 2. شاشة التشغيل (AllScreensLauncher)
+- مشغّل آمن يعرض جميع الشاشات والنماذج في قائمة واحدة.
+- معاينات (Preview Screens) لكل نموذج:
+    - BookingPreviewScreen
+    - GovFeeRulePreviewScreen
+    - AgencyPreviewScreen
+    - AgencyTransactionPreviewScreen
+    - AppUserPreviewScreen
+    - RatingPreviewScreen
+    - VehiclePreviewScreen
+
+---
+
+## 3. التصحيحات
+- حل أخطاء مثل:
+    - `The named parameter 'trip' is required`
+    - `The named parameter 'tripId' isn't defined`
+    - `The named parameter 'notificationId' isn't defined`
+    - `The method 'BookingPreviewScreen' isn't defined`
+
+---
+
+## 4. خطوات التنفيذ
+1. نسخ الملفات المحدثة (`models/*.dart` و`all_screens_launcher.dart`) إلى المشروع.
+2. تشغيل الأوامر:
+   ```bash
+   flutter clean
+   flutter pub get
+   flutter run
+# تقرير شامل للمحادثة
+
+## الملخص العام
+هذه المحادثة تناولت تطوير تطبيق Flutter خاص بالرحلات (راكب/سائق)، وفصل الشاشات، وتصحيح الأخطاء في ملفات الودجيتس والثيمات. كما ناقشنا مشاكل تشغيل التطبيق على الويب (Flutter Web) وتحذيرات متعلقة بـ Google Maps API.
+
+---
+
+## المواضيع التي تمت مناقشتها
+
+### 1. تشغيل الجهاز والتأكد من الاتصال
+- خطوات التحقق من أن جهاز الموبايل متصل ويظهر في `adb devices` و `flutter devices`.
+- أهمية تثبيت تعريفات USB للهاتف.
+
+### 2. ملفات Flutter الأساسية
+- **home_screen.dart**: يحتوي على منطق اختيار واجهة السائق أو الراكب.
+- **passenger_home_screen.dart**: واجهة الراكب مع البحث عن الرحلات، رسائل للمسافر، وأزرار وصول سريع.
+- مشكلة: `HomeScreen` كان يحتوي منطق زائد (قائمة، إشعارات، إلخ) مما جعل الفصل غير واضح.
+
+### 3. فصل الشاشات
+- اقتراح جعل `HomeScreen` موجّه فقط (Router).
+- جعل كل شاشة (`DriverHomeScreen`, `PassengerHomeScreen`) تحتوي على `Scaffold` خاص بها.
+- نقل القائمة العالمية (Global Menu) والـ Settings إلى ويدجت مشتركة.
+
+### 4. مراجعة الودجيتس
+تم تحليل عدة ملفات:
+- **app_scaffold.dart**: قالب واجهة رئيسي مع AppBar و Loading Overlay.
+- **custom_button.dart**: زر مخصص مع أنيميشن الضغط.
+- **trip_card.dart**: عرض تفاصيل الرحلة (العنوان، السعر، المقاعد).
+- **app_card.dart**: بطاقة عامة مع ظل وتأثير ضغط.
+- **trip_filter_sheet.dart**: BottomSheet لتصفية الرحلات (الحالة، السعر، نوع المركبة).
+
+### 5. مشاكل Null و Providers
+- `TripCard` كان يستخدم حقول قد تكون null (`status`, `departureTime`, `price`).
+- تم اقتراح نسخة محمية من `TripCard` لتفادي الاستثناءات.
+- ضرورة التأكد من أن `TripProvider` و `AuthState` معلنان في `MultiProvider` أعلى التطبيق.
+
+### 6. ملفات الثيم
+- **app_colors.dart**: يحتوي على تعريف الألوان والخطوط والثوابت.
+- **app_theme.dart**: بناء ThemeData للثيم الفاتح والمظلم.
+- مشاكل ظهرت:
+    - استخدام `CardTheme` بدلاً من `CardThemeData`.
+    - استخدام `DialogTheme` بدلاً من `DialogThemeData`.
+    - استخدام `withValues` بدلاً من `withOpacity`.
+    - استخدام `WidgetStateProperty` بدلاً من `MaterialStateProperty`.
+
+### 7. تشغيل على Flutter Web
+- تحذيرات ظهرت في الكونسول:
+    - `ERR_NAME_NOT_RESOLVED`: مشكلة DNS أو مورد غير موجود.
+    - تحذير `viewport`: وسم مكرر في `index.html`.
+    - `Google Maps API InvalidKey`: مفتاح غير صالح أو غير مفعّل.
+    - تحذير تحميل Google Maps بدون `async`.
+
+### 8. الحلول المقترحة
+- إصلاح `app_colors.dart` بإزالة getter الذي يعيد null.
+- تعديل `app_theme.dart` لاستخدام الأنواع الصحيحة (`CardThemeData`, `DialogThemeData`, `MaterialStateProperty`, `withOpacity`).
+- إضافة ملف `pop_scope.dart` لتعويض PopScope.
+- تفعيل Google Maps API في Google Cloud Console، وضبط قيود المفتاح لتشمل `localhost`.
+- تحميل سكربت Google Maps باستخدام `async defer`.
+
+---
+
+## الخلاصة
+- تم فصل شاشات السائق والراكب بنجاح.
+- تم إصلاح معظم الأخطاء في ملفات الثيم والودجيتس.
+- بقيت بعض التحذيرات مرتبطة بـ Google Maps API تحتاج ضبط المفتاح الصحيح وتفعيل الفوترة.
+- التطبيق الآن أكثر تنظيمًا: `HomeScreen` موجّه فقط، وكل شاشة لها Scaffold مستقل، والودجيتس المشتركة موجودة في مجلد `widgets/shared`.
+
+---
+
+## الخطوات التالية المقترحة
+- مراجعة `index.html` وضبط تحميل Google Maps.
+- التأكد من أن جميع Providers معلنة في `main.dart`.
+- اختبار التطبيق على Android/iOS للتأكد من أن المشاكل خاصة بالويب فقط.
+- إضافة اختبارات وحدات (Unit Tests) للودجيتس الأساسية مثل `TripCard` و `TripFilterSheet`.
+
+# 📂 هيكلية الودجتس في المشروع
+
+## الهدف
+تنظيم جميع الودجتس في مجلدات واضحة حسب المسؤولية:
+- **Shared**: ويدجتس مشتركة بين السائق والراكب.
+- **Passenger**: ويدجتس خاصة بالراكب.
+- **Driver**: ويدجتس خاصة بالسائق.
+
+---
+
+## 📂 المجلدات
+
+### 1. lib/widgets/shared/
+يحتوي على الودجتس العامة التي تُستخدم في أكثر من شاشة:
+- `app_scaffold.dart` — AppScaffold — قالب واجهة رئيسي مع AppBar و Loading Overlay.
+- `app_card.dart` — AppCard — بطاقة عامة بستايل موحد مع ظل وتأثير ضغط.
+- `custom_button.dart` — CustomButton — زر مخصص مع أنيميشن الضغط وحالة تحميل.
+- `custom_text_field.dart` — CustomTextField — حقل إدخال نص مخصص.
+- `loading_indicator.dart` — LoadingIndicator — مؤشر تحميل مشترك.
+- `settings_sheet.dart` — SettingsSheet — BottomSheet للإعدادات.
+- `pop_scope.dart` — PopScope — بديل لـ WillPopScope للتحكم في الرجوع.
+- **مقترح جديد:**
+  - `notification_bell.dart` — NotificationBell — جرس إشعارات مع عداد.
+  - `global_menu.dart` — GlobalMenu — قائمة عالمية BottomSheet للوصول السريع.
+
+---
+
+### 2. lib/widgets/passenger/
+يحتوي على الودجتس الخاصة بالراكب:
+- `trip_card.dart` — TripCard — كرت يعرض تفاصيل الرحلة (عنوان، سعر، مقاعد، وقت).
+- `trip_filter_sheet.dart` — TripFilterSheet — BottomSheet لتصفية الرحلات.
+- `travel_prayer_card.dart` — TravelPrayerCard — بطاقة تعرض دعاء السفر.
+- `otp_dialog.dart` — OtpDialog — نافذة حوار لإدخال رمز تحقق (OTP).
+
+---
+
+### 3. lib/widgets/driver/
+يحتوي على الودجتس الخاصة بالسائق:
+- `payment_deeplink_widget.dart` — PaymentDeeplinkWidget — ويدجت للتعامل مع روابط الدفع (deeplink).
+
+---
+
+## 🛠️ خطوات عملية للتنظيم
+
+1. أنشئ المجلدات الفرعية:

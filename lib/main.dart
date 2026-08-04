@@ -10,6 +10,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+
 // Providers
 import 'providers/user_provider.dart';
 import 'providers/trip_provider.dart';
@@ -20,54 +21,58 @@ import 'providers/vehicle_provider.dart';
 import 'providers/agencies_provider.dart';
 import 'state/auth_state.dart';
 
-// Screens
+// 2. استيراد الشاشات
 import 'screens/auth_screen.dart';
 import 'screens/auth_wrapper.dart';
+import 'screens/home_screen.dart';
 import 'screens/available_trips_screen.dart' hide TripProvider;
 import 'screens/create_trip_screen.dart';
 import 'screens/driver_bookings_screen.dart';
 import 'screens/driver_calendar_screen.dart';
 import 'screens/driver_home_screen.dart';
 import 'screens/driver_trips_screen.dart';
-import 'screens/edit_profile_screen.dart';
-import 'screens/edit_trip_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/loading_screen.dart';
-import 'screens/manage_trip_screen.dart';
-import 'screens/my_bookings_screen.dart';
-import 'screens/notification_screen.dart';
-import 'screens/passenger_calendar_screen.dart';
-import 'screens/passenger_home_screen.dart';
-import 'screens/payment_confirmation_screen.dart';
 import 'screens/payment_screen.dart';
+import 'screens/notification_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/rating_screen.dart';
-import 'screens/trip_details_screen.dart';
-import 'screens/trip_exporter.dart';
-import 'screens/trip_history_screen.dart';
-import 'screens/trip_search_screen.dart';
-import 'screens/user_ratings_screen.dart';
+import 'screens/manage_trip_screen.dart';
+import 'screens/agencies_list_screen.dart';
 import 'screens/vehicle_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/trip_search_screen.dart';
+import 'screens/my_bookings_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/passenger_calendar_screen.dart';
+import 'screens/edit_trip_screen.dart';
+import 'screens/edit_profile_screen.dart';
+import 'screens/rating_screen.dart';
+import 'screens/trip_history_screen.dart';
+import 'screens/trip_details_screen.dart';
+import 'screens/user_ratings_screen.dart';
 import 'screens/vehicle_selection_screen.dart';
+import 'screens/payment_confirmation_screen.dart';
+import 'screens/notification_settings_screen.dart';
+import 'screens/notification_detail_screen.dart';
+import 'screens/loading_screen.dart';
+import 'screens/passenger_home_screen.dart';
 
 // Agencies screens
-import 'screens/agencies_list_screen.dart';
 import 'screens/agency_form_screen.dart';
 import 'screens/agency_detail_screen.dart';
 import 'screens/agency_location_edit_screen.dart';
 
 import 'models/trip.dart';
+import 'models/notification_model.dart';
+
+import 'theme/app_colors.dart';
+import 'theme/app_theme.dart';
 import 'utils/app_localizations.dart';
 
-
-Future<void> main() async { // تم حذف (dynamic FirebaseDatabase) لأنه خطأ
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   if (kDebugMode) {
-    // بما أنك تستخدم كروم، الـ host يجب أن يكون localhost
     final String host = 'localhost';
-
     try {
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
       FirebaseFunctions.instance.useFunctionsEmulator(host, 5002);
@@ -96,7 +101,7 @@ class RootApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RatingProvider()),
         ChangeNotifierProvider(create: (_) => TripProvider()),
         ChangeNotifierProvider(create: (_) => VehicleProvider()),
-        ChangeNotifierProvider(create: (_) => AgenciesProvider()), // Added AgenciesProvider
+        ChangeNotifierProvider(create: (_) => AgenciesProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -133,20 +138,23 @@ class RootApp extends StatelessWidget {
   }
 }
 
-class TestMenuScreen extends StatelessWidget {
-  const TestMenuScreen({super.key});
+class FullProjectTestMenu extends StatelessWidget {
+  const FullProjectTestMenu({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // بيانات تجريبية للرحلة
-    final sampleTrip = Trip(
-      id: 'trip123',
-      title: 'رحلة تجريبية إلى صنعاء',
-      seatStatus: [true, false, true, true],
-      totalSeats: 4,
-      availableSeats: 2,
-      departureTime: DateTime.now().add(const Duration(days: 1)),
-      driverId: 'driver001',
+    final dummyTrip = Trip(
+      id: 'test_trip_123',
+      driverId: 'driver_001',
+      driverName: 'الكابتن محمد علي',
+      origin: 'صنعاء',
+      destination: 'عدن',
+      date: DateTime.now().add(const Duration(days: 1)),
+      time: '07:30 AM',
+      price: 6000,
+      availableSeats: 4,
+      vehicleType: 'سيارة صالون',
+      status: 'نشطة',
     );
 
     final Map<String, Widget> screens = {
@@ -162,39 +170,56 @@ class TestMenuScreen extends StatelessWidget {
       'EditTrip': EditTripScreen(tripId: 'trip123'),
       'Home': const HomeScreen(),
       'Loading': const LoadingScreen(),
-      'ManageTrip': ManageTripScreen(trip: sampleTrip),
+      'ManageTrip': ManageTripScreen(trip: dummyTrip),
       'MyBookings': const MyBookingsScreen(),
       'Notification': const NotificationScreen(),
       'PassengerCalendar': const PassengerCalendarScreen(),
       'PassengerHome': const PassengerHomeScreen(),
-      'PaymentConfirmation': const PaymentConfirmationScreen(bookingId: '', transactionId: '', amount: 0, paymentMethod: ''),
-      'Payment': const PaymentScreen(amount: "", bookingId: 'booking001', tripId: '', seatNumber: 1),
+      'PaymentConfirmation': const PaymentConfirmationScreen(
+        bookingId: '',
+        transactionId: '',
+        amount: 0,
+        paymentMethod: '',
+      ),
+      'Payment': const PaymentScreen(
+        amount: "",
+        bookingId: 'booking001',
+        tripId: '',
+        seatNumber: 1,
+      ),
       'Profile': const ProfileScreen(),
       'Rating': const RatingScreen(),
-      'TripDetails': TripDetailsScreen(trip: sampleTrip),
-      'TripExporter': const TripExporterScreen(),
+      'TripDetails': TripDetailsScreen(trip: dummyTrip),
       'TripHistory': const TripHistoryScreen(),
       'TripSearch': const TripSearchScreen(),
       'UserRatings': const UserRatingsScreen(userId: 'user001'),
       'Vehicle': const VehicleScreen(),
       'VehicleSelection': const VehicleSelectionScreen(),
-      // Agencies screens
       'AgenciesList': const AgenciesListScreen(),
       'AgencyForm': const AgencyFormScreen(),
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('قائمة الاختبار')),
+      appBar: AppBar(
+        title: const Text(
+          'مختبر واجهات رحلاء الشامل',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF1E70B8),
+      ),
       body: ListView(
         children: screens.entries.map((entry) {
-          return ListTile(
-            title: Text(entry.key, style: const TextStyle(fontFamily: 'Cairo')),
-            onTap: () {
-              Navigator.push(
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ListTile(
+              title: Text(entry.key, style: const TextStyle(fontFamily: 'Cairo')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => entry.value),
-              );
-            },
+                MaterialPageRoute(builder: (context) => entry.value),
+              ),
+            ),
           );
         }).toList(),
       ),

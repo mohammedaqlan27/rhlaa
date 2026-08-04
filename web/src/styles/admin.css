@@ -1,0 +1,54 @@
+/* src/styles/admin.css */
+.admin-panel {
+  max-width: 980px;
+  margin: 20px auto;
+  font-family: Arial, sans-serif;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+}
+
+.card h3 {
+  margin-top: 0;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 8px;
+  margin: 6px 0 12px;
+  box-sizing: border-box;
+}
+
+button {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 2fr 2fr 2fr 1fr;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.row.header {
+  font-weight: bold;
+  background: #fafafa;
+}
+
+.message {
+  margin-top: 8px;
+  color: #1a73e8;
+}

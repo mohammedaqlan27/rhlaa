@@ -1,0 +1,61 @@
+/* src/styles/gov.css */
+.gov-panel {
+  max-width: 960px;
+  margin: 20px auto;
+  font-family: Arial, sans-serif;
+}
+
+.gov-header {
+  background: var(--primary);
+  color: #fff;
+  padding: 16px 24px;
+  border-radius: 6px;
+}
+
+.gov-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.report-card {
+  background: var(--card);
+  border: 1px solid #e0e0e0;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.report-card h3 {
+  margin-top: 0;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.report-card p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.alert {
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.alert-info {
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.alert-warning {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.alert-danger {
+  background: #f8d7da;
+  color: #721c24;
+}

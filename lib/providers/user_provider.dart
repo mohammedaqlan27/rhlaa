@@ -206,22 +206,25 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  /// 9. تحديث بيانات السائق الخاصة (مثلاً عند تفعيل حساب السائق أو تعديل بيانات المركبة)
+  /// 9. تحديث بيانات السائق الخاصة (تمت إضافة agencyStatus هنا)
   Future<bool> updateDriverInfo({
     List<String>? vehicleIds,
     String? drivingLicenseNumber,
     String? driverNotes,
     String? carPlateNumber,
     String? carOwnerOfficialName,
+    String? agencyStatus, // الحقل الجديد المضاف
     bool? isIdVerified,
   }) async {
     if (_currentUser == null) return false;
     final Map<String, dynamic> fields = {};
+
     if (vehicleIds != null) fields['vehicleIds'] = vehicleIds;
     if (drivingLicenseNumber != null) fields['drivingLicenseNumber'] = drivingLicenseNumber;
     if (driverNotes != null) fields['driverNotes'] = driverNotes;
     if (carPlateNumber != null) fields['carPlateNumber'] = carPlateNumber;
     if (carOwnerOfficialName != null) fields['carOwnerOfficialName'] = carOwnerOfficialName;
+    if (agencyStatus != null) fields['agencyStatus'] = agencyStatus; // إضافة الحقل للمجموعة
     if (isIdVerified != null) fields['isIdVerified'] = isIdVerified;
 
     return await updateSpecificFields(fields);

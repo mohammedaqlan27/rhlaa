@@ -1,6 +1,11 @@
 ---
 name: firebase-hosting-basics
+<<<<<<< HEAD
 description: Skill for working with Firebase Hosting (Classic). Use this when you want to deploy static web apps, Single Page Apps (SPAs), or simple microservices. Do NOT use for Firebase App Hosting.
+=======
+description: >-
+  Deploys and configures classic Firebase Hosting for static websites, single-page apps (SPAs), and microservices. Use when deploying static sites/SPAs, setting up custom domains, configuring firebase.json hosting settings (redirects, rewrites, headers, multi-site), or managing preview channels. Don't use for Firebase App Hosting (Next.js/SSR), Auth, Firestore queries/rules, Data Connect, or Crashlytics.
+>>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
 ---
 
 # hosting-basics

@@ -5,9 +5,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../widgets/app_scaffold.dart';
-import '../widgets/app_card.dart';
-import '../widgets/custom_button.dart';
+import '../widgets/shared/app_scaffold.dart';
+import '../widgets/shared/app_card.dart';
+import '../widgets/shared/custom_button.dart';
 import '../providers/vehicle_provider.dart';
 import 'edit_profile_screen.dart';
 import 'vehicle_screen.dart';

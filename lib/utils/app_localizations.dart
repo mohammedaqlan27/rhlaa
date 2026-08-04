@@ -1,19 +1,45 @@
+// lib/l10n/app_localizations.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+/// مفاتيح الترجمة المركزية لتجنب الأخطاء الإملائية
+class L10nKeys {
+  L10nKeys._();
+  static const appTitle = 'app_title';
+  static const login = 'login';
+  static const register = 'register';
+  static const email = 'email';
+  static const password = 'password';
+  static const home = 'home';
+  static const profile = 'profile';
+  static const myBookings = 'my_bookings';
+  static const notifications = 'notifications';
+  static const settings = 'settings';
+  static const logout = 'logout';
+  static const createTrip = 'create_trip';
+  static const search = 'search';
+  static const noTrips = 'no_trips';
+  static const confirm = 'confirm';
+  static const cancel = 'cancel';
+  static const error = 'error';
+// أضف مفاتيح جديدة هنا عند الحاجة
+}
+
+/// AppLocalizations: مدير الترجمات البسيط مع fallback و interpolation
 class AppLocalizations {
   final Locale locale;
 
   AppLocalizations(this.locale);
 
-  // دالة مساعدة للوصول إلى الكلاس من داخل الـ Widgets
+  /// الوصول إلى الـ instance من داخل الودجتس
   static AppLocalizations? of(BuildContext context) {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  // خريطة النصوص المترجمة
+  /// خريطة الترجمات (يمكن لاحقًا نقلها إلى ملفات ARB/JSON)
   static const Map<String, Map<String, String>> _localizedValues = {
     'en': {
-      'app_title': 'Trips App',
+      'app_title': 'Rhlaa',
       'login': 'Login',
       'register': 'Register',
       'email': 'Email Address',
@@ -52,29 +78,68 @@ class AppLocalizations {
     },
   };
 
-  // دالة لجلب النص بناءً على المفتاح واللغة الحالية
+  /// ترجمة مفتاح مع fallback إلى الإنجليزية ثم إلى المفتاح نفسه
   String translate(String key) {
-    return _localizedValues[locale.languageCode]?[key] ?? key;
+    final lang = locale.languageCode;
+    final map = _localizedValues[lang];
+    if (map != null && map.containsKey(key)) return map[key]!;
+    // fallback to English
+    final fallback = _localizedValues['en']?[key];
+    if (fallback != null) return fallback;
+    // أثناء التطوير: طباعة تحذير عند فقدان الترجمة
+    assert(() {
+      debugPrint('Missing translation for "$key" in locale "$lang"');
+      return true;
+    }());
+    return key;
   }
 
-  // Delegate المسؤول عن تحميل ملفات اللغة
-  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  /// ترجمة مع استبدال متغيرات داخل النص مثل {name}
+  String translateWithArgs(String key, [Map<String, String>? args]) {
+    var text = translate(key);
+    if (args != null && args.isNotEmpty) {
+      args.forEach((k, v) {
+        text = text.replaceAll('{$k}', v);
+      });
+    }
+    return text;
+  }
+
+  /// Delegate المطلوب من Flutter
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+  _AppLocalizationsDelegate();
 }
 
-// كلاس الـ Delegate المطلوب من Flutter
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) {
-    return ['en', 'ar'].contains(locale.languageCode);
-  }
+  bool isSupported(Locale locale) => ['en', 'ar'].contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async {
-    return AppLocalizations(locale);
+    // يمكن إضافة تحميل موارد غير متزامن هنا إذا انتقلت لملفات خارجية
+    return SynchronousFuture<AppLocalizations>(AppLocalizations(locale));
   }
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
+}
+
+/// امتداد للوصول السهل داخل الودجتس: context.t(key)
+extension TranslateX on BuildContext {
+  String t(String key) {
+    final loc = AppLocalizations.of(this);
+    if (loc == null) {
+      // في حال لم تُسجل الـ Localizations بعد، نعيد المفتاح كاحتياط
+      return key;
+    }
+    return loc.translate(key);
+  }
+
+  String tArgs(String key, [Map<String, String>? args]) {
+    final loc = AppLocalizations.of(this);
+    if (loc == null) return key;
+    return loc.translateWithArgs(key, args);
+  }
 }

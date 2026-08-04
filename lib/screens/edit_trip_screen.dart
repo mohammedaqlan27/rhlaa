@@ -6,12 +6,13 @@ import '../models/trip.dart';
 class EditTripScreen extends StatefulWidget {
   final String tripId;
 
-  // تأكد أن السطر التالي لا يحتوي على "required Trip trip"
+  // تم تعديل السطر هنا ليتوافق مع الاستدعاء في الشاشات الأخرى (يتطلب tripId فقط)
   const EditTripScreen({super.key, required this.tripId});
 
   @override
   State<EditTripScreen> createState() => _EditTripScreenState();
 }
+
 class _EditTripScreenState extends State<EditTripScreen> {
   final _formKey = GlobalKey<FormState>();
   late Trip _trip;
@@ -59,7 +60,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
     super.dispose();
   }
 
-  /// جلب بيانات الرحلة من قاعدة البيانات
+  /// جلب بيانات الرحلة من قاعدة البيانات باستخدام tripId
   Future<void> _loadTrip() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -83,7 +84,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
       // تحويل البيانات من Firestore إلى كائن Trip
       _trip = Trip.fromDocument(doc);
 
-      // تعبئة الحقول بالبيانات الحالية
+      // تعبئة الحقول بالبيانات الحالية المسترجعة
       _titleController.text = _trip.title;
       _descriptionController.text = _trip.description;
       _originController.text = _trip.origin;
@@ -135,7 +136,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
         tripCategory: _tripCategory,
         totalSeats: _totalSeats,
         departureTime: departureDateTime,
-        updatedAt: Timestamp.now(), // التعديل هنا: استخدم Timestamp بدلاً من DateTime
+        updatedAt: Timestamp.now(),
       );
 
       // تحديث الوثيقة في Firestore
@@ -151,7 +152,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
                 style: TextStyle(fontFamily: 'Cairo')),
           ),
         );
-        Navigator.pop(context, true); // العودة مع إشارة للنجاح
+        Navigator.pop(context, true); // العودة مع إشارة للنجاح لتحديث القائمة السابقة
       }
     } catch (e) {
       if (mounted) {

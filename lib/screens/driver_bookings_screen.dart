@@ -25,6 +25,53 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
 
   String _selectedFilter = 'الكل';
 
+  // متغيرات الإعدادات الجديدة
+  bool _autoAccept = false;
+  String _acceptPreference = 'الكل'; // 'الكل', 'عائلات', 'أفراد'
+  bool _isUpdatingSettings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTripSettings();
+  }
+
+  // جلب إعدادات القبول الحالية من مستند الرحلة
+  Future<void> _loadTripSettings() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        setState(() {
+          _autoAccept = data?['autoAccept'] ?? false;
+          _acceptPreference = data?['acceptPreference'] ?? 'الكل';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading trip settings: $e');
+    }
+  }
+
+  // تحديث إعدادات القبول في Firestore
+  Future<void> _updateTripSettings(bool auto, String pref) async {
+    setState(() => _isUpdatingSettings = true);
+    try {
+      await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).update({
+        'autoAccept': auto,
+        'acceptPreference': pref,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم تحديث إعدادات القبول بنجاح', style: TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error updating settings: $e');
+    } finally {
+      if (mounted) setState(() => _isUpdatingSettings = false);
+    }
+  }
+
   DateTime _toDateTime(dynamic value) {
     if (value == null) return DateTime.now();
     try {
@@ -37,7 +84,6 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchBookingsWithTripInfo(String tripId) async {
     final firestore = FirebaseFirestore.instance;
-
     final tripDoc = await firestore.collection('trips').doc(tripId).get();
     final tripData = tripDoc.data();
 
@@ -46,22 +92,15 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
 
     QuerySnapshot bookingSnapshot;
     try {
-      bookingSnapshot = await firestore
-          .collection('bookings')
-          .where('tripId', isEqualTo: tripId)
-          .get();
+      bookingSnapshot = await firestore.collection('bookings').where('tripId', isEqualTo: tripId).get();
       if (bookingSnapshot.docs.isEmpty) {
-        bookingSnapshot = await firestore
-            .collection('bookings')
-            .where('trip_id', isEqualTo: tripId)
-            .get();
+        bookingSnapshot = await firestore.collection('bookings').where('trip_id', isEqualTo: tripId).get();
       }
     } catch (e) {
       return [];
     }
 
     final bookings = <Map<String, dynamic>>[];
-
     for (final doc in bookingSnapshot.docs) {
       try {
         final booking = Booking.fromDocument(doc);
@@ -86,8 +125,77 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
         });
       } catch (_) {}
     }
-
     return bookings;
+  }
+
+  // --- واجهة إعدادات القبول التلقائي (الجديدة) ---
+  Widget _buildSettingsHeader() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: _logoBlue.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5))],
+        border: Border.all(color: _logoBlue.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.bolt_rounded, color: _logoTeal),
+                  const SizedBox(width: 8),
+                  const Text('القبول التلقائي للركاب',
+                      style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                ],
+              ),
+              Switch.adaptive(
+                value: _autoAccept,
+                activeColor: _logoGreen,
+                onChanged: (val) {
+                  setState(() => _autoAccept = val);
+                  _updateTripSettings(val, _acceptPreference);
+                },
+              ),
+            ],
+          ),
+          if (_autoAccept) ...[
+            const Divider(height: 24),
+            const Text('تفضيل نوع الركاب للقبول الآلي:',
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: ['الكل', 'أفراد', 'عائلات'].map((type) {
+                bool isSelected = _acceptPreference == type;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _acceptPreference = type);
+                    _updateTripSettings(_autoAccept, type);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? _logoBlue : _backgroundColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isSelected ? _logoBlue : Colors.grey.shade300),
+                    ),
+                    child: Text(type,
+                        style: TextStyle(fontFamily: 'Cairo', fontSize: 12,
+                            color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _showFilterBottomSheet() {
@@ -139,12 +247,11 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
     final status = (booking.bookingStatus ?? '').toLowerCase();
     final bool isConfirmed = status == 'مؤكد' || status == 'confirmed';
 
-    // فلترة الواجهة برمجياً بناءً على اختيار القائمة السفلية
     if (_selectedFilter == 'مؤكد' && !isConfirmed) return const SizedBox.shrink();
     if (_selectedFilter == 'pending' && isConfirmed) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -223,33 +330,40 @@ class _DriverBookingsScreenState extends State<DriverBookingsScreen> {
         ],
       ),
       body: SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _fetchBookingsWithTripInfo(widget.tripId),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator(color: _logoBlue));
-            }
+        child: Column(
+          children: [
+            _buildSettingsHeader(), // عرض لوحة الإعدادات في الأعلى
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _fetchBookingsWithTripInfo(widget.tripId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator(color: _logoBlue));
+                  }
 
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.assignment_turned_in_outlined, size: 64, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    Text('لا توجد أي طلبات حجز لهذه الرحلة حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600, fontSize: 13)),
-                  ],
-                ),
-              );
-            }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.assignment_turned_in_outlined, size: 64, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          Text('لا توجد أي طلبات حجز لهذه الرحلة حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600, fontSize: 13)),
+                        ],
+                      ),
+                    );
+                  }
 
-            final bookings = snapshot.data!;
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: bookings.length,
-              itemBuilder: (context, index) => buildBookingCard(bookings[index]),
-            );
-          },
+                  final bookings = snapshot.data!;
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: bookings.length,
+                    itemBuilder: (context, index) => buildBookingCard(bookings[index]),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

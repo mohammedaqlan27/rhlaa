@@ -64,13 +64,21 @@ Configure Firebase Authentication in `firebase.json` by adding an 'auth' block:
 ```
 {
   "auth": {
+<<<<<<< HEAD
+=======
+  "authorizedDomains": ["localhost"],
+>>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
     "providers": {
       "anonymous": true,
       "emailPassword": true,
       "googleSignIn": {
         "oAuthBrandDisplayName": "Your Brand Name",
+<<<<<<< HEAD
         "supportEmail": "support@example.com",
         "authorizedRedirectUris": ["https://example.com", "http://localhost"]
+=======
+        "supportEmail": "support@example.com"
+>>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
       }
     }
   }

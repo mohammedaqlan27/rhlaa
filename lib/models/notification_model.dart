@@ -2,20 +2,18 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// نموذج إشعار التطبيق (AppNotification)
-/// يدعم حقول إضافية: actionUrl, priority, sendNotification, transactionId
 class AppNotification {
   final String id;
   final String userId;
   final String title;
   final String body;
-  final String type; // مثال: 'booking', 'payment', 'system', ...
-  final Map<String, dynamic>? metadata; // بيانات إضافية قابلة للتوسع
+  final String type;
+  final Map<String, dynamic>? metadata;
   final bool isRead;
-  final String? actionUrl; // رابط ينقل المستخدم مباشرةً إلى شاشة معينة
+  final String? actionUrl;
   final String priority; // 'high', 'normal', 'low'
-  final bool sendNotification; // هل نرسل push أم لا
-  final String? transactionId; // معرف عملية إن وُجد
+  final bool sendNotification;
+  final String? transactionId;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
 
@@ -35,10 +33,11 @@ class AppNotification {
     this.updatedAt,
   });
 
-  /// تحويل الكائن إلى Map لحفظه في Firestore
+  /// تحويل الكائن إلى Map للحفظ في Firestore
+  /// يراعي قواعد الأمان بعدم إرسال حقول فارغة
   Map<String, dynamic> toMap() {
     return {
-      'userId': userId,
+      'userId':userId,
       'title': title,
       'body': body,
       'type': type,
@@ -53,72 +52,52 @@ class AppNotification {
     }..removeWhere((key, value) => value == null);
   }
 
-  /// مساعدة لتحويل قيمة قد تكون JSON نصي إلى Map
-  static Map<String, dynamic>? _tryParseMetadata(dynamic v) {
-    if (v == null) return null;
-    if (v is Map<String, dynamic>) return v;
-    if (v is Map) return Map<String, dynamic>.from(v);
-    if (v is String) {
-      final s = v.trim();
-      if (s.isEmpty) return null;
-      try {
-        final decoded = json.decode(s);
-        if (decoded is Map<String, dynamic>) return decoded;
-        if (decoded is Map) return Map<String, dynamic>.from(decoded);
-      } catch (_) {
-        // ليس JSON صالحًا — تجاهل
-      }
-    }
-    return null;
-  }
-
-  /// إنشاء نموذج من مستند Firestore مع دعم camelCase و snake_case
+  /// إنشاء نموذج من مستند Firestore مع معالجة ذكية لجميع أنواع البيانات
   factory AppNotification.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
+    // دالة مساعدة لجلب النصوص (تتعامل مع camelCase و snake_case)
     String s(List<String> keys, [String fallback = '']) {
       for (var k in keys) {
         final v = data[k];
-        if (v != null && v.toString().isNotEmpty) return v.toString();
+        if (v != null && v.toString().trim().isNotEmpty) return v.toString();
       }
       return fallback;
     }
 
+    // دالة مساعدة لجلب القيم المنطقية (تتعامل مع bool, int, String)
     bool b(List<String> keys, [bool fallback = false]) {
       for (var k in keys) {
         final v = data[k];
         if (v is bool) return v;
         if (v is num) return v != 0;
         if (v is String) {
-          final low = v.toLowerCase();
+          final low = v.toLowerCase().trim();
           if (low == 'true' || low == '1') return true;
-          if (low == 'false' || low == '0') return false;
+          if (low == 'false' || low == '0' || low == '') return false;
         }
       }
       return fallback;
     }
 
-    Map<String, dynamic>? m(List<String> keys) {
-      for (var k in keys) {
-        final v = data[k];
-        final parsed = _tryParseMetadata(v);
-        if (parsed != null) return parsed;
+    // دالة مساعدة لمعالجة الـ Metadata (سواء كانت Map أو JSON String)
+    Map<String, dynamic>? parseMeta(dynamic v) {
+      if (v == null) return null;
+      if (v is Map<String, dynamic>) return v;
+      if (v is String && v.trim().isNotEmpty) {
+        try { return json.decode(v); } catch (_) {}
       }
       return null;
     }
 
+    // دالة مساعدة لمعالجة التوقيت (Timestamp)
     Timestamp? ts(List<String> keys) {
       for (var k in keys) {
         final v = data[k];
         if (v is Timestamp) return v;
         if (v is String) {
-          final parsed = DateTime.tryParse(v);
-          if (parsed != null) return Timestamp.fromDate(parsed);
-        }
-        if (v is int) {
-          try {
-            return Timestamp.fromMillisecondsSinceEpoch(v);
-          } catch (_) {}
+          final p = DateTime.tryParse(v);
+          if (p != null) return Timestamp.fromDate(p);
         }
       }
       return null;
@@ -126,16 +105,16 @@ class AppNotification {
 
     return AppNotification(
       id: doc.id,
-      userId: s(['userId', 'user_id']),
+      userId: s(['userId','user_id']),
       title: s(['title']),
       body: s(['body', 'message']),
       type: s(['type'], 'general'),
-      metadata: m(['metadata', 'meta', 'data']),
+      metadata: parseMeta(data['metadata'] ?? data['meta'] ?? data['data']),
       isRead: b(['isRead', 'is_read', 'read'], false),
-      actionUrl: s(['actionUrl', 'action_url', 'url']).isNotEmpty ? s(['actionUrl', 'action_url', 'url']) : null,
+      actionUrl: s(['actionUrl', 'action_url', 'url']).isEmpty ? null : s(['actionUrl', 'action_url', 'url']),
       priority: s(['priority'], 'normal'),
       sendNotification: b(['sendNotification', 'send_notification'], true),
-      transactionId: s(['transactionId', 'transaction_id']).isNotEmpty ? s(['transactionId', 'transaction_id']) : null,
+      transactionId: s(['transactionId', 'transaction_id']).isEmpty ? null : s(['transactionId', 'transaction_id']),
       createdAt: ts(['createdAt', 'created_at', 'timestamp']),
       updatedAt: ts(['updatedAt', 'updated_at']),
     );
@@ -171,10 +150,5 @@ class AppNotification {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
-  }
-
-  @override
-  String toString() {
-    return 'AppNotification(id: $id, userId: $userId, title: $title, type: $type, isRead: $isRead, priority: $priority, sendNotification: $sendNotification, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }

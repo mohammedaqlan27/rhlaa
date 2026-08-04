@@ -1,58 +1,134 @@
+// lib/utils/constants.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../theme/app_colors.dart'; // استيراد الألوان
 
-/// 🎨 ألوان التطبيق (App Colors)
-class AppColors {
-  static const Color primaryPurple = Color(0xFFB39DDB); // بنفسجي فاتح
-  static const Color darkPurple = Color(0xFF6A0DAD);    // بنفسجي غامق
-  static const Color backgroundWhite = Color(0xFFFFFFFF);
-  static const Color lightGray = Color.fromARGB(255, 213, 206, 206);
-  static const Color successGreen = Color(0xFF4CAF50);
-  static const Color errorRed = Color(0xFFF44336);
-  static const Color alertYellow = Color.fromARGB(255, 255, 173, 59);
-  static const Color textDark = Color(0xFF212121);
-  static const Color secondaryBlue = Color(0xFF2196F3); // تم إصلاح السطر 16
-}
-
-/// ✒️ الخطوط المستخدمة (App Fonts)
-class AppFonts {
-  static const String arabicFont = 'Cairo';
-  static const String englishFont = 'Roboto';
-}
-
-/// 📌 ثوابت عامة (App Constants)
+/// 📌 الثوابت العامة (App Constants)
 class AppConstants {
+  AppConstants._();
+
+  static const double borderRadius = 16.0; // انحناء عصري موحد
+
+  // --- تصنيفات الرحلات ---
   static const List<String> tripCategories = ['داخلية', 'خارجية'];
-  static const Map<String, List<String>> destinations = {
-    'داخلية': ['صنعاء', 'عدن', 'تعز', 'حضرموت'],
-    'خارجية': ['الرياض', 'جدة', 'مكة', 'مسقط', 'أبوظبي', 'دبي', 'الشارقة'],
+
+  // --- جميع المحافظات اليمنية (22 محافظة + الأمانة) ---
+  static const List<String> yemenGovernorates = [
+    'أمانة العاصمة (صنعاء)', 'محافظة صنعاء', 'عدن', 'تعز', 'حضرموت (المكلا)',
+    'حضرموت (سيئون)', 'إب', 'الحديدة', 'مأرب', 'شبوة', 'الجوف', 'المهرة',
+    'أبين', 'الضالع', 'لحج', 'البيضاء', 'عمران', 'ذمار', 'حجة', 'صعدة',
+    'المحويت', 'ريمة', 'سقطرى'
+  ];
+
+  // --- الوجهات الخارجية (موسعة) ---
+  static const Map<String, List<String>> externalDestinations = {
+    'السعودية': ['الرياض', 'جدة', 'مكة المكرمة', 'المدينة المنورة', 'الدمام', 'خميس مشيط', 'نجران', 'شرورة'],
+    'الإمارات': ['دبي', 'أبوظبي', 'الشارقة', 'العين'],
+    'عمان': ['مسقط', 'صلالة', 'صحار'],
+    'مصر': ['القاهرة', 'الإسكندرية'],
+    'الأردن': ['عمان', 'إربد'],
   };
-  static const List<String> vehicleTypes = ['سيارة سيدان', 'سيارة دفع رباعي', 'سيارة فان'];
+
+  // --- أنواع المركبات (مفصلة) ---
+  static const Map<String, List<String>> vehicleCategories = {
+    'اقتصادية': ['سيدان (تويوتا كورولا، إلنترا)', 'سيدان (كامري، سوناتا)'],
+    'عائلية / دفع رباعي': ['لاندكروزر (صالون)', 'برادو', 'سنتافي', 'توسان'],
+    'نقل جماعي': ['باص هايس (14 راكب)', 'باص كوستر (26 راكب)', 'حافلة نقل جماعي (50 راكب)'],
+    'نقل بضائع / حوض': ['هيلوكس غمارتين', 'شاص', 'دينا'],
+  };
+
   static const List<String> tripStatuses = ['مفعّلة', 'في الطريق', 'تم الوصول', 'مكتملة', 'ملغاة'];
 }
 
-/// 🛠️ إعدادات الثيم
+/// 🛠️ إعدادات الثيم (Theme Factory)
 class AppTheme {
+  AppTheme._();
+
+  // --- الثيم الفاتح (Light Theme) ---
   static ThemeData get lightTheme {
     return ThemeData(
-      primaryColor: AppColors.primaryPurple,
-      scaffoldBackgroundColor: AppColors.backgroundWhite,
-      fontFamily: AppFonts.arabicFont,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primaryPurple,
-        primary: AppColors.primaryPurple,
-        secondary: AppColors.secondaryBlue,
-        error: AppColors.errorRed,
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorSchemeSeed: AppColors.primary,
+      scaffoldBackgroundColor: AppColors.background,
+      fontFamily: AppFonts.arabic,
+
+      // داخل AppTheme في ملف constants.dart
+      cardTheme: CardThemeData( // تأكد من إضافة كلمة Data
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
       ),
+
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 56),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+          textStyle: const TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold),
+        ),
+      ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.gray300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.gray200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
+      ),
+
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.primaryPurple,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         titleTextStyle: TextStyle(
-          fontFamily: AppFonts.arabicFont,
-          fontSize: 20,
+          fontFamily: AppFonts.arabic,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
           color: Colors.white,
         ),
+      ),
+    );
+  }
+
+  // --- الثيم المظلم (Dark Theme) ---
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorSchemeSeed: AppColors.primary,
+      scaffoldBackgroundColor: AppColors.backgroundDark,
+      fontFamily: AppFonts.arabic,
+
+      // داخل AppTheme في ملف constants.dart
+      cardTheme: CardThemeData( // تأكد من إضافة كلمة Data
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.surfaceDark,
+        centerTitle: true,
+        elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
     );
   }

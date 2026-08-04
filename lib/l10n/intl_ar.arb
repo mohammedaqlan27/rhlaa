@@ -1,0 +1,34 @@
+{
+  "@@locale": "ar",
+  "app_title": "تطبيق الرحلات",
+  "login": "تسجيل الدخول",
+  "register": "إنشاء حساب",
+  "email": "البريد الإلكتروني",
+  "password": "كلمة المرور",
+  "home": "الرئيسية",
+  "profile": "الملف الشخصي",
+  "my_bookings": "حجوزاتي",
+  "notifications": "التنبيهات",
+  "settings": "الإعدادات",
+  "logout": "تسجيل الخروج",
+  "create_trip": "إنشاء رحلة جديدة",
+  "search": "البحث عن رحلات...",
+  "no_trips": "لا توجد رحلات متاحة",
+  "confirm": "تأكيد",
+  "cancel": "إلغاء",
+  "error": "حدث خطأ ما",
+  "welcome_user": "مرحبًا {name}",
+  "@welcome_user": {
+    "description": "Greeting with user name",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "trips_count": "{count, plural, =0{لا توجد رحلات} =1{رحلة واحدة} other{{count} رحلات}}",
+  "@trips_count": {
+    "description": "Number of trips with plural",
+    "placeholders": {
+      "count": {}
+    }
+  }
+}

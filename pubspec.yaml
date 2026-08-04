@@ -13,38 +13,34 @@ dependencies:
     sdk: flutter
   table_calendar: ^3.0.8
   qr_flutter: ^4.0.0
-
-  # ✅ Firebase packages (متوافقة مع SDK 3.2.6)
   firebase_core: ^3.15.2
   firebase_auth: ^5.5.2
   cloud_firestore: ^5.6.6
-  cloud_functions: ^5.1.0
+  cloud_functions: ^5.6.2
   firebase_storage: ^12.4.10
   firebase_messaging: ^15.2.10
-  firebase_functions: ^0.6.0
-  geolocator: ^9.0.2
-  google_maps_flutter: ^2.4.0
-
-  # ... الحزم الأخرى الموجودة مسبقاً
-
   provider: ^6.1.5+1
   share_plus: ^7.2.1
-
-  pdf: ^3.10.4
+  shared_preferences: ^2.2.2
+  dynamic_color: 1.8.1
+  timeago: ^3.5.0
+  pdf: ^3.12.0
   syncfusion_flutter_xlsio: ^33.1.49
   rxdart: ^0.27.7
   path_provider: ^2.0.14
-
-  # ✅ إضافات مهمة
+  image_gallery_saver: ^2.0.3
+  screenshot: ^3.0.0
   image_picker: ^1.0.4
   intl: ^0.20.2
-  shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.2
   uuid: ^4.0.0
   flutter_local_notifications: ^17.1.0
-
   flutter_localizations:
     sdk: flutter
+  google_maps_flutter: ^2.18.0
+  geolocator: ^14.0.2
+  barcode_widget: ^2.0.4
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -56,26 +52,33 @@ dev_dependencies:
   build_runner: ^2.4.6
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.4.0
+  intl_utils: ^2.8.0
+
+flutter_intl:
+  enabled: true
+  arb_dir: lib/l10n
+  output_dir: lib/l10n/generated
+  class_name: S
+  main_locale: en
 
 flutter_native_splash:
-
-  color: "#ffffff"        # لون الخلفية
+  color: "#ffffff"
   image: assets/images/app_logo.png
   android: true
   ios: true
   web: true
 
 flutter_icons:
-    android: true
-    ios: true
-    image_path: "assets/images/app_icon.png"
-    min_sdk_android: 21
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
 
   assets:
-  - assets/images/app_icon.png
+    - assets/images/app_icon.png
 
   fonts:
     - family: Tajawal

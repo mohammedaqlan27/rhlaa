@@ -1,10 +1,9 @@
 // lib/screens/available_trips_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../providers/trip_provider.dart';
 import '../models/trip.dart';
-import '../widgets/trip_card.dart';
+import '../widgets/Passenger/trip_card.dart';
 import 'trip_details_screen.dart';
 
 class AvailableTripsScreen extends StatefulWidget {
@@ -24,125 +23,140 @@ class AvailableTripsScreen extends StatefulWidget {
 }
 
 class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
+  // لوحة الألوان المعتمدة (Modern Flat Design 2.0)
+  static const Color _primaryBlue = Color(0xFF1E70B8);
+  static const Color _bgSecondary = Color(0xFFF8FAFC);
+  static const Color _textDark = Color(0xFF1E293B);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<TripProvider>(context, listen: false);
-      provider.fetchAvailableTrips();
+      context.read<TripProvider>().fetchAvailableTrips();
     });
   }
 
   Future<void> _onRefresh() async {
-    try {
-      await Provider.of<TripProvider>(context, listen: false).fetchAvailableTrips();
-    } catch (_) {}
+    await context.read<TripProvider>().fetchAvailableTrips(forceRefresh: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = const Color(0xFF4A7DAB);
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: _bgSecondary,
+        // --- 1. القائمة الجانبية الكبيرة (Drawer) ---
+        drawer: _buildSideDrawer(context),
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(
-          widget.destination.isNotEmpty ? 'رحلات إلى ${widget.destination}' : 'الرحلات المتاحة',
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black87,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: Consumer<TripProvider>(
-        builder: (context, tripProvider, child) {
-          if (tripProvider.isLoading) {
-            return Center(child: CircularProgressIndicator(color: primaryColor));
-          }
-
-          if (tripProvider.errorMessage != null && tripProvider.errorMessage!.isNotEmpty) {
-            return _buildErrorState(tripProvider.errorMessage!);
-          }
-
-          final allTrips = tripProvider.availableTrips ?? <Trip>[];
-          final filteredTrips = allTrips.where((trip) {
-            final matchesDest = widget.destination.isEmpty ||
-                (trip.destination ?? '').trim().toLowerCase() ==
-                    widget.destination.trim().toLowerCase();
-            final matchesCat = widget.tripCategory == null ||
-                widget.tripCategory!.isEmpty ||
-                trip.tripCategory == widget.tripCategory;
-            final matchesVehicle = widget.vehicleType == null ||
-                widget.vehicleType!.isEmpty ||
-                trip.vehicleType == widget.vehicleType;
-            return matchesDest && matchesCat && matchesVehicle;
-          }).toList();
-
-          if (filteredTrips.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: _onRefresh,
-              color: primaryColor,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height - kToolbarHeight - 80,
-                  child: _buildEmptyState(),
-                ),
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: _onRefresh,
-            color: primaryColor,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: filteredTrips.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                final trip = filteredTrips[index];
-                return TripCard(
-                  trip: trip,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)),
-                  ),
-                );
-              },
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0.5,
+          centerTitle: true,
+          iconTheme: const IconThemeData(color: _textDark),
+          title: const Text(
+            'الرحلات المتاحة', // تم تبسيط العنوان بناءً على طلبك
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              color: _textDark,
             ),
-          );
-        },
-      ),
-      bottomNavigationBar: _buildBottomNav(context),
-    );
-  }
-
-  Widget _buildErrorState(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 72, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Cairo', fontSize: 16)),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () => Provider.of<TripProvider>(context, listen: false).fetchAvailableTrips(),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A7DAB)),
-              child: const Text('حاول مرة أخرى', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.tune_rounded),
+              onPressed: () {
+                // منطق الفلترة المتقدمة
+              },
             ),
           ],
         ),
+
+        body: Consumer<TripProvider>(
+          builder: (context, tripProvider, child) {
+            if (tripProvider.isLoading) {
+              return const Center(child: CircularProgressIndicator(color: _primaryBlue));
+            }
+
+            if (tripProvider.errorMessage != null) {
+              return _buildErrorState(tripProvider.errorMessage!);
+            }
+
+            // منطق عرض جميع الرحلات أو المفلترة
+            final allTrips = tripProvider.availableTrips;
+            final filteredTrips = allTrips.where((trip) {
+              final matchesDest = widget.destination.isEmpty ||
+                  trip.destination.contains(widget.destination);
+              return matchesDest;
+            }).toList();
+
+            if (filteredTrips.isEmpty) {
+              return _buildEmptyState();
+            }
+
+            return RefreshIndicator(
+              onRefresh: _onRefresh,
+              color: _primaryBlue,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                itemCount: filteredTrips.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  return Hero(
+                    tag: 'trip-${filteredTrips[index].id}',
+                    child: TripCard(
+                      trip: filteredTrips[index],
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TripDetailsScreen(trip: filteredTrips[index]),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+
+        // --- 2. القائمة السفلية (Bottom Navigation) ---
+        bottomNavigationBar: _buildBottomNav(context),
       ),
+    );
+  }
+
+  // تصميم القائمة الجانبية (Drawer)
+  Widget _buildSideDrawer(BuildContext context) {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: _primaryBlue),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, size: 40, color: _primaryBlue),
+            ),
+            accountName: const Text('مستخدم رحلاء', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+            accountEmail: const Text('user@rhlaa.com', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+          _buildDrawerItem(Icons.home_rounded, 'الرئيسية', () => Navigator.pushReplacementNamed(context, '/passenger_home')),
+          _buildDrawerItem(Icons.confirmation_number_rounded, 'حجوزاتي', () => Navigator.pushNamed(context, '/my_bookings')),
+          _buildDrawerItem(Icons.settings_suggest_rounded, 'الإعدادات', () => Navigator.pushNamed(context, '/settings')),
+          const Divider(),
+          _buildDrawerItem(Icons.help_outline_rounded, 'مركز المساعدة', () {}),
+          _buildDrawerItem(Icons.logout_rounded, 'تسجيل الخروج', () {}, color: Colors.redAccent),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap, {Color? color}) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? _textDark),
+      title: Text(title, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, color: color ?? _textDark)),
+      onTap: onTap,
     );
   }
 
@@ -151,30 +165,15 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.search_off_rounded, size: 80, color: Colors.blue.shade300),
-          ),
+          Image.network('https://cdn-icons-png.flaticon.com/512/7486/7486744.png', height: 150, opacity: const AlwaysStoppedAnimation(0.5)),
           const SizedBox(height: 20),
-          const Text(
-            'عذراً، لا توجد رحلات حالياً',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'جرب البحث عن وجهة أخرى أو عد لاحقاً',
-            style: TextStyle(fontFamily: 'Cairo', color: Colors.grey),
-          ),
+          const Text('لا توجد رحلات متاحة حالياً', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(context).pop(), // إصلاح زر العودة للبحث
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A7DAB),
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              backgroundColor: _primaryBlue,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: const Text('العودة للبحث', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
@@ -184,28 +183,44 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
     );
   }
 
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.wifi_off_rounded, size: 60, color: Colors.orange),
+          const SizedBox(height: 16),
+          Text(message, style: const TextStyle(fontFamily: 'Cairo')),
+          TextButton(onPressed: _onRefresh, child: const Text('تحديث القائمة')),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomNav(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: BottomNavigationBar(
         currentIndex: 1,
-        selectedItemColor: const Color(0xFF4A7DAB),
-        unselectedItemColor: Colors.grey,
-        showUnselectedLabels: true,
-        selectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
-        unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: _primaryBlue,
+        unselectedItemColor: Colors.grey.shade400,
+        selectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11),
+        unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 11),
         onTap: (index) {
-          if (index == 0) Navigator.pushReplacementNamed(context, '/passenger_home');
-          if (index == 2) Navigator.pushNamed(context, '/my_bookings');
-          if (index == 3) Navigator.pushNamed(context, '/profile');
+          switch (index) {
+            case 0: Navigator.pushReplacementNamed(context, '/passenger_home'); break;
+            case 2: Navigator.pushNamed(context, '/my_bookings'); break;
+            case 3: Navigator.pushNamed(context, '/profile'); break;
+          }
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.directions_bus), label: 'الرحلات'),
-          BottomNavigationBarItem(icon: Icon(Icons.confirmation_number), label: 'حجوزاتي'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
+          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'الرئيسية'),
+          BottomNavigationBarItem(icon: Icon(Icons.directions_bus_rounded), label: 'الرحلات'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'حجوزاتي'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_2_rounded), label: 'حسابي'),
         ],
       ),
     );

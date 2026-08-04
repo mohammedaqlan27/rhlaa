@@ -1,6 +1,11 @@
 ---
 name: firebase-security-rules-auditor
+<<<<<<< HEAD
 description: A skill to evaluate how secure Firestore security rules are. Use this when Firestore security rules are updated to ensure that the generated rules are extremely secure and robust.
+=======
+description: >-
+  Audits Firebase (Firestore, Cloud Storage) security rules for vulnerabilities, privilege escalation, role bypasses, create vs update inconsistencies, resource exhaustion, type safety, size limits, and hasOnly ownership checks. Use when auditing/reviewing rules, running red-team rule assessments, or scoring against auditor checklists. Don't use for Firebase CLI (login, deploy), Auth, Crashlytics, Remote Config, or database queries.
+>>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
 ---
 
 # Overview

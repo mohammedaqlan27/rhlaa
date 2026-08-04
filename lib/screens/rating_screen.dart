@@ -27,7 +27,6 @@ class _RatingScreenState extends State<RatingScreen> {
   // ثيمات وألوان هوية "رحلاء"
   final Color _logoBlue = const Color(0xFF1E70B8);
   final Color _logoTeal = const Color(0xFF17A5A3);
-  final Color _logoGreen = const Color(0xFF4EBF64);
   final Color _starColor = const Color(0xFFFFB300);
   final Color _backgroundColor = const Color(0xFFF8FAFC);
 
@@ -49,9 +48,11 @@ class _RatingScreenState extends State<RatingScreen> {
     }
     final args = ModalRoute.of(context)!.settings.arguments;
     if (args is Map<String, dynamic>) {
-      _tripId ??= args['tripId']?.toString();
-      _targetUserId ??= args['targetUserId']?.toString();
-      _userType ??= args['userType']?.toString() ?? args['role']?.toString();
+      setState(() {
+        _tripId ??= args['tripId']?.toString();
+        _targetUserId ??= args['targetUserId']?.toString();
+        _userType ??= args['userType']?.toString() ?? args['role']?.toString();
+      });
     }
   }
 
@@ -70,49 +71,50 @@ class _RatingScreenState extends State<RatingScreen> {
     }
   }
 
+  // التحقق من وجود تقييم مسبق باستخدام fromUserId و toUserId
   Future<bool> _hasAlreadyRated(String fromUserId) async {
     if (_tripId == null || _targetUserId == null) return false;
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('ratings')
           .where('fromUserId', isEqualTo: fromUserId)
+          .where('toUserId', isEqualTo: _targetUserId)
           .where('tripId', isEqualTo: _tripId)
+          .limit(1)
           .get();
 
-      for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        final toUser = (data['toUserId'] ?? data['to_user_id'] ?? data['to'] ?? data['targetUserId'])?.toString();
-        if (toUser == _targetUserId) return true;
-      }
-    } catch (_) {}
-    return false;
+      return querySnapshot.docs.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
+  // تحديث متوسط التقييم للمستخدم المستهدف (toUserId)
   Future<void> _updateUserAverageRating() async {
     if (_targetUserId == null) return;
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('ratings').get();
+      // استعلام فقط عن التقييمات الموجهة لهذا المستخدم
+      final snapshot = await FirebaseFirestore.instance
+          .collection('ratings')
+          .where('toUserId', isEqualTo: _targetUserId)
+          .get();
+
       final List<double> ratings = [];
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        final toUser = (data['toUserId'] ?? data['to_user_id'] ?? data['to'] ?? data['targetUserId'])?.toString();
-        if (toUser == _targetUserId) {
-          final raw = data['rating'] ?? data['score'];
-          double? val;
-          if (raw is num) val = raw.toDouble();
-          else if (raw is String) val = double.tryParse(raw);
-          if (val != null) ratings.add(val);
+        final raw = data['rating'];
+        if (raw is num) {
+          ratings.add(raw.toDouble());
         }
       }
 
       final double average = ratings.isEmpty ? _rating : ratings.reduce((a, b) => a + b) / ratings.length;
-      final userRef = FirebaseFirestore.instance.collection('users').doc(_targetUserId);
-      await userRef.update({
+
+      await FirebaseFirestore.instance.collection('users').doc(_targetUserId).update({
         'averageRating': average,
-        'average_rating': average,
         'ratingCount': ratings.length,
-        'rating_count': ratings.length,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint('RatingScreen._updateUserAverageRating error: $e');
@@ -138,15 +140,16 @@ class _RatingScreenState extends State<RatingScreen> {
     try {
       final alreadyRated = await _hasAlreadyRated(fromUserId);
       if (alreadyRated) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❗ لقد قمت بتقييم هذا الكابتن/الراكب مسبقًا لهذه الرحلة', style: TextStyle(fontFamily: 'Cairo'))));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❗ لقد قمت بتقييم هذا الشخص مسبقًا لهذه الرحلة', style: TextStyle(fontFamily: 'Cairo'))));
         setState(() => _isSubmitting = false);
         return;
       }
 
+      // استخدام fromUserId بشكل صريح كما هو مطلوب
       final ratingPayload = <String, dynamic>{
         'tripId': _tripId,
-        'fromUserId': fromUserId,
-        'toUserId': _targetUserId,
+        'fromUserId': fromUserId, // الشخص الذي قام بالتقييم
+        'toUserId': _targetUserId, // الشخص الذي تم تقييمه
         'userType': _userType ?? 'غير محدد',
         'rating': _rating,
         'note': _noteController.text.trim(),
@@ -178,7 +181,7 @@ class _RatingScreenState extends State<RatingScreen> {
           icon: Icon(
             _rating >= starValue ? Icons.star_rounded : Icons.star_border_rounded,
             color: _rating >= starValue ? _starColor : Colors.grey.shade400,
-            size: 42,
+            size: 48,
           ),
         );
       }),
@@ -187,7 +190,6 @@ class _RatingScreenState extends State<RatingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _readRouteArgsIfNeeded();
     final displayName = targetUserName.isNotEmpty ? targetUserName : 'مستخدم رحلة';
 
     return Scaffold(
@@ -200,79 +202,82 @@ class _RatingScreenState extends State<RatingScreen> {
         elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade100),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+                ],
               ),
               child: Column(
                 children: [
-                  const CircleAvatar(
-                    radius: 32,
-                    backgroundColor: Color(0xFFF1F5F9),
-                    child: Icon(Icons.person_rounded, size: 36, color: Color(0xFF64748B)),
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: _logoBlue.withOpacity(0.1),
+                    child: Icon(Icons.person_rounded, size: 45, color: _logoBlue),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 20),
                   Text(
                     'كيف كانت تجربتك مع $displayName؟',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
+                  const SizedBox(height: 8),
                   Text(
                     'رأيك يساعدنا في الحفاظ على أمان وموثوقية مجتمع رحلة',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey.shade500),
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey.shade500),
                   ),
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                    padding: EdgeInsets.symmetric(vertical: 20),
                     child: Divider(),
                   ),
-                  const Text('اضغط على النجوم لتحديد التقييم:', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 4),
                   _buildStarRatingBar(),
+                  const SizedBox(height: 10),
                   Text(
                     '(${_rating.toStringAsFixed(0)} من 5)',
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: _logoTeal),
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold, color: _logoTeal),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 30),
                   TextField(
                     controller: _noteController,
-                    maxLines: 3,
-                    style: const TextStyle(fontSize: 13),
+                    maxLines: 4,
+                    style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'اكتب ملاحظاتك أو تجاربك الإيجابية هنا...',
-                      hintStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                      hintStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
                       labelText: '📝 أضف تعليقاً (اختياري)',
-                      labelStyle: TextStyle(fontFamily: 'Cairo', color: _logoTeal, fontSize: 13),
+                      labelStyle: TextStyle(fontFamily: 'Cairo', color: _logoTeal, fontSize: 14),
                       alignLabelWithHint: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: _backgroundColor,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: _logoBlue, width: 1.5),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: _logoBlue, width: 1),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
+                  const SizedBox(height: 30),
+                  ElevatedButton(
                     onPressed: _isSubmitting ? null : _submitRating,
-                    icon: _isSubmitting
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.send_rounded),
-                    label: const Text('إرسال التقييم والملاحظة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _logoBlue,
                       foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      minimumSize: const Size.fromHeight(55),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                     ),
+                    child: _isSubmitting
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('إرسال التقييم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ],
               ),

@@ -1,63 +1,56 @@
+// lib/screens/auth_wrapper.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/user_provider.dart';
-import '../models/trip.dart';
-
-// استيراد الشاشات
 import 'auth_screen.dart';
 import 'home_screen.dart';
-import 'passenger_home_screen.dart' hide Trip;
-import 'driver_home_screen.dart';
 import 'loading_screen.dart';
+import 'onboarding_screen.dart'; // سننشئ هذا الملف
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
+  Future<bool> _isFirstTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('is_first_time') ?? true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // مراقبة حالة تسجيل الدخول من Firebase
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // 1. إذا كان التطبيق يتصل بـ Firebase
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return FutureBuilder<bool>(
+      future: _isFirstTime(),
+      builder: (context, firstTimeSnapshot) {
+        if (firstTimeSnapshot.connectionState == ConnectionState.waiting) {
           return const LoadingScreen();
         }
 
-        // 2. إذا كان المستخدم مسجل الدخول
-        if (snapshot.hasData && snapshot.data != null) {
-          final userProvider = Provider.of<UserProvider>(context, listen: false);
-
-          // جلب بيانات المستخدم من Firestore فوراً إذا لم تكن موجودة
-          if (userProvider.currentUser == null) {
-            userProvider.fetchUserById(snapshot.data!.uid);
-          }
-
-          // توجيه المستخدم للشاشة الرئيسية العامة (التي تفرز بين السائق والراكب)
-          return const HomeScreen();
-
-          // ملاحظة: إذا أردت العودة لشاشة الاختبار، استبدل السطر أعلاه بـ:
-          // return const TestAllScreens();
+        // 1. إذا كانت المرة الأولى، اعرض شاشات الترحيب
+        if (firstTimeSnapshot.data == true) {
+          return const OnboardingScreen();
         }
 
-        // 3. إذا لم يكن مسجلاً، اذهب لشاشة الدخول
-        return const AuthScreen();
+        // 2. فحص حالة تسجيل الدخول
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, authSnapshot) {
+            if (authSnapshot.connectionState == ConnectionState.waiting) {
+              return const LoadingScreen();
+            }
+
+            if (authSnapshot.hasData && authSnapshot.data != null) {
+              final userProvider = Provider.of<UserProvider>(context, listen: false);
+              if (userProvider.currentUser == null) {
+                userProvider.fetchUserById(authSnapshot.data!.uid);
+              }
+              return const HomeScreen();
+            }
+
+            return const AuthScreen();
+          },
+        );
       },
-    );
-  }
-}
-
-// شاشة الاختبار (اختيارية، يمكنك الوصول إليها من القائمة الجانبية لاحقاً)
-class TestAllScreens extends StatelessWidget {
-  const TestAllScreens({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    // ... (كود شاشة الاختبار الذي أرسلته يبقى كما هو هنا) ...
-    return Scaffold(
-      appBar: AppBar(title: const Text("قائمة الاختبار")),
-      body: const Center(child: Text("شاشة الاختبار جاهزة")),
     );
   }
 }

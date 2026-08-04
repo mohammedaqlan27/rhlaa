@@ -1,6 +1,11 @@
 ---
 name: firebase-app-hosting-basics
+<<<<<<< HEAD
 description: Deploy and manage web apps with Firebase App Hosting. Use this skill when deploying Next.js/Angular apps with backends.
+=======
+description: >-
+  Deploys and manages full-stack web applications (Next.js, Angular) with Server-Side Rendering (SSR) using Firebase App Hosting. Use when deploying Next.js/Angular apps, configuring apphosting.yaml or firebase.json apphosting blocks, managing secrets, setting up GitHub CI/CD, or configuring Blaze billing requirements. Don't use for classic static web hosting, Auth, Firestore, Crashlytics, or Xcode.
+>>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
 ---
 
 # App Hosting Basics
@@ -36,6 +41,10 @@ to upgrade their plan.
 This is the recommended flow for most users.
 
 1. Configure `firebase.json` with an `apphosting` block.
+<<<<<<< HEAD
+=======
+   
+>>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
    ```json
    {
      "apphosting": {

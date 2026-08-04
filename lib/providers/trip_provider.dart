@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip.dart';
+import '../models/app_user.dart'; // استيراد موديل المستخدم للفحص
 import '../services/trip_service.dart';
 
 class TripProvider with ChangeNotifier {
@@ -102,11 +103,27 @@ class TripProvider with ChangeNotifier {
     }
   }
 
-  /// إنشاء رحلة جديدة (للسائقين)
-  /// يعيد tripId عند النجاح أو null عند الفشل
-  Future<String?> createNewTrip(Trip trip) async {
+  /// إنشاء رحلة جديدة (للسائقين) مع فحص البيانات الإجبارية
+  /// [currentUser] يستخدم للتحقق من وجود رقم اللوحة وتبعية المكتب
+  Future<String?> createNewTrip(Trip trip, AppUser? currentUser) async {
     _setLoading(true);
     _errorMessage = null;
+
+    // --- فحص البيانات الإجبارية للسائق قبل الإنشاء ---
+    if (currentUser == null) {
+      _errorMessage = "خطأ في تحديد بيانات المستخدم.";
+      _setLoading(false);
+      return null;
+    }
+
+    // التحقق من رقم اللوحة وحالة التبعية (agencyStatus)
+    if (currentUser.plateNumber == null || currentUser.plateNumber!.isEmpty ||
+        currentUser.agencyStatus == null || currentUser.agencyStatus!.isEmpty) {
+      _errorMessage = "يجب إكمال بيانات المركبة (رقم اللوحة) وتحديد تبعية السائق في الملف الشخصي قبل إنشاء رحلتك الأولى.";
+      _setLoading(false);
+      return null;
+    }
+
     try {
       final tripId = await _tripService.createTrip(trip);
       if (tripId != null) {

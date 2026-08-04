@@ -1,6 +1,5 @@
 // lib/state/auth_state.dart
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +11,7 @@ class AuthState with ChangeNotifier {
   User? _user;
   bool isLoading = false;
   String? errorMessage;
+  String? verificationId; // خاص بالتحقق من الهاتف
 
   String? userType;
   String? userRole;
@@ -19,13 +19,9 @@ class AuthState with ChangeNotifier {
   StreamSubscription<User?>? _authSub;
 
   AuthState() {
-    // احصل على المستخدم الحالي إن وُجد
     _user = _auth.currentUser;
-    if (_user != null) {
-      _loadUserProfile(_user!.uid);
-    }
+    if (_user != null) _loadUserProfile(_user!.uid);
 
-    // استمع لتغيرات المستخدم وحدث الحالة عند التغيير
     _authSub = _auth.userChanges().listen((u) {
       _user = u;
       if (u != null) {
@@ -35,23 +31,65 @@ class AuthState with ChangeNotifier {
         userRole = null;
         notifyListeners();
       }
-    }, onError: (e, st) {
-      debugPrint('AuthState.userChanges error: $e\n$st');
     });
   }
 
-  // getters
   User? get firebaseUser => _user;
-  User? get user => _user;
-  String? get userId => _user?.uid;
+  bool get isPhoneVerified => verificationId != null;
 
-  Object? get email => null;
+  // --- منطق التحقق من الهاتف ---
+  Future<void> verifyPhoneNumber(String phoneNumber, Function(String) onCodeSent) async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          await _auth.signInWithCredential(credential);
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          errorMessage = e.message;
+          isLoading = false;
+          notifyListeners();
+        },
+        codeSent: (String verId, int? resendToken) {
+          verificationId = verId;
+          isLoading = false;
+          notifyListeners();
+          onCodeSent(verId);
+        },
+        codeAutoRetrievalTimeout: (String verId) {
+          verificationId = verId;
+        },
+      );
+    } catch (e) {
+      errorMessage = e.toString();
+      isLoading = false;
+      notifyListeners();
+    }
+  }
 
-  Object? get mobileNumber => null;
+  Future<bool> signInWithOTP(String smsCode) async {
+    if (verificationId == null) return false;
+    try {
+      isLoading = true;
+      notifyListeners();
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId!,
+        smsCode: smsCode,
+      );
+      await _auth.signInWithCredential(credential);
+      return true;
+    } catch (e) {
+      errorMessage = "كود التحقق غير صحيح";
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
 
-  Object? get displayName => null;
-
-  /// تسجيل مستخدم جديد وحفظ بياناته في Firestore
+  // --- التسجيل المطور ---
   Future<bool> register({
     required String email,
     required String password,
@@ -60,17 +98,22 @@ class AuthState with ChangeNotifier {
     String? mobileNumber,
     String? idNumber,
     String? plateNumber,
-    String? carOwnerOfficialName,
+    String? agencyStatus, // الحقل الجديد
     String? drivingLicenseNumber,
   }) async {
     try {
       isLoading = true;
       notifyListeners();
 
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      UserCredential cred;
+      if (_auth.currentUser != null) {
+        cred = await _auth.currentUser!.linkWithCredential(
+          EmailAuthProvider.credential(email: email, password: password),
+        );
+      } else {
+        cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      }
+
       final uid = cred.user?.uid;
       if (uid == null) throw Exception('فشل إنشاء المستخدم');
 
@@ -78,37 +121,20 @@ class AuthState with ChangeNotifier {
         'email': email,
         'nickname': nickname,
         'userType': userType,
-        if (mobileNumber != null && mobileNumber.isNotEmpty) 'mobileNumber': mobileNumber,
-        if (idNumber != null && idNumber.isNotEmpty) 'idNumber': idNumber,
-        if (plateNumber != null && plateNumber.isNotEmpty) 'carPlateNumber': plateNumber,
-        if (carOwnerOfficialName != null && carOwnerOfficialName.isNotEmpty) 'carOwnerOfficialName': carOwnerOfficialName,
-        if (drivingLicenseNumber != null && drivingLicenseNumber.isNotEmpty) 'drivingLicenseNumber': drivingLicenseNumber,
+        'mobileNumber': mobileNumber,
+        'idNumber': idNumber,
+        'carPlateNumber': plateNumber,
+        'agencyStatus': agencyStatus ?? 'مستقل',
+        'drivingLicenseNumber': drivingLicenseNumber,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
       await _firestore.collection('users').doc(uid).set(userMap, SetOptions(merge: true));
-
-      _user = _auth.currentUser;
-
-      try {
-        if (_user != null && (_user!.displayName == null || _user!.displayName!.isEmpty)) {
-          await _user!.updateDisplayName(nickname);
-          _user = _auth.currentUser;
-        }
-      } catch (_) {
-        // تجاهل أخطاء تحديث displayName
-      }
-
       await _loadUserProfile(uid);
-
-      errorMessage = null;
       return true;
     } on FirebaseAuthException catch (e) {
       errorMessage = e.message;
-      return false;
-    } catch (e) {
-      errorMessage = e.toString();
       return false;
     } finally {
       isLoading = false;
@@ -116,25 +142,15 @@ class AuthState with ChangeNotifier {
     }
   }
 
-  /// تسجيل الدخول
   Future<bool> login(String email, String password) async {
     try {
       isLoading = true;
       notifyListeners();
-      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
-      _user = cred.user;
-      errorMessage = null;
-
-      if (_user != null) {
-        await _loadUserProfile(_user!.uid);
-      }
-
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      if (_auth.currentUser != null) await _loadUserProfile(_auth.currentUser!.uid);
       return true;
-    } on FirebaseAuthException catch (e) {
-      errorMessage = e.message;
-      return false;
     } catch (e) {
-      errorMessage = e.toString();
+      errorMessage = "خطأ في البريد أو كلمة المرور";
       return false;
     } finally {
       isLoading = false;
@@ -142,35 +158,18 @@ class AuthState with ChangeNotifier {
     }
   }
 
-  /// تسجيل الخروج
-  Future<void> logout() async {
-    try {
-      await _auth.signOut();
-    } catch (e, st) {
-      debugPrint('AuthState.logout error: $e\n$st');
-    } finally {
-      _user = null;
-      userType = null;
-      userRole = null;
-      notifyListeners();
-    }
-  }
-
-  /// تحميل ملف المستخدم من Firestore وتعيين الدور/النوع
   Future<void> _loadUserProfile(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
       final data = doc.data();
 
       if (data != null) {
-        // دعم عدة تسميات للحقل لأن البنية قد تختلف بين المشاريع
         final rawUserType = data['userType'] ?? data['user_type'] ?? data['role'] ?? data['userRole'] ?? data['user_role'];
         final rawUserRole = data['userRole'] ?? data['user_role'] ?? data['role'] ?? data['userType'] ?? data['user_type'];
 
         userType = rawUserType?.toString().trim();
         userRole = rawUserRole?.toString().trim();
 
-        // إذا لم يُحدد userRole لكن userType موجود، استخدمه كدور
         if ((userRole == null || userRole!.isEmpty) && userType != null && userType!.isNotEmpty) {
           userRole = userType;
         }
@@ -182,24 +181,12 @@ class AuthState with ChangeNotifier {
       debugPrint('AuthState._loadUserProfile error: $e\n$st');
       userType = null;
       userRole = null;
-    } finally {
-      notifyListeners();
     }
   }
 
-  /// إعادة تحميل بروفايل المستخدم الحالي
-  Future<void> reloadProfile() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid != null) {
-      await _loadUserProfile(uid);
-    }
+  Future<void> logout() async {
+    await _auth.signOut();
+    _user = null;
+    notifyListeners();
   }
-
-  @override
-  void dispose() {
-    _authSub?.cancel();
-    super.dispose();
-  }
-
-  Future<void> signOut() async {}
 }

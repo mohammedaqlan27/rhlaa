@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
-import '../widgets/app_scaffold.dart';
-import '../widgets/app_card.dart';
+import '../widgets/shared/app_scaffold.dart';
+import '../widgets/shared/app_card.dart';
 import 'trip_details_screen.dart';
 
 class PassengerCalendarScreen extends StatefulWidget {

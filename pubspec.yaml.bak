@@ -1,0 +1,105 @@
+name: rhlaa
+description: تتطبيق رحلة - منصة حجز وتنقل ذكية
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.6 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  table_calendar: ^3.0.8
+  qr_flutter: ^4.0.0
+
+  # ✅ Firebase packages (متوافقة مع SDK 3.2.6)
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.5.2
+  cloud_firestore: ^5.6.6
+  firebase_storage: ^12.4.10
+  firebase_messaging: ^15.2.10
+
+  provider: ^6.1.5+1
+  share_plus: ^7.2.1
+  shared_preferences: ^2.2.2
+  dynamic_color: 1.8.1
+  timeago: ^3.5.0
+  pdf: ^3.12.0
+  syncfusion_flutter_xlsio: ^33.1.49
+  rxdart: ^0.27.7
+  path_provider: ^2.0.14
+  image_gallery_saver: ^2.0.3
+  screenshot: ^3.0.0  # ✅ إضافات مهمة
+  image_picker: ^1.0.4
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.2
+  uuid: ^4.0.0
+  flutter_local_notifications: ^17.1.0
+
+  flutter_localizations:
+    sdk: flutter
+  google_maps_flutter: ^2.18.0
+  geolocator: ^14.0.2
+  cloud_functions: ^5.6.2
+  barcode_widget: ^2.0.4
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mockito: ^5.0.0
+  build_runner: ^2.4.6
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+  intl_utils: ^2.8.0
+
+  flutter_intl:
+    enabled: true
+    arb_dir: lib/l10n
+    output_dir: lib/l10n/generated
+    class_name: S
+    main_locale: en
+
+flutter_native_splash:
+
+  color: "#ffffff"        # لون الخلفية
+  image: assets/images/app_logo.png
+  android: true
+  ios: true
+  web: true
+
+flutter_icons:
+    android: true
+    ios: true
+    image_path: "assets/images/app_icon.png"
+    min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+
+  assets:
+  - assets/images/app_icon.png
+
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: assets/fonts/Tajawal-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Tajawal-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Tajawal-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Tajawal-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Tajawal-ExtraBold.ttf
+          weight: 800
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Regular.ttf
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Cairo-Light.ttf
+          weight: 300

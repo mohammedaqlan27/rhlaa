@@ -1,84 +1,76 @@
+// lib/services/notification_service.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import '../models/notification_model.dart';
+import '../models/user_prefs_model.dart';
 
 class NotificationService {
-  // حقن الاعتمادات
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
 
+  // أسماء المجموعات (Collections)
   final String collectionName = 'notifications';
   final String scheduledCollection = 'scheduled_notifications';
+  final String prefsCollection = 'user_notification_preferences';
+  final String settingsCollection = 'app_settings';
 
-  // Constructor مع قيم افتراضية لسهولة الاستخدام والقدرة على عمل Mocks
+  // ذاكرة مؤقتة للنصوص الديناميكية لتقليل القراءة من Firestore
+  Map<String, dynamic>? _cachedRemoteContent;
+
   NotificationService({
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _functions = functions ?? FirebaseFunctions.instance;
 
-  // -----------------------
-  // Low-level: write notification doc
-  // -----------------------
-  Future<DocumentReference> _createNotificationDoc({
-    required String userId,
-    required String title,
-    required String body,
-    String type = 'general',
-    Map<String, dynamic>? metadata,
-    String? actionUrl,
-    String priority = 'normal',
-    bool sendNotification = true,
-    String? transactionId,
-  }) async {
-    final now = Timestamp.now();
-    final data = <String, dynamic>{
-      'userId': userId,
-      'title': title,
-      'body': body,
-      'type': type,
-      'metadata': metadata,
-      'actionUrl': actionUrl,
-      'priority': priority,
-      'sendNotification': sendNotification,
-      'transactionId': transactionId,
-      'isRead': false,
-      'createdAt': now,
-      'updatedAt': now,
-    }..removeWhere((k, v) => v == null);
+  // ---------------------------------------------------------
+  // 1. إدارة التفضيلات والنصوص الديناميكية
+  // ---------------------------------------------------------
 
-    return await _firestore.collection(collectionName).add(data);
+  /// جلب النصوص المخصصة من Firestore (مثل دعاء السفر أو رسائل التحفيز)
+  Future<Map<String, dynamic>> _getRemoteContent() async {
+    if (_cachedRemoteContent != null) return _cachedRemoteContent!;
+    try {
+      final doc = await _firestore.collection(settingsCollection).doc('notifications_content').get();
+      if (doc.exists) {
+        _cachedRemoteContent = doc.data();
+        return _cachedRemoteContent!;
+      }
+    } catch (e) {
+      debugPrint('Error fetching remote content: $e');
+    }
+    // نصوص احتياطية في حال فشل الجلب
+    return {
+      'travel_prayer': 'سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ، وَإِنَّا إِلَى رَبِّنَا لَمُنْقَلِبُونَ',
+      'mid_trip_msg': 'نأمل أنك تستمتع برحلتك الآن. نحن نتابع مسار الرحلة لضمان سلامتك.',
+      'driver_motivation': 'طريق السلامة! تذكر أن سلامة الركاب هي أولويتنا، قد بحذر.',
+    };
   }
 
-  // -----------------------
-  // Callable Cloud Function wrapper
-  // -----------------------
-  Future<void> _callSendNotificationFunction({
-    required String notificationId,
-    required String userId,
-    required String title,
-    required String body,
-    Map<String, dynamic>? data,
-  }) async {
+  Future<UserNotificationPrefs> getPrefs(String userId) async {
     try {
-      final callable = _functions.httpsCallable('sendNotificationToUser');
-      await callable.call(<String, dynamic>{
-        'notificationId': notificationId,
-        'userId': userId,
-        'title': title,
-        'body': body,
-        'data': data ?? {},
-      });
-    } catch (e, st) {
-      debugPrint('NotificationService._callSendNotificationFunction error: $e\n$st');
+      final doc = await _firestore.collection(prefsCollection).doc(userId).get();
+      if (doc.exists) return UserNotificationPrefs.fromDocument(doc);
+      return UserNotificationPrefs(userId: userId);
+    } catch (e) {
+      debugPrint('Error fetching prefs: $e');
+      return UserNotificationPrefs(userId: userId);
     }
   }
 
-  // -----------------------
-  // Public: send notification
-  // -----------------------
+  Future<void> savePrefs(UserNotificationPrefs prefs) async {
+    await _firestore.collection(prefsCollection).doc(prefs.userId).set(
+      prefs.toMap(),
+      SetOptions(merge: true),
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 2. المحرك الرئيسي للإرسال (Core Engine)
+  // ---------------------------------------------------------
+
   Future<void> sendNotification({
     required String userId,
     required String title,
@@ -91,218 +83,152 @@ class NotificationService {
     String? transactionId,
   }) async {
     try {
-      final docRef = await _createNotificationDoc(
-        userId: userId,
-        title: title,
-        body: body,
-        type: type,
-        metadata: metadata,
-        actionUrl: actionUrl,
-        priority: priority,
-        sendNotification: sendPush,
-        transactionId: transactionId,
-      );
+      // التحقق من التفضيلات (هل المستخدم مفعل هذا النوع من الإشعارات؟)
+      final prefs = await getPrefs(userId);
+      if (type == 'promo' && !prefs.marketing) return;
+      if (type == 'transactional' && !prefs.transactional) return;
 
+      // 1. إضافة الإشعار لقاعدة البيانات (ليظهر في مركز الإشعارات داخل التطبيق)
+      final docRef = await _firestore.collection(collectionName).add({
+        'userId': userId,
+        'title': title,
+        'body': body,
+        'type': type,
+        'metadata': metadata,
+        'actionUrl': actionUrl,
+        'priority': priority,
+        'sendNotification': sendPush,
+        'transactionId': transactionId,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. استدعاء Cloud Function لإرسال Push Notification حقيقي للهاتف
       if (sendPush) {
-        await _callSendNotificationFunction(
-          notificationId: docRef.id,
-          userId: userId,
-          title: title,
-          body: body,
-          data: metadata,
-        );
+        await _functions.httpsCallable('sendNotificationToUser').call({
+          'notificationId': docRef.id,
+          'userId': userId,
+          'title': title,
+          'body': body,
+          'data': metadata ?? {},
+        });
       }
     } catch (e, st) {
       debugPrint('NotificationService.sendNotification error: $e\n$st');
-      rethrow;
     }
   }
 
-  // -----------------------
-  // Schedule a notification
-  // -----------------------
-  Future<void> scheduleNotification({
-    required String userId,
-    required String title,
-    required String body,
-    required DateTime sendAt,
-    String type = 'scheduled',
-    Map<String, dynamic>? metadata,
-    bool sendPush = true,
-  }) async {
-    final doc = <String, dynamic>{
-      'userId': userId,
-      'title': title,
-      'body': body,
-      'type': type,
-      'metadata': metadata,
-      'sendAt': Timestamp.fromDate(sendAt.toUtc()),
-      'sendNotification': sendPush,
-      'sent': false,
-      'createdAt': Timestamp.now(),
-    };
-    await _firestore.collection(scheduledCollection).add(doc);
-  }
+  // ---------------------------------------------------------
+  // 3. قوالب الخدمات المطورة (الركاب والسائقين)
+  // ---------------------------------------------------------
 
-  // -----------------------
-  // Templates / helpers
-  // -----------------------
-  Future<void> sendBookingPendingPaymentReminder({
-    required String userId,
-    required String bookingId,
-    bool sendPush = true,
-  }) async {
-    final title = 'تذكير بالدفع';
-    final body = 'حجزك رقم $bookingId لم يتم دفعه بعد. أكمل الدفع لتأكيد مقعدك.';
-    final metadata = {'screen': 'booking', 'bookingId': bookingId, 'action': 'pay'};
+  // --- إشعارات الركاب ---
+
+  Future<void> sendPassengerPaymentReminder({required String userId, required String bookingId, required String amount}) async {
     await sendNotification(
       userId: userId,
-      title: title,
-      body: body,
-      type: 'pending_payment',
-      metadata: metadata,
-      sendPush: sendPush,
+      title: 'تذكير بسداد الحجز 💳',
+      body: 'نود تذكيرك بضرورة دفع $amount ريال للحجز رقم $bookingId لضمان تأكيد مقعدك.',
+      type: 'transactional',
+      metadata: {'screen': 'booking', 'bookingId': bookingId},
     );
   }
 
-  Future<void> schedulePreTripReminders({
-    required String userId,
-    required String tripId,
-    required DateTime tripStart,
-    List<int> hoursBefore = const [24, 3, 1],
-  }) async {
-    for (final h in hoursBefore) {
+  Future<void> sendTripStartGreeting({required String userId, required String passengerName, required String destination}) async {
+    final content = await _getRemoteContent();
+    final prayer = content['travel_prayer'];
+    await sendNotification(
+      userId: userId,
+      title: 'انطلقت الرحلة! رافقتكم السلامة ✈️',
+      body: 'أهلاً بك يا $passengerName في رحلتك إلى $destination.\n\n📌 $prayer',
+      type: 'transactional',
+      metadata: {'screen': 'trip_live'},
+    );
+  }
+
+  Future<void> sendMidTripReassurance({required String userId, required String passengerName}) async {
+    final content = await _getRemoteContent();
+    final msg = content['mid_trip_msg'];
+    await sendNotification(
+      userId: userId,
+      title: 'نحن معك في الطريق 🛣️',
+      body: 'عزيزي $passengerName، $msg',
+      type: 'transactional',
+      metadata: {'screen': 'trip_live'},
+    );
+  }
+
+  Future<void> sendPassengerArrival({required String userId, required String destination}) async {
+    await sendNotification(
+      userId: userId,
+      title: 'الحمد لله على السلامة! 🏁',
+      body: 'لقد وصلنا بحمد الله إلى $destination. نرجو منك تقييم تجربتك معنا.',
+      type: 'transactional',
+      metadata: {'screen': 'rating'},
+    );
+  }
+
+  // --- إشعارات السائقين ---
+
+  Future<void> sendDriverMotivation({required String userId, required String driverName}) async {
+    final content = await _getRemoteContent();
+    final msg = content['driver_motivation'];
+    await sendNotification(
+      userId: userId,
+      title: 'رسالة تحفيزية 🌟',
+      body: 'يا $driverName، $msg',
+      type: 'driver_support',
+      metadata: {'screen': 'driver_home'},
+    );
+  }
+
+  // --- إشعارات الحالة العامة (السائق في الطريق، تأخر، إلخ) ---
+
+  Future<void> sendDriverOnTheWay({required String userId, required String driverName, required String plate, required String tripId}) async {
+    await sendNotification(
+      userId: userId,
+      title: 'السائق في الطريق',
+      body: 'السائق $driverName في الطريق إليك. رقم المركبة $plate.',
+      type: 'transactional',
+      metadata: {'screen': 'trip_live', 'tripId': tripId},
+    );
+  }
+
+  Future<void> sendSafetyAlert({required String userId, required String tripId, String? message}) async {
+    await sendNotification(
+      userId: userId,
+      title: 'تنبيه أمني هـام',
+      body: message ?? 'تم استلام بلاغ أمني. فريقنا يتابع رحلتك الآن.',
+      type: 'safety',
+      priority: 'high',
+      metadata: {'screen': 'support', 'tripId': tripId},
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 4. الجدولة وإدارة البيانات (لشاشة الإشعارات)
+  // ---------------------------------------------------------
+
+  Future<void> scheduleTripReminders({required String userId, required String tripId, required DateTime tripStart}) async {
+    final prefs = await getPrefs(userId);
+    for (final h in prefs.reminderHours) {
       final sendAt = tripStart.subtract(Duration(hours: h));
       if (sendAt.isAfter(DateTime.now())) {
-        final title = 'تذكير بالرحلة';
-        final body = 'رحلتك رقم $tripId تبدأ بعد $h ساعة. تأكد من الحضور.';
-        final metadata = {'screen': 'trip', 'tripId': tripId};
-        await scheduleNotification(
-          userId: userId,
-          title: title,
-          body: body,
-          sendAt: sendAt,
-          type: 'pre_trip_reminder',
-          metadata: metadata,
-        );
+        await _firestore.collection(scheduledCollection).add({
+          'userId': userId,
+          'title': 'تذكير بموعد الرحلة',
+          'body': 'رحلتك رقم $tripId تبدأ بعد $h ساعة.',
+          'sendAt': Timestamp.fromDate(sendAt.toUtc()),
+          'type': 'scheduled',
+          'sent': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       }
     }
   }
 
-  Future<void> sendDriverOnTheWay({
-    required String userId,
-    required String driverName,
-    required String plate,
-    required String tripId,
-  }) async {
-    final title = 'السائق في الطريق';
-    final body = 'السائق $driverName في الطريق. رقم المركبة $plate.';
-    final metadata = {'screen': 'trip_live', 'tripId': tripId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'driver_on_the_way', metadata: metadata);
-  }
-
-  Future<void> sendDriverArrived({
-    required String userId,
-    required String tripId,
-  }) async {
-    final title = 'السائق وصل';
-    final body = 'السائق وصل إلى نقطة الانطلاق. يرجى التوجه الآن.';
-    final metadata = {'screen': 'trip_live', 'tripId': tripId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'driver_arrived', metadata: metadata);
-  }
-
-  Future<void> sendDriverDelayed({
-    required String userId,
-    required String tripId,
-    required int minutes,
-  }) async {
-    final title = 'السائق متأخر';
-    final body = 'السائق متوقع الوصول بعد $minutes دقيقة. نعتذر عن التأخير.';
-    final metadata = {'screen': 'trip_live', 'tripId': tripId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'driver_delayed', metadata: metadata);
-  }
-
-  Future<void> sendTripStarted({
-    required String userId,
-    required String tripId,
-    String? personalizedMessage,
-  }) async {
-    final title = 'بداية الرحلة';
-    final body = personalizedMessage ?? 'انطلقت الرحلة الآن. نتمنى لكم رحلة آمنة ومريحة.';
-    final metadata = {'screen': 'trip_live', 'tripId': tripId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'trip_started', metadata: metadata);
-  }
-
-  Future<void> sendMidTripEncouragement({
-    required String userId,
-    required String tripId,
-  }) async {
-    final title = 'نأمل أن تكون الرحلة مريحة';
-    final body = 'نأمل أن تكون الرحلة مريحة — استمتع بالرحلة!';
-    final metadata = {'screen': 'trip_live', 'tripId': tripId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'trip_mid_encourage', metadata: metadata);
-  }
-
-  Future<void> sendArrivedAndRequestRating({
-    required String userId,
-    required String tripId,
-    String? bookingId,
-  }) async {
-    final title = 'تم الوصول';
-    final body = 'وصلت إلى وجهتك. شكرًا لاستخدامك خدمتنا. نرجو تقييم السائق.';
-    final metadata = {'screen': 'rating', 'tripId': tripId, 'bookingId': bookingId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'arrived', metadata: metadata);
-    final sendAt = DateTime.now().add(Duration(minutes: 1));
-    await scheduleNotification(
-      userId: userId,
-      title: 'كيف كانت رحلتك؟',
-      body: 'ساعدنا بتحسين الخدمة — قيّم سائقك الآن.',
-      sendAt: sendAt,
-      type: 'request_rating',
-      metadata: {'screen': 'rating', 'tripId': tripId, 'bookingId': bookingId},
-    );
-  }
-
-  Future<void> sendSafetyAlert({
-    required String userId,
-    required String tripId,
-    String? short,
-  }) async {
-    final title = 'تنبيه أمني';
-    final body = short ?? 'تم استلام بلاغ أمني متعلق برحلتك. سنتواصل معك فورًا.';
-    final metadata = {'screen': 'support', 'tripId': tripId};
-    await sendNotification(userId: userId, title: title, body: body, type: 'safety_alert', metadata: metadata, priority: 'high');
-  }
-
-  Future<void> sendPromo({
-    required String userId,
-    required String code,
-    required int percent,
-  }) async {
-    final title = 'عرض خاص لك';
-    final body = 'خصم $percent% على رحلتك القادمة. استخدم الكود $code.';
-    final metadata = {'screen': 'wallet', 'coupon': code};
-    await sendNotification(userId: userId, title: title, body: body, type: 'promo', metadata: metadata);
-  }
-
-  Future<void> sendWalletUpdate({
-    required String userId,
-    required double amount,
-    required double balance,
-  }) async {
-    final title = 'تحديث المحفظة';
-    final body = 'تم إضافة ${amount.toStringAsFixed(2)} إلى محفظتك. الرصيد الآن ${balance.toStringAsFixed(2)}.';
-    final metadata = {'screen': 'wallet'};
-    await sendNotification(userId: userId, title: title, body: body, type: 'wallet_update', metadata: metadata);
-  }
-
-  // -----------------------
-  // Existing helper methods
-  // -----------------------
-  Future<List<AppNotification>> getNotificationsOnce({
-    required String userId,
-    int limit = 50,
-  }) async {
+  Future<List<AppNotification>> getNotificationsOnce({required String userId, int limit = 50}) async {
     try {
       final q = await _firestore
           .collection(collectionName)
@@ -310,108 +236,49 @@ class NotificationService {
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
-
-      return q.docs.map((d) {
-        try {
-          return AppNotification.fromDocument(d);
-        } catch (e) {
-          debugPrint('NotificationService.getNotificationsOnce parse error: $e');
-          return null;
-        }
-      }).whereType<AppNotification>().toList();
-    } catch (e, st) {
-      debugPrint('NotificationService.getNotificationsOnce error: $e\n$st');
-      rethrow;
+      return q.docs.map((d) => AppNotification.fromDocument(d)).toList();
+    } catch (e) {
+      debugPrint('Error getNotificationsOnce: $e');
+      return [];
     }
   }
 
-  Stream<List<AppNotification>> streamNotificationsForUser(String userId, {int limit = 100}) {
-    final stream = _firestore
+  Stream<List<AppNotification>> streamNotifications(String userId, {int limit = 50}) {
+    return _firestore
         .collection(collectionName)
         .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .limit(limit)
-        .snapshots();
-
-    final controller = StreamController<List<AppNotification>>.broadcast();
-    StreamSubscription<QuerySnapshot>? sub;
-
-    sub = stream.listen((snap) {
-      try {
-        final list = snap.docs.map((d) {
-          try {
-            return AppNotification.fromDocument(d);
-          } catch (err) {
-            debugPrint('NotificationService.stream parse error: $err');
-            return null;
-          }
-        }).whereType<AppNotification>().toList();
-
-        controller.add(list);
-      } catch (e) {
-        debugPrint('NotificationService.stream processing error: $e');
-      }
-    }, onError: (e) {
-      debugPrint('NotificationService.stream error: $e');
-      controller.addError(e);
-    });
-
-    controller.onCancel = () async {
-      await sub?.cancel();
-      await controller.close();
-    };
-
-    return controller.stream;
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => AppNotification.fromDocument(d)).toList());
   }
 
   Future<void> markAsRead(String notificationId) async {
-    try {
-      await _firestore.collection(collectionName).doc(notificationId).update({
-        'isRead': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e, st) {
-      debugPrint('NotificationService.markAsRead error: $e\n$st');
-      rethrow;
-    }
+    await _firestore.collection(collectionName).doc(notificationId).update({
+      'isRead': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
-  Future<void> markAsReadBatch(List<String> notificationIds) async {
-    if (notificationIds.isEmpty) return;
+  Future<void> markAsReadBatch(List<String> ids) async {
+    if (ids.isEmpty) return;
     final batch = _firestore.batch();
-    try {
-      for (final id in notificationIds) {
-        final ref = _firestore.collection(collectionName).doc(id);
-        batch.update(ref, {'isRead': true, 'updatedAt': FieldValue.serverTimestamp()});
-      }
-      await batch.commit();
-    } catch (e, st) {
-      debugPrint('NotificationService.markAsReadBatch error: $e\n$st');
-      rethrow;
+    for (final id in ids) {
+      batch.update(_firestore.collection(collectionName).doc(id), {'isRead': true, 'updatedAt': FieldValue.serverTimestamp()});
     }
+    await batch.commit();
   }
 
   Future<void> deleteNotification(String notificationId) async {
-    try {
-      await _firestore.collection(collectionName).doc(notificationId).delete();
-    } catch (e, st) {
-      debugPrint('NotificationService.deleteNotification error: $e\n$st');
-      rethrow;
-    }
+    await _firestore.collection(collectionName).doc(notificationId).delete();
   }
 
   Future<int> getUnreadCount(String userId) async {
-    try {
-      final q = await _firestore
-          .collection(collectionName)
-          .where('userId', isEqualTo: userId)
-          .where('isRead', isEqualTo: false)
-          .get();
-
-      return q.docs.length;
-    } catch (e, st) {
-      debugPrint('NotificationService.getUnreadCount error: $e\n$st');
-      return 0;
-    }
+    final q = await _firestore
+        .collection(collectionName)
+        .where('userId', isEqualTo: userId)
+        .where('isRead', isEqualTo: false)
+        .get();
+    return q.docs.length;
   }
 }

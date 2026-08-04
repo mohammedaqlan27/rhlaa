@@ -1,7 +1,7 @@
 // lib/screens/vehicle_selection_screen.dart
 import 'package:flutter/material.dart';
-import '../widgets/app_card.dart';
-import '../widgets/custom_button.dart';
+import '../widgets/shared/app_card.dart';
+import '../widgets/shared/custom_button.dart';
 
 class VehicleSelectionScreen extends StatefulWidget {
   final String? initialSelection;
