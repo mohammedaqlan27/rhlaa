@@ -69,3 +69,6 @@ Thumbs.db
 .env
 .secret
 .next
+web/.next/
+build/
+node_modules/
