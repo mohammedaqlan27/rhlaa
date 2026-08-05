@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "flutter": {
     "platforms": {
       "android": {
@@ -77,28 +76,6 @@
     },
     "hosting": {
       "port": 5000
-=======
-  "functions": {
-    "source": "functions"
-  },
-  "hosting": {
-    "public": "web/.next",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "emulators": {
-    "auth": {
-      "port": 9099
-    },
-    "functions": {
-      "port": 5001
-    },
-    "firestore": {
-      "port": 8080
->>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
     },
     "pubsub": {
       "port": 8085
@@ -106,7 +83,6 @@
     "tasks": {
       "port": 9499
     },
-<<<<<<< HEAD
     "singleProjectMode": true
   },
   "firestore": {
@@ -141,12 +117,5 @@
         "supportEmail": "abdulrahmanaaqlan10@gmail.com"
       }
     }
-=======
-    "ui": {
-      "enabled": true,
-      "port": 4000
-    },
-    "singleProjectMode": true
->>>>>>> a77b7e7 (تحديث شامل: إضافة ملفات CSS (login, globals, table, buttons, forms, layout, admin, gov, agency, errors) تحديث صفحات الأدمن والمكاتب والحكومة تحسين الخدمات وربطها وإضافة ملف .gitignore لتجاهل node_modules والملفات الكبيرة)
   }
 }
