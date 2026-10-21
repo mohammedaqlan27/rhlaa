@@ -10,11 +10,19 @@ class AgenciesService {
   AgenciesService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  CollectionReference get _col => _firestore.collection('agencies');
-  CollectionReference get _transactionsCol => _firestore.collection('agency_transactions');
+  // حددنا النوع العام Map<String, dynamic> لتجنب مشاكل النوع
+  CollectionReference<Map<String, dynamic>> get _col => _firestore.collection('agencies');
+  CollectionReference<Map<String, dynamic>> get _transactionsCol => _firestore.collection('agency_transactions');
 
   /// تحويل القيم إلى double بأمان لتجنب أخطاء النوع
-  double _toDoubleSafe(dynamic v) => (v is num) ? v.toDouble() : (double.tryParse(v?.toString() ?? '0.0') ?? 0.0);
+  double _toDoubleSafe(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
 
   // =============================================================
   // 1. إدارة المكاتب (CRUD)
@@ -23,12 +31,12 @@ class AgenciesService {
   /// جلب كل المكاتب مع إمكانية الفلترة للمكاتب النشطة فقط
   Future<List<Agency>> fetchAllAgencies({bool onlyActive = false}) async {
     try {
-      Query q = _col.orderBy('createdAt', descending: true);
+      Query<Map<String, dynamic>> q = _col.orderBy('createdAt', descending: true);
       if (onlyActive) q = q.where('isActive', isEqualTo: true);
       final snap = await q.get();
       return snap.docs.map((d) => Agency.fromDoc(d)).toList();
-    } catch (e) {
-      debugPrint('Error fetchAllAgencies: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.fetchAllAgencies error: $e\n$st');
       return [];
     }
   }
@@ -39,8 +47,20 @@ class AgenciesService {
       final doc = await _col.doc(id).get();
       if (!doc.exists) return null;
       return Agency.fromDoc(doc);
-    } catch (e) {
-      debugPrint('Error getAgencyById: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.getAgencyById error: $e\n$st');
+      return null;
+    }
+  }
+
+  /// جلب مكتب بواسطة حقل authUid (مفيد لربط حساب Firebase Auth بالمكتب)
+  Future<Agency?> getAgencyByAuthUid(String authUid) async {
+    try {
+      final snap = await _col.where('authUid', isEqualTo: authUid).limit(1).get();
+      if (snap.docs.isEmpty) return null;
+      return Agency.fromDoc(snap.docs.first);
+    } catch (e, st) {
+      debugPrint('AgenciesService.getAgencyByAuthUid error: $e\n$st');
       return null;
     }
   }
@@ -50,8 +70,8 @@ class AgenciesService {
     try {
       updates['updatedAt'] = FieldValue.serverTimestamp();
       await _col.doc(id).update(updates);
-    } catch (e) {
-      debugPrint('Error updateAgency: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.updateAgency error: $e\n$st');
       rethrow;
     }
   }
@@ -60,8 +80,8 @@ class AgenciesService {
   Future<void> deleteAgency(String id) async {
     try {
       await _col.doc(id).delete();
-    } catch (e) {
-      debugPrint('Error deleteAgency: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.deleteAgency error: $e\n$st');
       rethrow;
     }
   }
@@ -73,8 +93,8 @@ class AgenciesService {
         'isActive': isActive,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-    } catch (e) {
-      debugPrint('Error setAgencyActive: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.setAgencyActive error: $e\n$st');
       rethrow;
     }
   }
@@ -87,6 +107,8 @@ class AgenciesService {
     required String mobileNumber,
     double initialBalance = 0.0,
     bool isActive = true,
+    String? authUid,
+    String? email,
   }) async {
     try {
       final existing = await _col.where('mobileNumber', isEqualTo: mobileNumber).get();
@@ -100,6 +122,8 @@ class AgenciesService {
         'managerName': managerName,
         'location': location,
         'mobileNumber': mobileNumber,
+        'email': email ?? '',
+        'authUid': authUid ?? '',
         'walletBalance': initialBalance,
         'isActive': isActive,
         'createdAt': now,
@@ -107,8 +131,8 @@ class AgenciesService {
         'searchKey': agencyName.toLowerCase(),
       });
       return docRef.id;
-    } catch (e) {
-      debugPrint('Error creating agency: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.createAgency error: $e\n$st');
       rethrow;
     }
   }
@@ -125,20 +149,23 @@ class AgenciesService {
     });
   }
 
-  /// البحث عن المكاتب برقم الهاتف أو الاسم
+  /// البحث عن المكاتب برقم الهاتف أو الاسم (بحث بسيط)
   Future<List<Agency>> searchAgencies(String query) async {
     try {
-      final snap = await _col.where('mobileNumber', isEqualTo: query).get();
-      if (snap.docs.isNotEmpty) return snap.docs.map((d) => Agency.fromDoc(d)).toList();
+      // بحث برقم الهاتف أولاً
+      final snapPhone = await _col.where('mobileNumber', isEqualTo: query).get();
+      if (snapPhone.docs.isNotEmpty) return snapPhone.docs.map((d) => Agency.fromDoc(d)).toList();
 
+      // بحث نصي مبسط باستخدام searchKey (يجب أن يكون مخزناً بصيغة lowercase)
+      final q = query.toLowerCase();
       final nameSnap = await _col
-          .where('searchKey', isGreaterThanOrEqualTo: query.toLowerCase())
-          .where('searchKey', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
+          .where('searchKey', isGreaterThanOrEqualTo: q)
+          .where('searchKey', isLessThanOrEqualTo: '$q\uf8ff')
           .limit(10)
           .get();
       return nameSnap.docs.map((d) => Agency.fromDoc(d)).toList();
-    } catch (e) {
-      debugPrint('Error searchAgencies: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.searchAgencies error: $e\n$st');
       return [];
     }
   }
@@ -147,7 +174,7 @@ class AgenciesService {
   Future<void> _updateWalletTransaction({
     required String agencyId,
     required double amount,
-    required String type,
+    required String type, // 'credit' أو 'debit'
     required String? reason,
     String? performedBy,
   }) async {
@@ -158,11 +185,10 @@ class AgenciesService {
       final snapshot = await tx.get(docRef);
       if (!snapshot.exists) throw Exception('المكتب غير موجود');
 
-      // تصحيح: الوصول للبيانات كـ Map لضمان التوافق
-      final data = snapshot.data() as Map<String, dynamic>;
+      final data = snapshot.data() as Map<String, dynamic>? ?? <String, dynamic>{};
       final currentBalance = _toDoubleSafe(data['walletBalance']);
 
-      double newBalance = type == 'credit' ? currentBalance + amount : currentBalance - amount;
+      final double newBalance = type == 'credit' ? currentBalance + amount : currentBalance - amount;
 
       if (type == 'debit' && currentBalance < amount) {
         throw Exception('رصيد المكتب غير كافٍ لإتمام العملية');
@@ -173,9 +199,9 @@ class AgenciesService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      final txDoc = _transactionsCol.doc();
-      tx.set(txDoc, {
-        'id': txDoc.id,
+      final txDocRef = _transactionsCol.doc();
+      tx.set(txDocRef, {
+        'id': txDocRef.id,
         'agencyId': agencyId,
         'amount': amount,
         'type': type,
@@ -202,27 +228,58 @@ class AgenciesService {
       final snap = await _col.get();
       double total = 0;
       for (var doc in snap.docs) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
         total += _toDoubleSafe(data['walletBalance']);
       }
       return total;
-    } catch (e) {
-      debugPrint('Error getTotalAgenciesBalance: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.getTotalAgenciesBalance error: $e\n$st');
       return 0.0;
     }
   }
 
   /// جلب سجل المعاملات المالية لمكتب معين
-  Future<List<AgencyTransaction>> fetchTransactions(String agencyId, {int limit = 50}) async {
+  /// يدعم: limit, from, to, startAfterId (للباجينايشن)
+  Future<List<AgencyTransaction>> fetchTransactions(
+      String agencyId, {
+        int limit = 50,
+        DateTime? from,
+        DateTime? to,
+        String? startAfterId,
+      }) async {
     try {
-      final snap = await _transactionsCol
+      Query<Map<String, dynamic>> q = _transactionsCol
           .where('agencyId', isEqualTo: agencyId)
-          .orderBy('createdAt', descending: true)
-          .limit(limit)
-          .get();
+          .orderBy('createdAt', descending: true);
+
+      if (from != null) {
+        q = q.where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+      }
+      if (to != null) {
+        q = q.where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(to));
+      }
+
+      if (startAfterId != null && startAfterId.isNotEmpty) {
+        // نحاول الحصول على المستند الذي يمثل نقطة البداية
+        try {
+          final docSnap = await _transactionsCol.doc(startAfterId).get();
+          if (docSnap.exists) {
+            q = q.startAfterDocument(docSnap);
+          } else {
+            // إذا لم يوجد المستند، نتجاهل startAfterId بهدوء
+            debugPrint('AgenciesService.fetchTransactions: startAfterId not found: $startAfterId');
+          }
+        } catch (e) {
+          debugPrint('AgenciesService.fetchTransactions: failed to resolve startAfterId: $e');
+        }
+      }
+
+      q = q.limit(limit);
+
+      final snap = await q.get();
       return snap.docs.map((d) => AgencyTransaction.fromDoc(d)).toList();
-    } catch (e) {
-      debugPrint('Error fetchTransactions: $e');
+    } catch (e, st) {
+      debugPrint('AgenciesService.fetchTransactions error: $e\n$st');
       return [];
     }
   }

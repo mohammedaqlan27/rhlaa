@@ -1,0 +1,430 @@
+{
+  "agencies": [
+    {
+      "id": "agency1",
+      "agencyName": "مكتب السفريات / وكالة السفريات",
+      "managerName": "مدير الوكالة",
+      "location": null,
+      "mobileNumber": "",
+      "email": "agency1@test.local",
+      "authUid": "agency1",
+      "searchKey": "",
+      "walletBalance": 0.0,
+      "isActive": true,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null
+    }
+  ],
+  "agencyTransactions": [
+    {
+      "id": "txn1",
+      "agencyId": "agency1",
+      "amount": 0.0,
+      "type": "credit",
+      "reason": null,
+      "performedBy": null,
+      "oldBalance": 0.0,
+      "newBalance": 0.0,
+      "createdAt": {
+        "_serverTimestamp": true
+      }
+    }
+  ],
+  "bookings": [
+    {
+      "id": "booking1",
+      "tripId": "trip1",
+      "passengerId": "passenger1",
+      "passengerNickname": "",
+      "driverId": "driver1",
+      "amountPaid": 0.0,
+      "totalPrice": 0.0,
+      "bookedSeatsCount": 1,
+      "isFamilyBooking": false,
+      "childrenCount": 0,
+      "bookingStatus": "pending",
+      "paymentStatus": "unpaid",
+      "paymentMethod": "",
+      "paymentIntentId": null,
+      "transactionId": null,
+      "paidAt": null,
+      "seatIndexes": null,
+      "seatNumber": null,
+      "reservedUntil": null,
+      "notes": null,
+      "canceledAt": null,
+      "updatedBy": null,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null,
+      "bookingService": null,
+      "pdfService": null,
+      "passengerSnapshot": null,
+      "pricingBreakdown": null
+    }
+  ],
+  "govFeeRules": [
+    {
+      "id": "rule1",
+      "origin": "*",
+      "destination": "*",
+      "exact": false,
+      "distanceBased": false,
+      "fixedAmount": 0.0,
+      "distanceTiers": [],
+      "priority": 0,
+      "isActive": true,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null
+    }
+  ],
+  "ratings": [
+    {
+      "id": "rating1",
+      "tripId": "trip1",
+      "bookingId": "booking1",
+      "fromUserId": "user_from",
+      "toUserId": "user_to",
+      "driverId": null,
+      "passengerId": null,
+      "rating": "",
+      "score": 0.0,
+      "category": "",
+      "note": null,
+      "comment": null,
+      "tags": [],
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif1",
+      "userId": "user_1",
+      "title": "",
+      "body": "",
+      "type": "general",
+      "metadata": null,
+      "isRead": false,
+      "actionUrl": null,
+      "priority": "normal",
+      "sendNotification": true,
+      "transactionId": null,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null
+    }
+  ],
+  "trips": [
+    {
+      "id": "trip1",
+      "driverId": "driver1",
+      "agencyId": "agency1",
+      "vehicleId": "veh1",
+      "title": "",
+      "description": "",
+      "origin": "",
+      "destination": "",
+      "tripCategory": "داخلية",
+      "vehicleType": "",
+      "totalSeats": 4,
+      "availableSeats": 4,
+      "seatStatus": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "departureTime": "2026-01-01T08:00:00Z",
+      "status": "active",
+      "price": 0.0,
+      "plateNumber": "",
+      "vehicleOwner": "",
+      "searchKey": "",
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null,
+      "flexibleWindow": null,
+      "stops": null
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "veh1",
+      "plateNumber": "",
+      "vehicleOwner": "",
+      "ownerId": null,
+      "driverId": "driver1",
+      "driverName": "",
+      "vehicleType": "",
+      "makeModelYear": "",
+      "color": "",
+      "maxCapacity": 0,
+      "licenseNumber": "",
+      "isVerified": false,
+      "sGovernmentRegistered": false,
+      "notes": null,
+      "extra": null,
+      "vehicleDocuments": [],
+      "insuranceExpiryDate": null,
+      "lastInspectionDate": null,
+      "carOwnerOfficialName": "",
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null
+    }
+  ],
+  "users": [
+    {
+      "id": "admin1",
+      "uid": "admin1",
+      "email": "admin1@test.local",
+      "userType": "admin",
+      "name": "مدير النظام الرئيسي",
+      "nickname": "",
+      "profilePictureUrl": "",
+      "mobileNumber": "",
+      "fcmTokens": [],
+      "agencyName": "",
+      "agencyStatus": "",
+      "agencyVehicles": [],
+      "agencyVerified": false,
+      "averageRating": 0.0,
+      "carOwnerOfficialName": "",
+      "childrenCount": 0,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "documents": {},
+      "driverNotes": "",
+      "drivingLicenseNumber": "",
+      "familyStatus": false,
+      "identityCardUrl": "",
+      "isActiveDriver": false,
+      "isDriver": false,
+      "isIdVerified": false,
+      "plateNumber": "",
+      "ratingCount": 0,
+      "updatedAt": null,
+      "vehicleIds": [],
+      "walletBalance": 0.0,
+      "role": "admin",
+      "agencyId": null
+    },
+    {
+      "id": "gov1",
+      "uid": "gov1",
+      "email": "gov1@test.local",
+      "userType": "government",
+      "name": "مكتب الرقابة والترخيص",
+      "nickname": "",
+      "profilePictureUrl": "",
+      "mobileNumber": "",
+      "fcmTokens": [],
+      "agencyName": "",
+      "agencyStatus": "",
+      "agencyVehicles": [],
+      "agencyVerified": false,
+      "averageRating": 0.0,
+      "carOwnerOfficialName": "",
+      "childrenCount": 0,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "documents": {},
+      "driverNotes": "",
+      "drivingLicenseNumber": "",
+      "familyStatus": false,
+      "identityCardUrl": "",
+      "isActiveDriver": false,
+      "isDriver": false,
+      "isIdVerified": false,
+      "plateNumber": "",
+      "ratingCount": 0,
+      "updatedAt": null,
+      "vehicleIds": [],
+      "walletBalance": 0.0,
+      "role": "government",
+      "agencyId": null
+    },
+    {
+      "id": "agency1",
+      "uid": "agency1",
+      "email": "agency1@test.local",
+      "userType": "agency",
+      "name": "مكتب السفريات / وكالة السفريات",
+      "nickname": "",
+      "profilePictureUrl": "",
+      "mobileNumber": "",
+      "fcmTokens": [],
+      "agencyName": "مكتب السفريات / وكالة السفريات",
+      "agencyStatus": "approved",
+      "agencyVehicles": [],
+      "agencyVerified": true,
+      "averageRating": 0.0,
+      "carOwnerOfficialName": "",
+      "childrenCount": 0,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "documents": {},
+      "driverNotes": "",
+      "drivingLicenseNumber": "",
+      "familyStatus": false,
+      "identityCardUrl": "",
+      "isActiveDriver": false,
+      "isDriver": false,
+      "isIdVerified": false,
+      "plateNumber": "",
+      "ratingCount": 0,
+      "updatedAt": null,
+      "vehicleIds": [],
+      "walletBalance": 0.0,
+      "role": "agency",
+      "agencyId": "agency1"
+    },
+    {
+      "id": "driver1",
+      "uid": "driver1",
+      "email": "driver1@test.local",
+      "userType": "driver",
+      "name": "السائق 1",
+      "nickname": "",
+      "profilePictureUrl": "",
+      "mobileNumber": "",
+      "fcmTokens": [],
+      "agencyName": "",
+      "agencyStatus": "",
+      "agencyVehicles": [],
+      "agencyVerified": false,
+      "averageRating": 0.0,
+      "carOwnerOfficialName": "",
+      "childrenCount": 0,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "documents": {},
+      "driverNotes": "",
+      "drivingLicenseNumber": "",
+      "familyStatus": false,
+      "identityCardUrl": "",
+      "isActiveDriver": true,
+      "isDriver": true,
+      "isIdVerified": true,
+      "plateNumber": "",
+      "ratingCount": 0,
+      "updatedAt": null,
+      "vehicleIds": [
+        "veh1"
+      ],
+      "walletBalance": 0.0,
+      "role": "driver",
+      "agencyId": "agency1"
+    },
+    {
+      "id": "passenger1",
+      "uid": "passenger1",
+      "email": "pass1@test.local",
+      "userType": "passenger",
+      "name": "الراكب 1",
+      "nickname": "",
+      "profilePictureUrl": "",
+      "mobileNumber": "",
+      "fcmTokens": [],
+      "agencyName": "",
+      "agencyStatus": "",
+      "agencyVehicles": [],
+      "agencyVerified": false,
+      "averageRating": 0.0,
+      "carOwnerOfficialName": "",
+      "childrenCount": 0,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "documents": {},
+      "driverNotes": "",
+      "drivingLicenseNumber": "",
+      "familyStatus": false,
+      "identityCardUrl": "",
+      "isActiveDriver": false,
+      "isDriver": false,
+      "isIdVerified": false,
+      "plateNumber": "",
+      "ratingCount": 0,
+      "updatedAt": null,
+      "vehicleIds": [],
+      "walletBalance": 0.0,
+      "role": "passenger",
+      "agencyId": null
+    }
+  ],
+  "user_notification_preferences": [
+    {
+      "id": "prefs_driver1",
+      "userId": "driver1",
+      "driver_support": true,
+      "locale": "ar",
+      "marketing": false,
+      "reminder_hours": [
+        1,
+        2,
+        3,
+        8,
+        24
+      ],
+      "transactional": false,
+      "createdAt": {
+        "_serverTimestamp": true
+      },
+      "updatedAt": null
+    }
+  ],
+  "payments": [
+    {
+      "id": "payment1",
+      "agencyCommissionAmount": 0.0,
+      "agencyCommissionRate": 0.0,
+      "agencyId": "agency1",
+      "amount": 0.0,
+      "amountPaid": 0.0,
+      "appCommissionAmount": 2.0,
+      "appCommissionRate": 0.04,
+      "bookingId": "booking1",
+      "calculatedAt": "2026-07-12T00:00:00Z",
+      "createdAt": "2026-07-08T05:12:33Z",
+      "currency": "YER",
+      "driverId": "driver1",
+      "driverNetAmount": 0.85,
+      "gatewayResponse": {},
+      "dynamic": "تفاصيل البوابة",
+      "govFee": 0.0,
+      "govFeePaidBy": "driver",
+      "notes": "ملاحظات إضافية",
+      "passengerId": "passenger1",
+      "paymentMethod": "cash",
+      "paymentStatus": "pending",
+      "platformReceives": 0.0,
+      "rawProvider": {},
+      "rawProviderResponse": "",
+      "refundReason": "",
+      "refundedAt": "2026-07-08T06:13:37Z",
+      "roundingDelta": 0.0,
+      "split": {},
+      "CommissionResult": 0.0,
+      "status": "",
+      "totalAmount": 0.0,
+      "transactionId": "txn_payment_001",
+      "updatedAt": "2026-07-08T05:12:59Z"
+    }
+  ]
+}

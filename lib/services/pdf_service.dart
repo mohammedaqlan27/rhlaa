@@ -1,6 +1,5 @@
 // lib/services/pdf_service.dart
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
@@ -56,7 +55,7 @@ class PdfService {
         .orderBy('createdAt', descending: false)
         .get();
 
-    final bookings = bookingsSnap.docs.map((d) => d.data() as Map<String, dynamic>).toList();
+    final bookings = bookingsSnap.docs.map((d) => d.data()).toList();
 
     // تحميل الخطوط والصور (الهوية البصرية)
     pw.Font? arabicFont;

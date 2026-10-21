@@ -1,142 +1,225 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/constants.dart'; // استدعاء الألوان والخطوط من AppColors
 
+/// 🕌 TravelPrayerCard: بطاقة دعاء السفر متكاملة مع AppColors والثيم
 class TravelPrayerCard extends StatelessWidget {
-  const TravelPrayerCard({super.key});
+  final String title;
+  final String content;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+  final double maxWidth;
 
-  // الألوان المستوحاة من هويتك البصرية
-  static const Color primaryBlue = Color(0xFF1E70B8);
-  static const Color goldAccent = Color(0xFFD4AF37); // لون ذهبي خفيف للروحانية
+  const TravelPrayerCard({
+    super.key,
+    required this.title,
+    required this.content,
+    this.icon = Icons.auto_stories,
+    this.color = AppColors.warning, // الافتراضي من AppColors
+    this.onTap,
+    this.maxWidth = 320,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            primaryBlue,
-            primaryBlue.withOpacity(0.8),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryBlue.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          children: [
-            // خلفية زخرفية خفيفة (Pattern)
-            Positioned(
-              right: -20,
-              top: -20,
-              child: Icon(
-                Icons.mosque_rounded,
-                size: 150,
-                color: Colors.white.withOpacity(0.05),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // الأيقونة والعنوان
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.auto_awesome, color: goldAccent, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'دعاء السفر',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.auto_awesome, color: goldAccent, size: 20),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // نص الدعاء
-                  const Text(
-                    '«سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ، وَإِنَّا إِلَى رَبِّنَا لَمُنْقَلِبُونَ، اللهُمَّ إِنَّا نَسْأَلُكَ فِي سَفَرِنَا هَذَا الْبِرَّ وَالتَّقْوَى، وَمِنَ الْعَمَلِ مَا تَرْضَى»',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      color: Colors.white,
-                      fontSize: 16,
-                      height: 1.8,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // أزرار التفاعل
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildActionButton(
-                        icon: Icons.copy_rounded,
-                        label: 'نسخ',
-                        onTap: () {
-                          Clipboard.setData(const ClipboardData(text: 'سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَذَا...'));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('تم نسخ الدعاء')),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      _buildActionButton(
-                        icon: Icons.check_circle_outline_rounded,
-                        label: 'آمين',
-                        onTap: () => Navigator.pop(context),
-                      ),
-                    ],
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // ألوان ديناميكية من AppColors
+    final primaryColor = isDark ? AppColors.backgroundDark : AppColors.primary;
+    final textColor = isDark ? AppColors.textPrimary : Colors.white;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+            onTap: onTap,
+            child: Container(
+              margin: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    primaryColor,
+                    primaryColor.withOpacity(0.85),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -20,
+                      top: -20,
+                      child: Icon(
+                        Icons.mosque_rounded,
+                        size: 140,
+                        color: Colors.white.withOpacity(0.05),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(18.0),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(icon, color: color, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: AppFonts.arabic,
+                                      color: textColor.withOpacity(0.95),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.1,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(icon, color: color, size: 20),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              content,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: AppFonts.arabic,
+                                color: textColor,
+                                fontSize: 15,
+                                height: 1.7,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 6,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 12,
+                              runSpacing: 8,
+                              children: [
+                                _ActionButton(
+                                  tooltip: 'نسخ النص',
+                                  icon: Icons.copy_rounded,
+                                  label: 'نسخ',
+                                  onPressed: () async {
+                                    await Clipboard.setData(ClipboardData(text: content));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('تم نسخ الدعاء')),
+                                    );
+                                  },
+                                ),
+                                _ActionButton(
+                                  tooltip: 'مشاركة النص',
+                                  icon: Icons.share_outlined,
+                                  label: 'مشاركة',
+                                  onPressed: () {
+                                    Share.share(content, subject: title);
+                                  },
+                                ),
+                                _ActionButton(
+                                  tooltip: 'آمين',
+                                  icon: Icons.check_circle_outline,
+                                  label: 'آمين',
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('آمين')),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                color: Colors.white,
-                fontSize: 14,
-              ),
+/// 🔘 زر تفاعل داخلي
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.tooltip = '',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final buttonColor = isDark ? AppColors.surfaceDark.withOpacity(0.18) : Colors.white.withOpacity(0.12);
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: Tooltip(
+        message: tooltip.isEmpty ? label : tooltip,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onPressed,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: buttonColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.14)),
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.white, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: AppFonts.arabic,
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

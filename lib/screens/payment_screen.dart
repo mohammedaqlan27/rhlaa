@@ -1,9 +1,9 @@
-// lib/screens/payment_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/payment_service.dart';
+import '../theme/app_colors.dart';
 import 'payment_confirmation_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -36,13 +36,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   final PaymentService _paymentService = PaymentService();
 
-  // ألوان هوية رحلاء البصرية
-  final Color _logoBlue = const Color(0xFF1E70B8);
-  final Color _logoTeal = const Color(0xFF17A5A3);
-  final Color _logoGreen = const Color(0xFF4EBF64);
-  final Color _backgroundColor = const Color(0xFFF8FAFC);
-
-  // قائمة طرق الدفع الموسعة والشاملة لليمن
   final List<Map<String, dynamic>> _methods = [
     {'title': 'نقداً عند اللقاء', 'subtitle': 'الدفع المباشر للكابتن فور الركوب', 'icon': Icons.money_rounded, 'color': Colors.green},
     {'title': 'كريمي جوال (Kuraimi)', 'subtitle': 'عبر رقم الحساب أو كود QR', 'icon': Icons.account_balance_rounded, 'color': Color(0xFF1E70B8)},
@@ -58,7 +51,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void initState() {
     super.initState();
-    // استعادة تهيئة المتغيرات الأصلية
     _currentTripId = widget.tripId;
     _currentSeatNumber = widget.seatNumber;
     _currentBookingId = widget.bookingId;
@@ -68,12 +60,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _extractArguments(); // استعادة منطق الـ Arguments
-      _loadBookingAmountIfNeeded(); // استعادة منطق جلب المبلغ من الداتابيز
+      _extractArguments();
+      _loadBookingAmountIfNeeded();
     });
   }
 
-  // استعادة وظيفة استخراج البيانات من Arguments
   void _extractArguments() {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map<String, dynamic>) {
@@ -88,7 +79,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  // استعادة وظيفة جلب مبلغ الحجز من Firestore
   Future<void> _loadBookingAmountIfNeeded() async {
     try {
       final bId = _currentBookingId;
@@ -114,10 +104,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   void _showPaymentMethodsBottomSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? AppColors.webCardBackground : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       builder: (context) {
         return Container(
@@ -127,7 +119,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             children: [
               Container(width: 45, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 20),
-              const Text('💳 اختر وسيلة الدفع', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text('💳 اختر وسيلة الدفع', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 15),
               Expanded(
                 child: ListView.builder(
@@ -142,15 +134,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       leading: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: (method['color'] as Color).withOpacity(0.1),
+                          color: (method['color'] as Color).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(method['icon'] as IconData, color: isDisabled ? Colors.grey : method['color'] as Color),
                       ),
-                      title: Text(method['title'] as String,
-                          style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: isSelected ? FontWeight.bold : FontWeight.w600, color: isDisabled ? Colors.grey : Colors.black87)),
-                      subtitle: Text(method['subtitle'] as String, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11)),
-                      trailing: isSelected ? Icon(Icons.check_circle, color: _logoGreen) : null,
+                      title: Text(
+                        method['title'] as String,
+                        style: TextStyle(
+                          fontFamily: AppFonts.arabic,
+                          fontSize: 14,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          color: isDisabled ? Colors.grey : (isDark ? Colors.white : AppColors.textPrimary),
+                        ),
+                      ),
+                      subtitle: Text(method['subtitle'] as String, style: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 11)),
+                      trailing: isSelected ? const Icon(Icons.check_circle, color: AppColors.success) : null,
                       onTap: () {
                         setState(() => _selectedMethod = method['title'] as String);
                         Navigator.pop(context);
@@ -166,7 +165,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // استعادة منطق تأكيد الدفع الأصلي بالكامل
   Future<void> _confirmPayment() async {
     if (_currentTripId == null) {
       setState(() => _errorMessage = "خطأ: معرف الرحلة مفقود");
@@ -229,56 +227,63 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        title: const Text('تأكيد الحجز والدفع', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: _logoBlue,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildSummaryCard(),
-                  const SizedBox(height: 20),
-                  const Text('وسيلة الدفع', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 10),
-                  _buildPaymentSelector(),
-                  if (_errorMessage != null) ...[
-                    const SizedBox(height: 15),
-                    Text(_errorMessage!, style: const TextStyle(fontFamily: 'Cairo', color: Colors.red, fontSize: 12)),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background,
+        appBar: AppBar(
+          title: const Text('تأكيد الحجز والدفع', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 16)),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+          elevation: 0,
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _buildSummaryCard(),
+                    const SizedBox(height: 20),
+                    const Text('وسيلة الدفع', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 10),
+                    _buildPaymentSelector(),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 15),
+                      Text(_errorMessage!, style: const TextStyle(fontFamily: AppFonts.arabic, color: AppColors.error, fontSize: 12)),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            _buildBottomAction(),
-          ],
+              _buildBottomAction(),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSummaryCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.webCardBackground : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Column(
         children: [
           Row(
-            children: [
-              Icon(Icons.receipt_long_rounded, color: _logoBlue),
-              const SizedBox(width: 10),
-              const Text('ملخص الحجز', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+            children: const [
+              Icon(Icons.receipt_long_rounded, color: AppColors.primary),
+              SizedBox(width: 10),
+              Text('ملخص الحجز', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
           const Divider(height: 30),
@@ -288,8 +293,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('المبلغ الإجمالي', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-              Text(_formatCurrency(_amount), style: TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.bold, color: _logoGreen)),
+              const Text('المبلغ الإجمالي', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold)),
+              Text(_formatCurrency(_amount), style: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.success)),
             ],
           ),
         ],
@@ -303,38 +308,40 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 13)),
-          Text(value, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(label, style: const TextStyle(fontFamily: AppFonts.arabic, color: AppColors.gray500, fontSize: 13)),
+          Text(value, style: const TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.w600, fontSize: 13)),
         ],
       ),
     );
   }
 
   Widget _buildPaymentSelector() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       onTap: _showPaymentMethodsBottomSheet,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppColors.webCardBackground : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _logoBlue.withOpacity(0.2), width: 1.5),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2), width: 1.5),
         ),
         child: Row(
           children: [
-            Icon(Icons.account_balance_wallet_rounded, color: _logoBlue),
+            const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary),
             const SizedBox(width: 15),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('طريقة الدفع المختارة', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey)),
-                  Text(_selectedMethod, style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold)),
+                  const Text('طريقة الدفع المختارة', style: TextStyle(fontFamily: AppFonts.arabic, fontSize: 10, color: AppColors.gray500)),
+                  Text(_selectedMethod, style: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 15, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.gray500),
           ],
         ),
       ),
@@ -342,16 +349,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Widget _buildBottomAction() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.webCardBackground : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ElevatedButton(
             onPressed: _isProcessing ? null : _confirmPayment,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _logoBlue,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(55),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -359,12 +371,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             child: _isProcessing
                 ? const CircularProgressIndicator(color: Colors.white)
-                : const Text('تأكيد الحجز وإصدار السند', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+                : const Text('تأكيد الحجز وإصدار السند', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 16)),
           ),
           const SizedBox(height: 10),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء والعودة', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+            child: const Text('إلغاء والعودة', style: TextStyle(fontFamily: AppFonts.arabic, color: AppColors.gray500)),
           ),
         ],
       ),

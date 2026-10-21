@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { auth } from '../../lib/firebaseClient';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useRouter } from 'next/router';
-import { getGovReports } from '../../services/govService';
+import { getGovReports } from '../../services/govFeeService';
 import { refreshIdToken } from '../../lib/auth';
 
 export default function GovPage() {

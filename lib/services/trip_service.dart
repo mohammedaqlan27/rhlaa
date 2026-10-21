@@ -1,10 +1,5 @@
 // lib/services/trip_service.dart
-//
-// خدمة إدارة الرحلات (TripService) مع تكامل لحساب رسوم الفرزة الحكومية (govFee).
-// - عند إنشاء رحلة جديدة: تحفظ الرحلة ثم تحسب govFee تلقائياً عبر GovFeesService.
-// - عند تحديث رحلة: إذا تغيّر origin أو destination أو distanceKm، تعيد حساب govFee.
-// - توفر دوال مساعدة لجلب الرحلات، تحديث المقاعد، حذف الرحلات، وإشعارات المستخدمين.
-
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
@@ -14,15 +9,15 @@ import '../models/app_user.dart';
 import '../services/notification_service.dart';
 import '../services/govfees_service.dart';
 
+/// TripService محسّن: يدعم CRUD، streams، pagination، transactions، وإعادة حساب رسوم الفرزة.
 class TripService {
   final FirebaseFirestore _firestore;
+  final GovFeesService _govFeesService;
+  final NotificationService _notificationService;
   final Uuid _uuid = const Uuid();
 
   final String _tripsCollection = 'trips';
   final String _usersCollection = 'users';
-
-  final GovFeesService _govFeesService;
-  final NotificationService _notificationService;
 
   TripService({
     FirebaseFirestore? firestore,
@@ -32,159 +27,171 @@ class TripService {
         _govFeesService = govFeesService ?? GovFeesService(),
         _notificationService = notificationService ?? NotificationService();
 
-  /// التحقق من أن المستخدم سائق وموثق (Verified)
-  Future<bool> isDriverVerified(String driverId) async {
-    try {
-      if (driverId.isEmpty) return false;
-      final doc = await _firestore.collection(_usersCollection).doc(driverId).get();
-      if (!doc.exists) return false;
-      final user = AppUser.fromDocument(doc);
-      return user.isDriver && user.isIdVerified;
-    } catch (e, st) {
-      debugPrint('TripService.isDriverVerified error: $e\n$st');
-      return false;
-    }
-  }
-
-  /// إنشاء رحلة جديدة مع حساب الرسوم الحكومية تلقائياً
-  Future<String?> createTrip(Trip trip) async {
-    try {
-      if (trip.driverId.isEmpty) {
-        debugPrint('TripService.createTrip error: driverId is empty');
-        return null;
-      }
-
-      final isDriverOk = await isDriverVerified(trip.driverId);
-      if (!isDriverOk) {
-        debugPrint('TripService: Driver is not verified or not a driver.');
-        return null;
-      }
-
-      // جلب اسم السائق من مستند المستخدم لضمان الدقة
-      String driverName = trip.driverName;
+  // -----------------------
+  // Helpers
+  // -----------------------
+  Future<T> _withRetry<T>(Future<T> Function() fn, {int retries = 2, Duration delay = const Duration(milliseconds: 200)}) async {
+    var attempt = 0;
+    var wait = delay;
+    while (true) {
       try {
-        final userDoc = await _firestore.collection(_usersCollection).doc(trip.driverId).get();
-        if (userDoc.exists) {
-          final user = AppUser.fromDocument(userDoc);
-          if (user.nickname.isNotEmpty) driverName = user.nickname;
-        }
-      } catch (_) {}
-
-      final String finalId = trip.id.isEmpty ? _uuid.v4() : trip.id;
-      final int seats = trip.totalSeats > 0 ? trip.totalSeats : 0;
-      final List<bool> initialSeatStatus = List<bool>.filled(seats, true);
-
-      final finalTrip = trip.copyWith(
-        id: finalId,
-        availableSeats: seats,
-        seatStatus: initialSeatStatus,
-        driverName: driverName,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      );
-
-      await _firestore.collection(_tripsCollection).doc(finalId).set(finalTrip.toMap());
-
-      // حساب رسوم الفرزة الحكومية تلقائياً بعد الإنشاء
-      await _govFeesService.computeAndSetGovFeeForTrip(finalId);
-
-      return finalId;
-    } catch (e, st) {
-      debugPrint('TripService.createTrip error: $e\n$st');
-      return null;
-    }
-  }
-
-  /// تحديث بيانات الرحلة وإعادة حساب الرسوم إذا تغير المسار
-  Future<bool> updateTrip(String tripId, Trip updatedTrip) async {
-    try {
-      final tripRef = _firestore.collection(_tripsCollection).doc(tripId);
-      final existingSnap = await tripRef.get();
-      if (!existingSnap.exists) return false;
-
-      final existingTrip = Trip.fromDocument(existingSnap);
-      final data = updatedTrip.toMap();
-      data.remove('createdAt'); // منع تغيير تاريخ الإنشاء
-
-      await tripRef.update(data);
-
-      // التحقق من تغير المسار لإعادة حساب الرسوم
-      final routeChanged = (existingTrip.origin != updatedTrip.origin) ||
-          (existingTrip.destination != updatedTrip.destination) ||
-          ((existingTrip.distanceKm ?? 0.0) != (updatedTrip.distanceKm ?? 0.0));
-
-      if (routeChanged) {
-        await _govFeesService.computeAndSetGovFeeForTrip(tripId);
+        return await fn();
+      } catch (e) {
+        attempt++;
+        if (attempt > retries) rethrow;
+        if (kDebugMode) debugPrint('TripService retry #$attempt after error: $e');
+        await Future.delayed(wait);
+        wait *= 2;
       }
-
-      return true;
-    } catch (e, st) {
-      debugPrint('TripService.updateTrip error: $e\n$st');
-      return false;
     }
   }
 
-  /// حذف الرحلة
-  Future<bool> deleteTrip(String tripId) async {
-    try {
-      await _firestore.collection(_tripsCollection).doc(tripId).delete();
-      return true;
-    } catch (e) {
-      return false;
-    }
+  // -----------------------
+  // Streams / Queries
+  // -----------------------
+
+  /// بث الرحلات المتاحة (status == active && availableSeats > 0)
+  Stream<List<Trip>> streamAvailableTrips({int limit = 100}) {
+    final q = _firestore
+        .collection(_tripsCollection)
+        .where('status', isEqualTo: 'active')
+        .where('availableSeats', isGreaterThan: 0)
+        .orderBy('departureTime', descending: false)
+        .limit(limit);
+    return q.snapshots().map((snap) => snap.docs.map((d) => Trip.fromDocument(d)).toList());
   }
 
-  /// جلب بيانات رحلة واحدة
-  Future<Trip?> getTripById(String tripId) async {
-    try {
-      final doc = await _firestore.collection(_tripsCollection).doc(tripId).get();
-      return doc.exists ? Trip.fromDocument(doc) : null;
-    } catch (e) {
-      return null;
-    }
+  /// بث رحلات سائق معين
+  Stream<List<Trip>> streamDriverTrips(String driverId) {
+    if (driverId.trim().isEmpty) return const Stream.empty();
+    final q = _firestore.collection(_tripsCollection).where('driverId', isEqualTo: driverId).orderBy('createdAt', descending: true);
+    return q.snapshots().map((snap) => snap.docs.map((d) => Trip.fromDocument(d)).toList());
   }
 
-  /// جلب الرحلات المتاحة للركاب
-  Future<List<Trip>> getAvailableTrips() async {
-    try {
-      final snapshot = await _firestore
+  /// جلب الرحلات المتاحة لمرة واحدة (غير متزامن)
+  Future<List<Trip>> getAvailableTrips({int limit = 500}) async {
+    return _withRetry(() async {
+      final snap = await _firestore
           .collection(_tripsCollection)
           .where('status', isEqualTo: 'active')
           .where('availableSeats', isGreaterThan: 0)
+          .orderBy('departureTime', descending: false)
+          .limit(limit)
           .get();
-
-      final list = snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList();
-
+      final list = snap.docs.map((d) => Trip.fromDocument(d)).toList();
       list.sort((a, b) {
         if (a.departureTime == null) return 1;
         if (b.departureTime == null) return -1;
         return a.departureTime!.compareTo(b.departureTime!);
       });
-
       return list;
-    } catch (e) {
-      return [];
-    }
+    });
   }
 
-  /// جلب رحلات سائق معين
-  Future<List<Trip>> getDriverTrips(String driverId) async {
+  /// جلب رحلات سائق
+  Future<List<Trip>> getDriverTrips(String driverId, {int limit = 500}) async {
+    if (driverId.trim().isEmpty) return [];
+    return _withRetry(() async {
+      final snap = await _firestore.collection(_tripsCollection).where('driverId', isEqualTo: driverId).orderBy('createdAt', descending: true).limit(limit).get();
+      return snap.docs.map((d) => Trip.fromDocument(d)).toList();
+    });
+  }
+
+  /// جلب رحلة واحدة
+  Future<Trip?> getTripById(String tripId) async {
+    if (tripId.trim().isEmpty) return null;
     try {
-      final snapshot = await _firestore
-          .collection(_tripsCollection)
-          .where('driverId', isEqualTo: driverId)
-          .get();
-
-      final list = snapshot.docs.map((doc) => Trip.fromDocument(doc)).toList();
-      list.sort((a, b) => (b.createdAt ?? Timestamp.now()).compareTo(a.createdAt ?? Timestamp.now()));
-      return list;
+      final doc = await _firestore.collection(_tripsCollection).doc(tripId).get();
+      return doc.exists ? Trip.fromDocument(doc) : null;
     } catch (e) {
-      return [];
+      if (kDebugMode) debugPrint('TripService.getTripById error: $e');
+      return null;
     }
   }
 
-  /// تحديث حالة المقاعد عند الحجز
+  // -----------------------
+  // CRUD
+  // -----------------------
+
+  /// إنشاء رحلة مع تهيئة المقاعد وحساب govFee لاحقاً
+  Future<String?> createTrip(Trip trip) async {
+    return _withRetry(() async {
+      if (trip.driverId.trim().isEmpty) {
+        if (kDebugMode) debugPrint('TripService.createTrip: driverId empty');
+        return null;
+      }
+
+      // تحقق من توثيق السائق
+      final isDriverOk = await isDriverVerified(trip.driverId);
+      if (!isDriverOk) {
+        if (kDebugMode) debugPrint('TripService.createTrip: driver not verified');
+        return null;
+      }
+
+      final id = trip.id.isEmpty ? _uuid.v4() : trip.id;
+      final seats = trip.totalSeats > 0 ? trip.totalSeats : 0;
+      final seatStatus = List<bool>.filled(seats, true);
+
+      final finalTrip = trip.copyWith(
+        id: id,
+        availableSeats: seats,
+        seatStatus: seatStatus,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      );
+
+      await _firestore.collection(_tripsCollection).doc(id).set(finalTrip.toMap());
+
+      // حساب رسوم الفرزة في الخلفية (لا نمنع الإرجاع)
+      unawaited(_govFeesService.computeAndSetGovFeeForTrip(id));
+
+      return id;
+    });
+  }
+
+  /// تحديث رحلة (يعيد true عند النجاح)
+  Future<bool> updateTrip(String tripId, Trip updatedTrip) async {
+    if (tripId.trim().isEmpty) return false;
+    return _withRetry(() async {
+      final ref = _firestore.collection(_tripsCollection).doc(tripId);
+      final snap = await ref.get();
+      if (!snap.exists) return false;
+      final existing = Trip.fromDocument(snap);
+
+      final data = updatedTrip.toMap();
+      data.remove('createdAt');
+
+      await ref.update(data);
+
+      final routeChanged = (existing.origin != updatedTrip.origin) ||
+          (existing.destination != updatedTrip.destination) ||
+          ((existing.distanceKm ?? 0.0) != (updatedTrip.distanceKm ?? 0.0));
+
+      if (routeChanged) {
+        unawaited(_govFeesService.computeAndSetGovFeeForTrip(tripId));
+      }
+      return true;
+    });
+  }
+
+  /// حذف رحلة
+  Future<bool> deleteTrip(String tripId) async {
+    if (tripId.trim().isEmpty) return false;
+    try {
+      await _firestore.collection(_tripsCollection).doc(tripId).delete();
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('TripService.deleteTrip error: $e');
+      return false;
+    }
+  }
+
+  // -----------------------
+  // Seats / status
+  // -----------------------
+
   Future<bool> updateSeatStatus(String tripId, List<bool> seatStatus, int availableSeats) async {
+    if (tripId.trim().isEmpty) return false;
     try {
       await _firestore.collection(_tripsCollection).doc(tripId).update({
         'seatStatus': seatStatus,
@@ -193,44 +200,57 @@ class TripService {
       });
       return true;
     } catch (e) {
+      if (kDebugMode) debugPrint('TripService.updateSeatStatus error: $e');
       return false;
     }
   }
 
-  /// تغيير حالة الرحلة
   Future<void> changeTripStatus(String tripId, String newStatus) async {
+    if (tripId.trim().isEmpty) return;
     try {
       await _firestore.collection(_tripsCollection).doc(tripId).update({
         'status': newStatus,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-    } catch (e) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('TripService.changeTripStatus error: $e');
+    }
   }
 
-  /// إرسال إشعار للمستخدم
+  // -----------------------
+  // Gov fees helpers
+  // -----------------------
+
+  Future<bool> recomputeAndSetGovFeeForTrip(String tripId) async {
+    return _govFeesService.computeAndSetGovFeeForTrip(tripId);
+  }
+
+  Future<int> recomputeGovFeesForAllActiveTrips({int limit = 500}) async {
+    return _govFeesService.recomputeGovFeesForAllActiveTrips(limit: limit);
+  }
+
+  // -----------------------
+  // Utilities
+  // -----------------------
+
+  Future<bool> isDriverVerified(String driverId) async {
+    try {
+      if (driverId.trim().isEmpty) return false;
+      final doc = await _firestore.collection(_usersCollection).doc(driverId).get();
+      if (!doc.exists) return false;
+      final user = AppUser.fromDocument(doc);
+      return user.isDriver && user.isIdVerified;
+    } catch (e) {
+      if (kDebugMode) debugPrint('TripService.isDriverVerified error: $e');
+      return false;
+    }
+  }
+
   Future<void> notifyUserAboutTrip(String userId, String title, String body, String type) async {
     try {
-      await _notificationService.sendNotification(
-        userId: userId,
-        title: title,
-        body: body,
-        type: type,
-      );
-    } catch (e) {}
-  }
-
-  // ============================
-  // وظائف متعلقة برسوم الفرزة
-  // ============================
-
-  /// إعادة حساب وتعيين رسوم الفرزة لرحلة محددة
-  Future<bool> recomputeAndSetGovFeeForTrip(String tripId) async {
-    return await _govFeesService.computeAndSetGovFeeForTrip(tripId);
-  }
-
-  /// إعادة حساب رسوم الفرزة لجميع الرحلات النشطة
-  Future<int> recomputeGovFeesForAllActiveTrips({int limit = 500}) async {
-    // ملاحظة: تم التأكد من مطابقة اسم الدالة مع GovFeesService المحدثة
-    return await _govFeesService.recomputeGovFeesForAllActiveTrips(limit: limit);
+      await _notificationService.sendNotification(userId: userId, title: title, body: body, type: type);
+    } catch (e) {
+      if (kDebugMode) debugPrint('TripService.notifyUserAboutTrip error: $e');
+    }
   }
 }

@@ -1,6 +1,6 @@
-// lib/widgets/app_card.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // للتحكم في الاهتزاز اللمسي
+import 'package:flutter/services.dart';
+import '../../theme/app_colors.dart';
 
 class AppCard extends StatefulWidget {
   final Widget child;
@@ -17,7 +17,7 @@ class AppCard extends StatefulWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.margin,
-    this.borderRadius = 20.0, // زوايا أكثر عصرية
+    this.borderRadius = 20.0,
     this.onTap,
     this.color,
     this.showShadow = true,
@@ -35,7 +35,6 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    // إعداد أنيميشن الضغط (ينكمش الكرت بنسبة 2%)
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 100),
@@ -53,7 +52,7 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
 
   void _handleTap() {
     if (widget.onTap != null) {
-      HapticFeedback.lightImpact(); // اهتزاز لمسي خفيف
+      HapticFeedback.lightImpact();
       _controller.forward().then((_) => _controller.reverse());
       widget.onTap!();
     }
@@ -75,31 +74,25 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
           child: Container(
             margin: widget.margin ?? const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             decoration: BoxDecoration(
-              // استخدام لون الثيم أو اللون الممرر
-              color: widget.color ?? (isDark ? const Color(0xFF1E1E1E) : Colors.white),
+              color: widget.color ?? (isDark ? AppColors.webCardBackground : Colors.white),
               borderRadius: BorderRadius.circular(widget.borderRadius),
               border: widget.showBorder
                   ? Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.black.withOpacity(0.05),
+                color: isDark ? AppColors.webBorder : Colors.black.withValues(alpha: 0.05),
                 width: 1,
               )
                   : null,
               boxShadow: widget.showShadow
                   ? [
                 BoxShadow(
-                  color: isDark
-                      ? Colors.black.withOpacity(0.3)
-                      : Colors.grey.withOpacity(0.12),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10), // ظل سفلي ناعم وعميق
-                  spreadRadius: -5,
+                  color: isDark ? Colors.black.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                  spreadRadius: -4,
                 ),
               ]
                   : null,
             ),
-            // استخدام ClipRRect لضمان عدم خروج المحتوى عن الزوايا المنحنية
             child: ClipRRect(
               borderRadius: BorderRadius.circular(widget.borderRadius),
               child: Padding(

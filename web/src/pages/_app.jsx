@@ -1,7 +1,7 @@
 // src/pages/_app.jsx
 import '../styles/globals.css';
 import ProtectedRoute from '../components/ProtectedRoute';
-
+import '../styles/login.css';
 const protectedPaths = [
   '/agency',
   '/agency/dashboard',

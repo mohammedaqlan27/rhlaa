@@ -1,5 +1,6 @@
-// lib/screens/loading_screen.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 
 class LoadingScreen extends StatelessWidget {
   final String message;
@@ -14,8 +15,10 @@ class LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
     return Scaffold(
-      backgroundColor: _baseBg, // الحفاظ على خلفية النيومورف الموحدة للتطبيق
+      backgroundColor: _baseBg, // خلفية موحدة للتطبيق
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -23,15 +26,23 @@ class LoadingScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // حاوية نيومورفية دائرية لحماية وتحسين مظهر مؤشر التحميل
+              // مؤشر التحميل داخل حاوية نيومورفية
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: _baseBg,
                   shape: BoxShape.circle,
                   boxShadow: [
-                    BoxShadow(color: const Color(0xFFCBD5E1).withOpacity(0.7), blurRadius: 16, offset: const Offset(5, 5)),
-                    const BoxShadow(color: Colors.white, blurRadius: 16, offset: Offset(-5, -5)),
+                    BoxShadow(
+                      color: const Color(0xFFCBD5E1).withValues(alpha: 0.7),
+                      blurRadius: 16,
+                      offset: const Offset(5, 5),
+                    ),
+                    const BoxShadow(
+                      color: Colors.white,
+                      blurRadius: 16,
+                      offset: Offset(-5, -5),
+                    ),
                   ],
                 ),
                 child: const CircularProgressIndicator(
@@ -41,7 +52,7 @@ class LoadingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
 
-              // نص الرسالة بخط Cairo الرسمي لـ رحلاء
+              // نص الرسالة
               Text(
                 message,
                 textAlign: TextAlign.center,
@@ -54,7 +65,7 @@ class LoadingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
 
-              // نص توضيحي تلطيفي للمستخدم
+              // نص توضيحي إضافي
               const Text(
                 'نعمل على ربطك بأفضل مسارات الرحلات في ثوانٍ معدودة...',
                 textAlign: TextAlign.center,
@@ -63,6 +74,39 @@ class LoadingScreen extends StatelessWidget {
                   fontSize: 12,
                   color: Colors.black45,
                 ),
+              ),
+              const SizedBox(height: 20),
+
+              // ✅ زر إعادة المحاولة
+              ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('إعادة المحاولة'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _logoBlue,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  final firebaseUser = userProvider.currentUser;
+                  if (firebaseUser == null) {
+                    // إعادة محاولة جلب المستخدم من Firebase
+                    final authUser = userProvider.isAuthenticated
+                        ? userProvider.currentUser
+                        : null;
+                    if (authUser != null) {
+                      userProvider.fetchUserById(authUser.uid, context: context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('لا يوجد مستخدم مسجل دخول حالياً'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  } else {
+                    // إذا كان المستخدم موجود بالفعل، نقوم بتحديث بياناته
+                    userProvider.refreshUser();
+                  }
+                },
               ),
             ],
           ),

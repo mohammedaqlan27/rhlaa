@@ -1,10 +1,20 @@
 // lib/services/notification_service.dart
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import '../models/notification_model.dart';
 import '../models/user_prefs_model.dart';
+
+class NotificationResult {
+  final bool success;
+  final String? message;
+  final dynamic raw;
+  final String? notificationId;
+
+  NotificationResult({required this.success, this.message, this.raw, this.notificationId});
+}
 
 class NotificationService {
   final FirebaseFirestore _firestore;
@@ -29,7 +39,6 @@ class NotificationService {
   // 1. إدارة التفضيلات والنصوص الديناميكية
   // ---------------------------------------------------------
 
-  /// جلب النصوص المخصصة من Firestore (مثل دعاء السفر أو رسائل التحفيز)
   Future<Map<String, dynamic>> _getRemoteContent() async {
     if (_cachedRemoteContent != null) return _cachedRemoteContent!;
     try {
@@ -39,9 +48,8 @@ class NotificationService {
         return _cachedRemoteContent!;
       }
     } catch (e) {
-      debugPrint('Error fetching remote content: $e');
+      debugPrint('NotificationService._getRemoteContent error: $e');
     }
-    // نصوص احتياطية في حال فشل الجلب
     return {
       'travel_prayer': 'سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ، وَإِنَّا إِلَى رَبِّنَا لَمُنْقَلِبُونَ',
       'mid_trip_msg': 'نأمل أنك تستمتع برحلتك الآن. نحن نتابع مسار الرحلة لضمان سلامتك.',
@@ -55,7 +63,7 @@ class NotificationService {
       if (doc.exists) return UserNotificationPrefs.fromDocument(doc);
       return UserNotificationPrefs(userId: userId);
     } catch (e) {
-      debugPrint('Error fetching prefs: $e');
+      debugPrint('NotificationService.getPrefs error: $e');
       return UserNotificationPrefs(userId: userId);
     }
   }
@@ -68,10 +76,10 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------
-  // 2. المحرك الرئيسي للإرسال (Core Engine)
+  // 2. المحرك الرئيسي للإرسال (Core Engine) - محسّن
   // ---------------------------------------------------------
 
-  Future<void> sendNotification({
+  Future<NotificationResult> sendNotification({
     required String userId,
     required String title,
     required String body,
@@ -81,52 +89,135 @@ class NotificationService {
     String priority = 'normal',
     bool sendPush = true,
     String? transactionId,
+    int maxRetries = 3,
   }) async {
     try {
-      // التحقق من التفضيلات (هل المستخدم مفعل هذا النوع من الإشعارات؟)
+      // تحقق من تفضيلات المستخدم
       final prefs = await getPrefs(userId);
-      if (type == 'promo' && !prefs.marketing) return;
-      if (type == 'transactional' && !prefs.transactional) return;
+      if (type == 'promo' && !prefs.marketing) {
+        debugPrint('NotificationService.sendNotification: user $userId unsubscribed from promo');
+        return NotificationResult(success: false, message: 'user_unsubscribed');
+      }
+      if (type == 'transactional' && !prefs.transactional) {
+        debugPrint('NotificationService.sendNotification: user $userId unsubscribed from transactional');
+        sendPush = false;
+      }
 
-      // 1. إضافة الإشعار لقاعدة البيانات (ليظهر في مركز الإشعارات داخل التطبيق)
+      // 1) حفظ الإشعار في Firestore (حالة افتراضية: pushSent=false)
       final docRef = await _firestore.collection(collectionName).add({
         'userId': userId,
         'title': title,
         'body': body,
         'type': type,
-        'metadata': metadata,
+        'metadata': metadata ?? {},
         'actionUrl': actionUrl,
         'priority': priority,
-        'sendNotification': sendPush,
+        'sendPush': sendPush,
         'transactionId': transactionId,
+        'pushSent': false,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. استدعاء Cloud Function لإرسال Push Notification حقيقي للهاتف
-      if (sendPush) {
-        await _functions.httpsCallable('sendNotificationToUser').call({
-          'notificationId': docRef.id,
-          'userId': userId,
-          'title': title,
-          'body': body,
-          'data': metadata ?? {},
-        });
+      final notificationId = docRef.id;
+
+      if (!sendPush) {
+        debugPrint('NotificationService.sendNotification: saved notification without push for user $userId id=$notificationId');
+        return NotificationResult(success: true, message: 'saved_no_push', notificationId: notificationId);
       }
+
+      final payload = {
+        'notificationId': notificationId,
+        'userId': userId,
+        'title': title,
+        'body': body,
+        'data': metadata ?? {},
+        'priority': priority,
+        'type': type,
+        'transactionId': transactionId,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      if (kDebugMode) {
+        debugPrint('NotificationService.sendNotification payload: ${jsonEncode(payload)}');
+      }
+
+      int attempt = 0;
+      int delayMs = 500;
+      while (attempt < maxRetries) {
+        attempt++;
+        try {
+          final callable = _functions.httpsCallable('sendNotificationToUser');
+          final result = await callable.call(payload);
+
+          await docRef.update({
+            'pushSent': true,
+            'pushResult': result.data,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          if (kDebugMode) {
+            debugPrint('NotificationService.sendNotification success: attempt=$attempt notificationId=$notificationId result=${result.data}');
+          }
+
+          return NotificationResult(success: true, message: 'sent', raw: result.data, notificationId: notificationId);
+        } catch (e, st) {
+          if (kDebugMode) {
+            debugPrint('NotificationService.sendNotification error: attempt=$attempt error=$e\n$st');
+          }
+
+          String errMsg = e.toString();
+          try {
+            if (e is FirebaseFunctionsException) {
+              errMsg = '${e.code} - ${e.message}';
+            }
+          } catch (_) {}
+
+          final isRetryable = _isRetryableError(e);
+
+          if (!isRetryable || attempt >= maxRetries) {
+            try {
+              await docRef.update({
+                'pushSent': false,
+                'pushError': errMsg,
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+            } catch (uErr) {
+              debugPrint('NotificationService.sendNotification: failed to update doc after error: $uErr');
+            }
+
+            return NotificationResult(success: false, message: errMsg, raw: e, notificationId: notificationId);
+          }
+
+          await Future.delayed(Duration(milliseconds: delayMs));
+          delayMs *= 2;
+          continue;
+        }
+      }
+
+      return NotificationResult(success: false, message: 'failed_after_retries', notificationId: notificationId);
     } catch (e, st) {
-      debugPrint('NotificationService.sendNotification error: $e\n$st');
+      if (kDebugMode) debugPrint('NotificationService.sendNotification outer error: $e\n$st');
+      return NotificationResult(success: false, message: e.toString());
     }
   }
 
+  bool _isRetryableError(Object e) {
+    try {
+      if (e is FirebaseFunctionsException) {
+        return e.code == 'internal' || e.code == 'unavailable' || e.code == 'deadline-exceeded' || e.code == 'resource-exhausted';
+      }
+    } catch (_) {}
+    return true;
+  }
+
   // ---------------------------------------------------------
-  // 3. قوالب الخدمات المطورة (الركاب والسائقين)
+  // 3. قوالب الخدمات المطورة (الركاب والسائقين) — تستخدم sendNotification المحسّن
   // ---------------------------------------------------------
 
-  // --- إشعارات الركاب ---
-
-  Future<void> sendPassengerPaymentReminder({required String userId, required String bookingId, required String amount}) async {
-    await sendNotification(
+  Future<NotificationResult> sendPassengerPaymentReminder({required String userId, required String bookingId, required String amount}) async {
+    return await sendNotification(
       userId: userId,
       title: 'تذكير بسداد الحجز 💳',
       body: 'نود تذكيرك بضرورة دفع $amount ريال للحجز رقم $bookingId لضمان تأكيد مقعدك.',
@@ -135,10 +226,10 @@ class NotificationService {
     );
   }
 
-  Future<void> sendTripStartGreeting({required String userId, required String passengerName, required String destination}) async {
+  Future<NotificationResult> sendTripStartGreeting({required String userId, required String passengerName, required String destination}) async {
     final content = await _getRemoteContent();
     final prayer = content['travel_prayer'];
-    await sendNotification(
+    return await sendNotification(
       userId: userId,
       title: 'انطلقت الرحلة! رافقتكم السلامة ✈️',
       body: 'أهلاً بك يا $passengerName في رحلتك إلى $destination.\n\n📌 $prayer',
@@ -147,10 +238,10 @@ class NotificationService {
     );
   }
 
-  Future<void> sendMidTripReassurance({required String userId, required String passengerName}) async {
+  Future<NotificationResult> sendMidTripReassurance({required String userId, required String passengerName}) async {
     final content = await _getRemoteContent();
     final msg = content['mid_trip_msg'];
-    await sendNotification(
+    return await sendNotification(
       userId: userId,
       title: 'نحن معك في الطريق 🛣️',
       body: 'عزيزي $passengerName، $msg',
@@ -159,8 +250,8 @@ class NotificationService {
     );
   }
 
-  Future<void> sendPassengerArrival({required String userId, required String destination}) async {
-    await sendNotification(
+  Future<NotificationResult> sendPassengerArrival({required String userId, required String destination}) async {
+    return await sendNotification(
       userId: userId,
       title: 'الحمد لله على السلامة! 🏁',
       body: 'لقد وصلنا بحمد الله إلى $destination. نرجو منك تقييم تجربتك معنا.',
@@ -169,12 +260,10 @@ class NotificationService {
     );
   }
 
-  // --- إشعارات السائقين ---
-
-  Future<void> sendDriverMotivation({required String userId, required String driverName}) async {
+  Future<NotificationResult> sendDriverMotivation({required String userId, required String driverName}) async {
     final content = await _getRemoteContent();
     final msg = content['driver_motivation'];
-    await sendNotification(
+    return await sendNotification(
       userId: userId,
       title: 'رسالة تحفيزية 🌟',
       body: 'يا $driverName، $msg',
@@ -183,10 +272,8 @@ class NotificationService {
     );
   }
 
-  // --- إشعارات الحالة العامة (السائق في الطريق، تأخر، إلخ) ---
-
-  Future<void> sendDriverOnTheWay({required String userId, required String driverName, required String plate, required String tripId}) async {
-    await sendNotification(
+  Future<NotificationResult> sendDriverOnTheWay({required String userId, required String driverName, required String plate, required String tripId}) async {
+    return await sendNotification(
       userId: userId,
       title: 'السائق في الطريق',
       body: 'السائق $driverName في الطريق إليك. رقم المركبة $plate.',
@@ -195,8 +282,8 @@ class NotificationService {
     );
   }
 
-  Future<void> sendSafetyAlert({required String userId, required String tripId, String? message}) async {
-    await sendNotification(
+  Future<NotificationResult> sendSafetyAlert({required String userId, required String tripId, String? message}) async {
+    return await sendNotification(
       userId: userId,
       title: 'تنبيه أمني هـام',
       body: message ?? 'تم استلام بلاغ أمني. فريقنا يتابع رحلتك الآن.',
@@ -238,7 +325,7 @@ class NotificationService {
           .get();
       return q.docs.map((d) => AppNotification.fromDocument(d)).toList();
     } catch (e) {
-      debugPrint('Error getNotificationsOnce: $e');
+      debugPrint('NotificationService.getNotificationsOnce error: $e');
       return [];
     }
   }

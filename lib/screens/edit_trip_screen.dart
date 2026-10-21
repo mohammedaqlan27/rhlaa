@@ -1,3 +1,4 @@
+// lib/screens/edit_trip_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -6,7 +7,6 @@ import '../models/trip.dart';
 class EditTripScreen extends StatefulWidget {
   final String tripId;
 
-  // تم تعديل السطر هنا ليتوافق مع الاستدعاء في الشاشات الأخرى (يتطلب tripId فقط)
   const EditTripScreen({super.key, required this.tripId});
 
   @override
@@ -19,13 +19,17 @@ class _EditTripScreenState extends State<EditTripScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
 
-  // المتحكمات بالنصوص
+  // المتحكمات بالنصوص الأساسية والإضافية
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _originController = TextEditingController();
   final _destinationController = TextEditingController();
   final _priceController = TextEditingController();
   final _flexibleWindowController = TextEditingController();
+  final _totalSeatsController = TextEditingController();
+  final _carPlateController = TextEditingController();
+  final _carOwnerController = TextEditingController();
+  final _cancellationPolicyController = TextEditingController();
 
   // ألوان الهوية البصرية (تطبيق رحلاء)
   final Color _logoBlue = const Color(0xFF1E70B8);
@@ -39,7 +43,6 @@ class _EditTripScreenState extends State<EditTripScreen> {
 
   String _carType = 'سيارة سيدان';
   String _tripCategory = 'داخلية';
-  int _totalSeats = 4;
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
 
@@ -57,6 +60,10 @@ class _EditTripScreenState extends State<EditTripScreen> {
     _destinationController.dispose();
     _priceController.dispose();
     _flexibleWindowController.dispose();
+    _totalSeatsController.dispose();
+    _carPlateController.dispose();
+    _carOwnerController.dispose();
+    _cancellationPolicyController.dispose();
     super.dispose();
   }
 
@@ -74,7 +81,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
       if (!doc.exists) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('❌ الرحلة المطلوبة غير موجودة')),
+            const SnackBar(content: Text('❌ الرحلة المطلوبة غير موجودة', style: TextStyle(fontFamily: 'Cairo'))),
           );
           Navigator.pop(context);
         }
@@ -91,20 +98,75 @@ class _EditTripScreenState extends State<EditTripScreen> {
       _destinationController.text = _trip.destination;
       _priceController.text = _trip.price.toString();
       _flexibleWindowController.text = _trip.flexibleWindow;
+      _totalSeatsController.text = _trip.totalSeats.toString();
+      _carPlateController.text = _trip.carPlateNumber;
+      _carOwnerController.text = _trip.carOwnerOfficialName;
+      _cancellationPolicyController.text = _trip.cancellationPolicy ?? '';
+
       _carType = _trip.vehicleType.isNotEmpty ? _trip.vehicleType : carTypes.first;
       _tripCategory = _trip.tripCategory.isNotEmpty ? _trip.tripCategory : tripCategories.first;
-      _totalSeats = _trip.totalSeats;
 
       if (_trip.departureTime != null) {
         final dt = _trip.departureTime!;
         _selectedDate = DateTime(dt.year, dt.month, dt.day);
         _selectedTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+      } else if (_trip.date != null) {
+        final dt = _trip.date!;
+        _selectedDate = DateTime(dt.year, dt.month, dt.day);
       }
 
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error loading trip: $e');
       if (mounted) Navigator.pop(context);
+    }
+  }
+
+  /// حذف الرحلة من قاعدة البيانات
+  Future<void> _deleteTrip() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('تأكيد الحذف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: const Text('هل أنت متأكد من رغبتك في حذف هذه الرحلة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+            style: TextStyle(fontFamily: 'Cairo')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('trips')
+          .doc(widget.tripId)
+          .delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ تم حذف الرحلة بنجاح', style: TextStyle(fontFamily: 'Cairo'))),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ فشل الحذف: $e')),
+        );
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -115,7 +177,6 @@ class _EditTripScreenState extends State<EditTripScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // دمج التاريخ والوقت المختارين
       final departureDateTime = DateTime(
         _selectedDate.year,
         _selectedDate.month,
@@ -123,6 +184,17 @@ class _EditTripScreenState extends State<EditTripScreen> {
         _selectedTime.hour,
         _selectedTime.minute,
       );
+
+      final newTotalSeats = int.tryParse(_totalSeatsController.text.trim()) ?? _trip.totalSeats;
+
+      // التعامل مع تحديث حالة المقاعد إذا تغير العدد الكلي
+      List<bool> updatedSeatStatus = _trip.seatStatus;
+      int updatedAvailableSeats = _trip.availableSeats;
+
+      if (newTotalSeats != _trip.totalSeats) {
+        updatedSeatStatus = List<bool>.filled(newTotalSeats, true);
+        updatedAvailableSeats = newTotalSeats;
+      }
 
       // إنشاء نسخة محدثة من الرحلة باستخدام copyWith
       final updatedTrip = _trip.copyWith(
@@ -134,8 +206,14 @@ class _EditTripScreenState extends State<EditTripScreen> {
         flexibleWindow: _flexibleWindowController.text.trim(),
         vehicleType: _carType,
         tripCategory: _tripCategory,
-        totalSeats: _totalSeats,
+        totalSeats: newTotalSeats,
+        availableSeats: updatedAvailableSeats,
+        seatStatus: updatedSeatStatus,
+        carPlateNumber: _carPlateController.text.trim(),
+        carOwnerOfficialName: _carOwnerController.text.trim(),
+        cancellationPolicy: _cancellationPolicyController.text.trim(),
         departureTime: departureDateTime,
+        date: departureDateTime,
         updatedAt: Timestamp.now(),
       );
 
@@ -148,11 +226,10 @@ class _EditTripScreenState extends State<EditTripScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ تم حفظ تعديلات رحلتك بنجاح',
-                style: TextStyle(fontFamily: 'Cairo')),
+            content: Text('✅ تم حفظ تعديلات رحلتك بنجاح', style: TextStyle(fontFamily: 'Cairo')),
           ),
         );
-        Navigator.pop(context, true); // العودة مع إشارة للنجاح لتحديث القائمة السابقة
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -182,6 +259,13 @@ class _EditTripScreenState extends State<EditTripScreen> {
         foregroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded),
+            tooltip: 'حذف الرحلة',
+            onPressed: _isSaving ? null : _deleteTrip,
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -190,7 +274,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
             key: _formKey,
             child: Column(
               children: [
-                // قسم المعلومات الأساسية
+                // 1. قسم المعلومات الأساسية
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -217,7 +301,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // قسم السعر ونوع المركبة
+                // 2. قسم السعر، المقاعد وفترة المرونة
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -228,8 +312,21 @@ class _EditTripScreenState extends State<EditTripScreen> {
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        _buildTextField(_priceController, 'السعر الجديد',
-                            icon: Icons.payments_outlined, keyboardType: TextInputType.number),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildTextField(_priceController, 'السعر',
+                                  icon: Icons.payments_outlined, keyboardType: TextInputType.number),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildTextField(_totalSeatsController, 'إجمالي المقاعد',
+                                  icon: Icons.event_seat_rounded, keyboardType: TextInputType.number),
+                            ),
+                          ],
+                        ),
+                        _buildTextField(_flexibleWindowController, 'فترة المرونة (مثال: +/- ساعة)',
+                            icon: Icons.update_rounded),
                         _buildDropdown('نوع المركبة', _carType, carTypes,
                                 (val) => setState(() => _carType = val)),
                         _buildDropdown('فئة النطاق الجغرافي', _tripCategory, tripCategories,
@@ -240,7 +337,32 @@ class _EditTripScreenState extends State<EditTripScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // قسم الوقت والتاريخ
+                // 3. قسم بيانات السيارة والمالك وسياسة الإلغاء
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: _buildTextField(_carPlateController, 'رقم لوحة السيارة', icon: Icons.pin_rounded)),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildTextField(_carOwnerController, 'اسم المالك الرسمي', icon: Icons.person_outline_rounded)),
+                          ],
+                        ),
+                        _buildTextField(_cancellationPolicyController, 'سياسة الإلغاء', icon: Icons.policy_rounded),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 4. قسم الوقت والتاريخ
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(

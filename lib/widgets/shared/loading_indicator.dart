@@ -1,8 +1,5 @@
-// lib/widgets/loading_indicator.dart
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
-// تم إبقاء الاستيراد كما هو لتجنب أي تعارض
-import '../../utils/constants.dart' hide AppColors, AppFonts;
 
 class CustomLoadingIndicator extends StatelessWidget {
   final double size;
@@ -22,7 +19,8 @@ class CustomLoadingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // التصميم الأساسي للمؤشر
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     Widget indicator = Column(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -33,7 +31,6 @@ class CustomLoadingIndicator extends StatelessWidget {
           child: CircularProgressIndicator(
             strokeWidth: strokeWidth,
             valueColor: AlwaysStoppedAnimation<Color>(
-              // تم التعديل هنا: استخدام primary بدلاً من primaryBlue
               color ?? AppColors.primary,
             ),
           ),
@@ -42,40 +39,34 @@ class CustomLoadingIndicator extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             message!,
-            style: const TextStyle(
-              // استخدام المتغير الصحيح للخط من ملف app_colors.dart
+            style: TextStyle(
               fontFamily: AppFonts.arabic,
               fontSize: 14,
-              // تم التعديل هنا: استخدام textPrimary بدلاً من textDark
-              color: AppColors.textPrimary,
+              color: isDark ? Colors.white70 : AppColors.textPrimary,
             ),
           ),
         ],
       ],
     );
 
-    // إذا كان المطلوب عرض المؤشر بملء الشاشة
     if (isFullScreen) {
       return Scaffold(
-        // استخدام لون خلفية شفاف قليلاً
-        backgroundColor: Colors.white.withOpacity(0.8),
+        backgroundColor: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.85),
         body: Center(
           child: indicator,
         ),
       );
     }
 
-    // العرض العادي (داخل حاوية)
     return Center(child: indicator);
   }
 
-  // دالة مساعدة لإظهار التحميل كـ Dialog (نافذة منبثقة)
   static void show(BuildContext context, {String? message}) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => PopScope(
-        canPop: false, // منع إغلاق النافذة بالرجوع للخلف أثناء التحميل
+        canPop: false,
         child: CustomLoadingIndicator(
           isFullScreen: false,
           message: message,
@@ -84,7 +75,6 @@ class CustomLoadingIndicator extends StatelessWidget {
     );
   }
 
-  // دالة لإغلاق نافذة التحميل
   static void hide(BuildContext context) {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);

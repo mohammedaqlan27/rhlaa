@@ -147,7 +147,7 @@ class Payment {
 
     return Payment(
       id: doc.id,
-      agencyId: s(['agencyId', 'agency_id', 'agency'])!.isNotEmpty ? s(['agencyId', 'agency_id', 'agency']) : null,
+      agencyId: s(['agencyId', 'agency_id', 'agency']).isNotEmpty ? s(['agencyId', 'agency_id', 'agency']) : null,
       amount: _toDoubleSafe(data['amount'] ?? data['totalAmount'] ?? data['total_amount']),
       amountPaid: _toDoubleSafe(data['amountPaid'] ?? data['amount_paid']),
       currency: s(['currency', 'curr']),

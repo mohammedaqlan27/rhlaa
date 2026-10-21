@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart' as intl;
+import 'package:provider/provider.dart';
 
-import '../services/booking_service.dart';
+import '../providers/booking_provider.dart';
 import '../screens/rating_screen.dart';
 import '../models/booking_model.dart';
 import '../models/trip.dart';
-import '../widgets/shared/app_card.dart';
 import 'trip_details_screen.dart';
 
 class MyBookingsScreen extends StatefulWidget {
@@ -19,9 +20,9 @@ class MyBookingsScreen extends StatefulWidget {
 }
 
 class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerProviderStateMixin {
-  late Future<List<Map<String, dynamic>>> _bookingsFuture;
-  late TabController _tabController;
-  bool _isCancelling = false;
+  late final TabController _tabController;
+  final Map<String, Trip> _tripsCache = {};
+  bool _isLoadingTrips = false;
 
   static const Color _primaryBlue = Color(0xFF1E70B8);
   static const Color _accentTeal = Color(0xFF17A5A3);
@@ -32,7 +33,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _bookingsFuture = _fetchBookings();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && mounted) {
+        context.read<BookingProvider>().listenToUserBookings(uid);
+      }
+    });
   }
 
   @override
@@ -41,126 +48,178 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    setState(() {
-      _bookingsFuture = _fetchBookings();
-    });
-    await _bookingsFuture;
-  }
+  /// جلب تفاصيل الرحلات المرتبطة بالحجوزات دفعة واحدة مع حماية ضد التكرار المستمر
+  Future<void> _fetchTripsForBookings(List<Booking> bookings) async {
+    if (_isLoadingTrips) return;
 
-  Future<List<Map<String, dynamic>>> _fetchBookings() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return [];
-    final List<Map<String, dynamic>> allBookings = [];
+    final missingTripIds = bookings
+        .map((b) => b.tripId)
+        .where((id) => id.isNotEmpty && !_tripsCache.containsKey(id))
+        .toSet();
+
+    if (missingTripIds.isEmpty) return;
+
+    if (mounted) setState(() => _isLoadingTrips = true);
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('bookings')
-          .where('passengerId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .get();
+      final chunks = _chunkList(missingTripIds.toList(), 10);
+      for (final chunk in chunks) {
+        final snap = await FirebaseFirestore.instance
+            .collection('trips')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
 
-      for (var doc in snapshot.docs) {
-        final booking = Booking.fromDocument(doc);
-        final tripSnap = await FirebaseFirestore.instance.collection('trips').doc(booking.tripId).get();
-        if (tripSnap.exists) {
-          allBookings.add({
-            'booking': booking,
-            'trip': Trip.fromDocument(tripSnap),
-            'raw': doc.data(),
-          });
+        for (var doc in snap.docs) {
+          _tripsCache[doc.id] = Trip.fromDocument(doc);
         }
       }
-      return allBookings;
     } catch (e) {
-      debugPrint('Error: $e');
-      return [];
+      debugPrint('Error fetching cached trips: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingTrips = false);
     }
+  }
+
+  List<List<T>> _chunkList<T>(List<T> list, int chunkSize) {
+    final chunks = <List<T>>[];
+    for (var i = 0; i < list.length; i += chunkSize) {
+      chunks.add(list.sublist(i, i + chunkSize > list.length ? list.length : i + chunkSize));
+    }
+    return chunks;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bgGrey,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: _primaryBlue, size: 20),
-          onPressed: () => Navigator.pop(context),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: _bgGrey,
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: _primaryBlue, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'حجوزاتي',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _textDark, fontSize: 18),
+          ),
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorColor: _primaryBlue,
+            indicatorWeight: 3,
+            labelColor: _primaryBlue,
+            unselectedLabelColor: Colors.grey,
+            labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14),
+            tabs: const [
+              Tab(text: 'الرحلات القادمة'),
+              Tab(text: 'الرحلات السابقة'),
+            ],
+          ),
         ),
-        title: const Text(
-          'حجوزاتي',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _textDark, fontSize: 18),
+        body: Consumer<BookingProvider>(
+          builder: (context, bookingProvider, child) {
+            final bookings = bookingProvider.userBookings;
+
+            // تشغيل الجلب فقط إذا وجدنا حجوزات جديدة غير مخزنة كاش
+            if (bookings.isNotEmpty) {
+              final hasMissing = bookings.any((b) => b.tripId.isNotEmpty && !_tripsCache.containsKey(b.tripId));
+              if (hasMissing && !_isLoadingTrips) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _fetchTripsForBookings(bookings);
+                });
+              }
+            }
+
+            return Stack(
+              children: [
+                TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildBookingsList(bookings, isPast: false),
+                    _buildBookingsList(bookings, isPast: true),
+                  ],
+                ),
+                if (bookingProvider.isLoading || _isLoadingTrips)
+                  Container(
+                    color: Colors.black26,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: _primaryBlue),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: _primaryBlue,
-          indicatorWeight: 3,
-          labelColor: _primaryBlue,
-          unselectedLabelColor: Colors.grey,
-          labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14),
-          tabs: const [
-            Tab(text: 'الرحلات القادمة'),
-            Tab(text: 'الرحلات السابقة'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildBookingsList(isPast: false),
-          _buildBookingsList(isPast: true),
-        ],
       ),
     );
   }
 
-  Widget _buildBookingsList({required bool isPast}) {
+  Widget _buildBookingsList(List<Booking> allBookings, {required bool isPast}) {
+    final filteredBookings = allBookings.where((booking) {
+      final isDone = _isDoneStatus(booking.bookingStatus);
+      return isPast ? isDone : !isDone;
+    }).toList();
+
+    if (filteredBookings.isEmpty) {
+      return _buildEmptyState(isPast);
+    }
+
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: () async {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && mounted) {
+          context.read<BookingProvider>().listenToUserBookings(uid);
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      },
       color: _primaryBlue,
-      child: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _bookingsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: _primaryBlue));
-          }
-
-          final list = snapshot.data ?? [];
-          final filteredList = list.where((item) {
-            final status = (item['booking'] as Booking).bookingStatus.toLowerCase();
-            final isDone = status.contains('مكتمل') || status.contains('complete') || status.contains('ملغي');
-            return isPast ? isDone : !isDone;
-          }).toList();
-
-          if (filteredList.isEmpty) return _buildEmptyState(isPast);
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: filteredList.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 16),
-            itemBuilder: (context, index) => _buildModernBookingCard(filteredList[index]),
-          );
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: filteredBookings.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 16),
+        itemBuilder: (context, index) {
+          final booking = filteredBookings[index];
+          final trip = _tripsCache[booking.tripId] ??
+              Trip(
+                id: booking.tripId,
+                driverId: booking.driverId,
+                driverName: 'جاري التحميل...',
+                destination: 'غير محدد',
+                departureTime: null,
+                status: '',
+              );
+          return _buildModernBookingCard(booking, trip);
         },
       ),
     );
   }
 
-  Widget _buildModernBookingCard(Map<String, dynamic> data) {
-    final Booking booking = data['booking'];
-    final Trip trip = data['trip'];
+  Widget _buildModernBookingCard(Booking booking, Trip trip) {
+    final String driverName = (trip.driverName ?? '').trim().isEmpty ? 'غير معروف' : trip.driverName!;
+    final String destination = (trip.destination ?? '').trim().isEmpty ? 'غير محدد' : trip.destination!;
+
+    final String dateStr = trip.departureTime != null
+        ? intl.DateFormat('yyyy-MM-dd | hh:mm a', 'ar').format(trip.departureTime!)
+        : '-';
+
+    final String bookingStatus = booking.bookingStatus;
+    final int seatsCount = booking.bookedSeatsCount;
 
     Color statusColor = Colors.orange;
-    if (booking.bookingStatus.contains('مؤكد')) statusColor = Colors.green;
-    if (booking.bookingStatus.contains('ملغي')) statusColor = Colors.red;
+    final statusLower = bookingStatus.toLowerCase();
+    if (statusLower.contains('مؤكد') || statusLower.contains('confirmed')) statusColor = Colors.green;
+    if (statusLower.contains('ملغي') || statusLower.contains('cancel') || statusLower.contains('rejected')) {
+      statusColor = Colors.red;
+    }
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -176,15 +235,15 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.local_shipping_outlined, color: _primaryBlue, size: 20),
+                    const Icon(Icons.directions_bus_outlined, color: _primaryBlue, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      'إلى ${trip.destination}',
+                      'إلى $destination',
                       style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ],
                 ),
-                _buildStatusBadge(booking.bookingStatus, statusColor),
+                _buildStatusBadge(bookingStatus, statusColor),
               ],
             ),
           ),
@@ -192,15 +251,15 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                _buildInfoRow(Icons.person_pin, 'الكابتن', trip.driverName),
+                _buildInfoRow(Icons.person_pin, 'الكابتن', driverName),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: _buildInfoRow(Icons.calendar_today, 'التاريخ', trip.date as String)),
-                    Expanded(child: _buildInfoRow(Icons.event_seat, 'المقاعد', '${booking.bookedSeatsCount} مقاعد')),
+                    Expanded(child: _buildInfoRow(Icons.calendar_today, 'التاريخ', dateStr)),
+                    Expanded(child: _buildInfoRow(Icons.event_seat, 'المقاعد', '$seatsCount مقاعد')),
                   ],
                 ),
-                const Divider(height: 30),
+                const Divider(height: 24),
                 Row(
                   children: [
                     Expanded(
@@ -208,35 +267,58 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
                         label: 'التفاصيل',
                         icon: Icons.info_outline,
                         color: _primaryBlue,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip))),
+                        onTap: () {
+                          if (trip.id.isNotEmpty) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => TripDetailsScreen(trip: trip)),
+                            );
+                          }
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
-                    if (!isDone(booking.bookingStatus))
+                    if (!_isDoneStatus(bookingStatus))
                       Expanded(
                         child: _buildActionButton(
                           label: 'إلغاء',
-                          icon: Icons.close,
+                          icon: Icons.close_rounded,
                           color: Colors.redAccent,
                           onTap: () => _confirmAndCancel(context, booking),
                         ),
                       )
-                    else if (booking.bookingStatus.contains('مكتمل'))
+                    else if (statusLower.contains('مكتمل') || statusLower.contains('complete'))
                       Expanded(
                         child: _buildActionButton(
                           label: 'تقييم',
-                          icon: Icons.star_border,
+                          icon: Icons.star_border_rounded,
                           color: _accentTeal,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(tripId: trip.id, targetUserId: trip.driverId, userType: 'سائق'))),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RatingScreen(
+                                tripId: trip.id,
+                                targetUserId: trip.driverId,
+                                userType: 'سائق',
+                              ),
+                            ),
+                          ),
                         ),
                       ),
+                    const SizedBox(width: 6),
                     IconButton(
+                      tooltip: 'نسخ رقم الحجز',
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: booking.id));
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📋 تم نسخ رقم الحجز')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('📋 تم نسخ رقم الحجز بنجاح', style: TextStyle(fontFamily: 'Cairo')),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
                       },
-                      icon: const Icon(Icons.copy_all, size: 20, color: Colors.grey),
-                    )
+                      icon: const Icon(Icons.copy_all_outlined, size: 20, color: Colors.grey),
+                    ),
                   ],
                 ),
               ],
@@ -248,10 +330,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   }
 
   Widget _buildStatusBadge(String status, Color color) {
+    final display = status.isEmpty ? 'غير معروف' : status;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Text(status, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+      child: Text(display, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
     );
   }
 
@@ -261,12 +344,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
         Icon(icon, size: 16, color: Colors.grey[400]),
         const SizedBox(width: 6),
         Text('$label: ', style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold)),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
 
-  // تم تصحيح هذه الدالة بإضافة الأقواس المتعرجة {} لجعل البارامترات مسماة
   Widget _buildActionButton({
     required String label,
     required IconData icon,
@@ -275,19 +363,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           border: Border.all(color: color.withOpacity(0.3)),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: color, fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold)),
+            Text(label, style: TextStyle(color: color, fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -299,10 +387,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(isPast ? Icons.history : Icons.calendar_today, size: 64, color: Colors.grey[200]),
+          Icon(isPast ? Icons.history_rounded : Icons.calendar_today_rounded, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
-            isPast ? 'لا توجد رحلات سابقة' : 'لا توجد حجوزات نشطة حالياً',
+            isPast ? 'لا توجد رحلات سابقة مسجلة' : 'لا توجد حجوزات نشطة حالياً',
             style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 14),
           ),
         ],
@@ -310,40 +398,61 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> with SingleTickerPr
     );
   }
 
-  bool isDone(String status) {
-    final s = status.toLowerCase();
-    return s.contains('مكتمل') || s.contains('complete') || s.contains('ملغي');
+  bool _isDoneStatus(String? status) {
+    final s = (status ?? '').toLowerCase();
+    return s.contains('مكتمل') ||
+        s.contains('complete') ||
+        s.contains('ملغي') ||
+        s.contains('cancel') ||
+        s.contains('rejected');
   }
 
   Future<void> _confirmAndCancel(BuildContext context, Booking booking) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('تأكيد الإلغاء', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        content: const Text('هل أنت متأكد أنك تريد إلغاء هذا الحجز؟', style: TextStyle(fontFamily: 'Cairo')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('تأكيد الإلغاء', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('تأكيد الإلغاء', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          content: const Text('هل أنت متأكد من رغبتك في إلغاء هذا الحجز؟', style: TextStyle(fontFamily: 'Cairo')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('تراجع', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تأكيد الإلغاء', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirmed != true) return;
 
-    setState(() => _isCancelling = true);
-    try {
-      final result = await BookingService().cancelBooking(bookingId: booking.id, passengerId: booking.passengerId);
-      if (result == null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إلغاء الحجز بنجاح')));
-        _refresh();
-      }
-    } finally {
-      if (mounted) setState(() => _isCancelling = false);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final provider = context.read<BookingProvider>();
+    final success = await provider.cancelUserBooking(booking.id, uid);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success ? '✅ تم إلغاء الحجز بنجاح' : (provider.errorMessage ?? 'فشل إلغاء الحجز'),
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+          backgroundColor: success ? Colors.green : Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 }

@@ -33,13 +33,14 @@ class AppUser {
   final String? driverNotes;
   final String? plateNumber;
   final String? carOwnerOfficialName;
-  final String? agencyStatus; // الحقل الجديد: مستقل، تابع لمكتب، إلخ
+  final String? agencyStatus; // مستقل، تابع لمكتب، إلخ
   final List<String> vehicleIds;
 
   // 5. بيانات المكتب/الوكالة
   final String? agencyName;
   final bool agencyVerified;
   final List<String> agencyVehicles;
+  final String? agencyId; // ربط صريح إلى مستند المكتب (مهم)
 
   // 6. بيانات إضافية
   final double walletBalance;
@@ -69,11 +70,12 @@ class AppUser {
     this.driverNotes,
     this.plateNumber,
     this.carOwnerOfficialName,
-    this.agencyStatus, // إضافة الحقل هنا
+    this.agencyStatus,
     this.vehicleIds = const [],
     this.agencyName,
     this.agencyVerified = false,
     this.agencyVehicles = const [],
+    this.agencyId,
     this.walletBalance = 0.0,
   });
 
@@ -90,7 +92,7 @@ class AppUser {
       'averageRating': averageRating,
       'ratingCount': ratingCount,
       'familyStatus': familyStatus,
-      'childrenCount': childrenCount.toString(),
+      'childrenCount': childrenCount,
       'isIdVerified': isIdVerified,
       'idNumber': idNumber,
       'identityCardUrl': identityCardUrl,
@@ -101,15 +103,16 @@ class AppUser {
       'driverNotes': driverNotes,
       'plateNumber': plateNumber,
       'carOwnerOfficialName': carOwnerOfficialName,
-      'agencyStatus': agencyStatus, // حفظ الحقل الجديد
+      'agencyStatus': agencyStatus,
       'vehicleIds': vehicleIds,
       'agencyName': agencyName,
       'agencyVerified': agencyVerified,
       'agencyVehicles': agencyVehicles,
+      'agencyId': agencyId,
       'walletBalance': walletBalance,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
-    };
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
+    }..removeWhere((k, v) => v == null);
   }
 
   /// خريطة خاصة بإنشاء المستخدم لأول مرة
@@ -156,11 +159,12 @@ class AppUser {
     String? driverNotes,
     String? plateNumber,
     String? carOwnerOfficialName,
-    String? agencyStatus, // إضافة الحقل هنا
+    String? agencyStatus,
     List<String>? vehicleIds,
     String? agencyName,
     bool? agencyVerified,
     List<String>? agencyVehicles,
+    String? agencyId,
     double? walletBalance,
   }) {
     return AppUser(
@@ -188,11 +192,12 @@ class AppUser {
       driverNotes: driverNotes ?? this.driverNotes,
       plateNumber: plateNumber ?? this.plateNumber,
       carOwnerOfficialName: carOwnerOfficialName ?? this.carOwnerOfficialName,
-      agencyStatus: agencyStatus ?? this.agencyStatus, // تحديث الحقل الجديد
+      agencyStatus: agencyStatus ?? this.agencyStatus,
       vehicleIds: vehicleIds ?? this.vehicleIds,
       agencyName: agencyName ?? this.agencyName,
       agencyVerified: agencyVerified ?? this.agencyVerified,
       agencyVehicles: agencyVehicles ?? this.agencyVehicles,
+      agencyId: agencyId ?? this.agencyId,
       walletBalance: walletBalance ?? this.walletBalance,
     );
   }
@@ -201,38 +206,51 @@ class AppUser {
   factory AppUser.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
+    Timestamp? parseTs(dynamic v) {
+      if (v == null) return null;
+      if (v is Timestamp) return v;
+      if (v is DateTime) return Timestamp.fromDate(v);
+      if (v is int) return Timestamp.fromMillisecondsSinceEpoch(v);
+      if (v is String) {
+        final parsed = DateTime.tryParse(v);
+        if (parsed != null) return Timestamp.fromDate(parsed);
+      }
+      return null;
+    }
+
     return AppUser(
       id: doc.id,
-      uid: data['uid'] ?? doc.id,
-      name: data['name'] ?? '',
-      nickname: data['nickname'] ?? '',
-      email: data['email'] ?? '',
-      userType: (data['userType'] ?? 'passenger').toString().toLowerCase(),
-      profilePictureUrl: data['profilePictureUrl'],
-      mobileNumber: data['mobileNumber'],
+      uid: (data['uid'] ?? doc.id) as String,
+      name: (data['name'] ?? data['displayName'] ?? '') as String,
+      nickname: (data['nickname'] ?? '') as String,
+      email: (data['email'] ?? '') as String,
+      userType: (data['userType'] ?? data['role'] ?? 'passenger').toString().toLowerCase(),
+      profilePictureUrl: data['profilePictureUrl'] as String?,
+      mobileNumber: data['mobileNumber'] as String?,
       averageRating: (data['averageRating'] is num) ? (data['averageRating'] as num).toDouble() : 0.0,
       ratingCount: (data['ratingCount'] is num) ? (data['ratingCount'] as num).toInt() : 0,
-      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : null,
-      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] as Timestamp : null,
+      createdAt: parseTs(data['createdAt']),
+      updatedAt: parseTs(data['updatedAt']),
       familyStatus: data['familyStatus'] ?? false,
       childrenCount: data['childrenCount'] is int
           ? data['childrenCount']
           : int.tryParse(data['childrenCount']?.toString() ?? '0') ?? 0,
       isIdVerified: data['isIdVerified'] ?? false,
-      idNumber: data['idNumber'],
-      identityCardUrl: data['identityCardUrl'],
+      idNumber: data['idNumber'] as String?,
+      identityCardUrl: data['identityCardUrl'] as String?,
       documents: data['documents'] != null ? Map<String, dynamic>.from(data['documents']) : null,
       isDriver: data['isDriver'] ?? false,
       isActiveDriver: data['isActiveDriver'] ?? false,
-      drivingLicenseNumber: data['drivingLicenseNumber'],
-      driverNotes: data['driverNotes'],
-      plateNumber: data['plateNumber'] ?? data['carPlateNumber'],
-      carOwnerOfficialName: data['carOwnerOfficialName'],
-      agencyStatus: data['agencyStatus'], // قراءة الحقل الجديد من Firestore
+      drivingLicenseNumber: data['drivingLicenseNumber'] as String?,
+      driverNotes: data['driverNotes'] as String?,
+      plateNumber: data['plateNumber'] ?? data['carPlateNumber'] as String?,
+      carOwnerOfficialName: data['carOwnerOfficialName'] as String?,
+      agencyStatus: data['agencyStatus'] as String?,
       vehicleIds: data['vehicleIds'] != null ? List<String>.from(data['vehicleIds']) : [],
-      agencyName: data['agencyName'],
+      agencyName: data['agencyName'] as String?,
       agencyVerified: data['agencyVerified'] ?? false,
       agencyVehicles: data['agencyVehicles'] != null ? List<String>.from(data['agencyVehicles']) : [],
+      agencyId: data['agencyId'] as String?,
       walletBalance: (data['walletBalance'] is num) ? (data['walletBalance'] as num).toDouble() : 0.0,
     );
   }

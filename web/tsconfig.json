@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2020", // تحديث الهدف لدعم ميزات أحدث
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true, // الأفضل تفعيل الوضع الصارم لضبط الأخطاء مبكرًا
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler", // استخدم "node" بدل "bundler" لمزيد توافق مع Next.js
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx", // Next.js يفضل "preserve" أو "react-jsx" حسب الإصدار
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

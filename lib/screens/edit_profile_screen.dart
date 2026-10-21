@@ -209,7 +209,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: _primaryBlue.withOpacity(0.2), width: 4),
+                  border: Border.all(color: _primaryBlue.withValues(alpha: 0.2), width: 4),
                 ),
                 child: CircleAvatar(
                   radius: 60,

@@ -9,6 +9,7 @@ const db = admin.firestore();
 const agenciesCol = db.collection('agencies');
 const transactionsCol = db.collection('agency_transactions');
 const paymentsCol = db.collection('payments');
+const paymentsFunctions = require('./payments');
 
 /**
  * Helpers
@@ -25,8 +26,6 @@ function hasRole(context, role) {
 
 /**
  * createAgencySafe
- * Callable function: ينشئ مكتبًا جديدًا داخل Transaction ويتحقق من عدم تكرار رقم الهاتف.
- * متطلبات: المستدعي يجب أن يكون admin.
  */
 exports.createAgencySafe = functions.https.onCall(async (data, context) => {
   requireAuth(context);
@@ -78,9 +77,9 @@ exports.createAgencySafe = functions.https.onCall(async (data, context) => {
 
 /**
  * creditAgency
- * Callable function: يشحن محفظة المكتب ويُسجّل معاملة في agency_transactions.
- * صلاحية: admin أو صاحب المكتب نفسه (role 'agency' ويطابق ownerId).
  */
+ exports.createPayment = paymentsFunctions.createPayment;
+
 exports.creditAgency = functions.https.onCall(async (data, context) => {
   requireAuth(context);
   const callerUid = context.auth.uid;
@@ -92,7 +91,6 @@ exports.creditAgency = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // صلاحية: admin أو صاحب المكتب نفسه
     if (callerRole === 'admin') {
       // ok
     } else if (callerRole === 'agency') {
@@ -147,7 +145,6 @@ exports.creditAgency = functions.https.onCall(async (data, context) => {
 
 /**
  * debitAgency
- * Callable function: يخصم من محفظة المكتب بعد التحقق من كفاية الرصيد.
  */
 exports.debitAgency = functions.https.onCall(async (data, context) => {
   requireAuth(context);
@@ -160,7 +157,6 @@ exports.debitAgency = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // صلاحية: admin أو صاحب المكتب نفسه
     if (callerRole === 'admin') {
       // ok
     } else if (callerRole === 'agency') {
@@ -218,8 +214,6 @@ exports.debitAgency = functions.https.onCall(async (data, context) => {
 
 /**
  * exportTransactions
- * Callable function that returns CSV of transactions for an agency between dates.
- * For large exports: يفضل رفع الملف إلى Cloud Storage وإرجاع رابط موقّع.
  */
 exports.exportTransactions = functions.https.onCall(async (data, context) => {
   requireAuth(context);
@@ -229,7 +223,6 @@ exports.exportTransactions = functions.https.onCall(async (data, context) => {
   const { agencyId, fromTs, toTs } = data || {};
   if (!agencyId) throw new functions.https.HttpsError('invalid-argument', 'agencyId is required.');
 
-  // Authorization: admin or agency owner
   if (!(callerRole === 'admin' || callerRole === 'agency')) {
     throw new functions.https.HttpsError('permission-denied', 'Not authorized to export transactions.');
   }
@@ -247,66 +240,115 @@ exports.exportTransactions = functions.https.onCall(async (data, context) => {
     const from = fromTs ? admin.firestore.Timestamp.fromMillis(Number(fromTs)) : admin.firestore.Timestamp.fromMillis(0);
     const to = toTs ? admin.firestore.Timestamp.fromMillis(Number(toTs)) : admin.firestore.Timestamp.now();
 
-    const snap = await transactionsCol
-      .where('agencyId', '==', agencyId)
-      .where('createdAt', '>=', from)
-      .where('createdAt', '<=', to)
-      .orderBy('createdAt', 'desc')
-      .get();
+       const snap = await transactionsCol
+         .where('agencyId', '==', agencyId)
+         .where('createdAt', '>=', from)
+         .where('createdAt', '<=', to)
+         .orderBy('createdAt', 'desc')
+         .get();
 
-    const rows = snap.docs.map((d) => {
-      const dt = d.data();
-      return {
-        id: dt.id,
-        agencyId: dt.agencyId,
-        type: dt.type,
-        amount: dt.amount,
-        reason: dt.reason,
-        performedBy: dt.performedBy,
-        createdAt: dt.createdAt ? dt.createdAt.toDate().toISOString() : '',
-        oldBalance: dt.oldBalance,
-        newBalance: dt.newBalance,
-      };
-    });
+       const rows = snap.docs.map((d) => {
+         const dt = d.data();
+         return {
+           id: dt.id,
+           agencyId: dt.agencyId,
+           type: dt.type,
+           amount: dt.amount,
+           reason: dt.reason,
+           performedBy: dt.performedBy,
+           createdAt: dt.createdAt ? dt.createdAt.toDate().toISOString() : '',
+           oldBalance: dt.oldBalance,
+           newBalance: dt.newBalance,
+         };
+       });
 
-    const csv = stringify(rows, { header: true });
-    return { success: true, csv };
-  } catch (err) {
-    functions.logger.error('exportTransactions failed', err);
-    if (err instanceof functions.https.HttpsError) throw err;
-    throw new functions.https.HttpsError('internal', 'Failed to export transactions');
-  }
-});
+       const csv = stringify(rows, { header: true });
+       return { success: true, csv };
+     } catch (err) {
+       functions.logger.error('exportTransactions failed', err);
+       if (err instanceof functions.https.HttpsError) throw err;
+       throw new functions.https.HttpsError('internal', 'Failed to export transactions');
+     }
+   });
 
-/**
- * setUserRole
- * Callable function آمنة لتعيين custom claims (roles) للمستخدمين.
- * المستدعي يجب أن يكون admin داخل التطبيق.
- */
-exports.setUserRole = functions.https.onCall(async (data, context) => {
-  requireAuth(context);
-  const callerRole = context.auth.token && context.auth.token.role;
-  if (callerRole !== 'admin') {
-    throw new functions.https.HttpsError('permission-denied', 'Only admins can set roles');
-  }
+   /**
+    * setUserRole
+    */
+   exports.setUserRole = functions.https.onCall(async (data, context) => {
+     requireAuth(context);
+     const callerRole = context.auth.token && context.auth.token.role;
+     if (callerRole !== 'admin') {
+       throw new functions.https.HttpsError('permission-denied', 'Only admins can set roles');
+     }
 
-  const { uid, role } = data || {};
-  if (!uid || !role) throw new functions.https.HttpsError('invalid-argument', 'uid and role are required');
+     const { uid, role } = data || {};
+     if (!uid || !role) throw new functions.https.HttpsError('invalid-argument', 'uid and role are required');
 
-  const allowedRoles = ['admin', 'agency', 'gov', 'driver', 'passenger', 'security'];
-  if (!allowedRoles.includes(role)) throw new functions.https.HttpsError('invalid-argument', 'role not allowed');
+     const allowedRoles = ['admin', 'agency', 'gov', 'driver', 'passenger', 'security'];
+     if (!allowedRoles.includes(role)) throw new functions.https.HttpsError('invalid-argument', 'role not allowed');
 
-  try {
-    await admin.auth().setCustomUserClaims(uid, { role });
-    await db.collection('role_changes').add({
-      uid,
-      role,
-      changedBy: context.auth.uid,
-      changedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    return { success: true, uid, role };
-  } catch (err) {
-    functions.logger.error('setUserRole failed', err);
-    throw new functions.https.HttpsError('internal', 'Failed to set role');
-  }
-});
+     try {
+       await admin.auth().setCustomUserClaims(uid, { role });
+       await db.collection('role_changes').add({
+         uid,
+         role,
+         changedBy: context.auth.uid,
+         changedAt: admin.firestore.FieldValue.serverTimestamp()
+       });
+       return { success: true, uid, role };
+     } catch (err) {
+       functions.logger.error('setUserRole failed', err);
+       throw new functions.https.HttpsError('internal', 'Failed to set role');
+     }
+   });
+
+   /**
+    * createPayment
+    * Callable function: ينشئ مستند جديد في مجموعة payments
+    */
+   exports.createPayment = functions.https.onCall(async (data, context) => {
+     requireAuth(context);
+
+     try {
+       const paymentData = {
+         agencyCommissionAmount: data.agencyCommissionAmount || 0,
+         agencyCommissionRate: data.agencyCommissionRate || 0,
+         agencyId: data.agencyId || null,
+         amount: data.amount || 0,
+         amountPaid: data.amountPaid || 0,
+         appCommissionAmount: data.appCommissionAmount || 0,
+         appCommissionRate: data.appCommissionRate || 0,
+         bookingId: data.bookingId || "",
+         calculatedAt: admin.firestore.Timestamp.now(),
+         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+         currency: data.currency || "YER",
+         driverId: data.driverId || "",
+         driverNetAmount: data.driverNetAmount || 0,
+         gatewayResponse: data.gatewayResponse || {},
+         govFee: data.govFee || 0,
+         govFeePaidBy: data.govFeePaidBy || "driver",
+         notes: data.notes || "",
+         passengerId: data.passengerId || "",
+         paymentMethod: data.paymentMethod || "cash",
+         paymentStatus: data.paymentStatus || "pending",
+         platformReceives: data.platformReceives || 0,
+         rawProvider: data.rawProvider || {},
+         rawProviderResponse: data.rawProviderResponse || "",
+         refundReason: data.refundReason || "",
+         refundedAt: null,
+         roundingDelta: data.roundingDelta || 0,
+         split: data.split || {},
+         CommissionResult: data.CommissionResult || 0,
+         status: data.status || "",
+         totalAmount: data.totalAmount || 0,
+         transactionId: data.transactionId || "",
+         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+       };
+
+       const docRef = await paymentsCol.add(paymentData);
+       return { success: true, id: docRef.id };
+     } catch (err) {
+       functions.logger.error('createPayment failed', err);
+       throw new functions.https.HttpsError('internal', 'Failed to create payment');
+     }
+   });

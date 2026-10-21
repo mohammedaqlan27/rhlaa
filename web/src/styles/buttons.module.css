@@ -1,0 +1,128 @@
+/* src/styles/buttons.module.css
+   متغيرات قابلة للتخصيص، وصول، حالات، أيقونات، واستجابة */
+
+:root{
+  --btn-font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  --btn-font-size: 14px;
+  --btn-radius: 8px;
+  --btn-padding-y: 8px;
+  --btn-padding-x: 14px;
+  --btn-gap: 8px;
+  --btn-transition: 180ms cubic-bezier(.2,.9,.3,1);
+  --btn-focus-ring: 3px;
+  --btn-focus-color: rgba(11,95,255,0.18);
+
+  --color-primary: #0b5fff;
+  --color-on-primary: #ffffff;
+  --color-secondary: #e6e9ef;
+  --color-on-secondary: #111827;
+  --color-success: #16a34a;
+  --color-danger: #b00020;
+  --color-muted: #6b7280;
+  --color-disabled-bg: #f3f4f6;
+  --color-disabled-text: #9ca3af;
+}
+
+/* قاعدة عامة */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--btn-gap);
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  font-family: var(--btn-font-family);
+  font-size: var(--btn-font-size);
+  font-weight: 600;
+  line-height: 1;
+  border: none;
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+  transition: transform var(--btn-transition), box-shadow var(--btn-transition), opacity var(--btn-transition), background-color var(--btn-transition);
+  white-space: nowrap;
+}
+
+/* focus visible */
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--btn-focus-ring) var(--btn-focus-color);
+  transform: translateY(-1px);
+}
+
+/* active */
+.btn:active { transform: translateY(1px); }
+
+/* disabled */
+.btn[disabled], .btn.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+  transform: none;
+  cursor: not-allowed;
+}
+
+/* spacing */
+.btn + .btn { margin-left: 8px; }
+
+/* Variants */
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 6px 18px rgba(11,95,255,0.12);
+}
+.btn-primary:hover { opacity: 0.95; }
+
+.btn-secondary {
+  background: var(--color-secondary);
+  color: var(--color-on-secondary);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+.btn-secondary:hover { filter: brightness(0.98); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-primary);
+  padding: calc(var(--btn-padding-y) - 2px) var(--btn-padding-x);
+}
+.btn-ghost:hover { background: rgba(11,95,255,0.04); }
+
+.btn-success {
+  background: var(--color-success);
+  color: #fff;
+}
+.btn-success:hover { opacity: 0.95; }
+
+.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+.btn-danger:hover { opacity: 0.95; }
+
+/* sizes */
+.btn-sm { padding: 6px 10px; font-size: 13px; border-radius: 6px; }
+.btn-md { /* default */ }
+.btn-lg { padding: 10px 16px; font-size: 15px; border-radius: 10px; }
+
+/* block */
+.btn-block { display: flex; width: 100%; }
+
+/* icon */
+.btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.2em; height: 1.2em; }
+.btn-icon-only { padding: 8px; width: 40px; height: 40px; justify-content: center; }
+
+/* spinner */
+.btn-spinner { display: inline-flex; align-items: center; justify-content: center; color: currentColor; }
+.btn-label { display: inline-block; }
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+}
+
+/* responsive */
+@media (max-width: 520px) {
+  .btn { padding: 8px 12px; font-size: 13px; }
+  .btn-block { width: 100%; }
+}

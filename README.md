@@ -1,396 +1,395 @@
-# rhlaa
+🚍 منصة رحلاء | RHLAA Platform
+منصة ذكية لإدارة النقل البري والرحلات والحجوزات
+Smart Transportation Management Platform
+FlutterFirebaseFirestoreProviderPlatformStatus
+
+🇸🇦 العربية
+📖 نبذة عن المشروع
+رحلاء (RHLAA) هي منصة رقمية متكاملة لإدارة النقل البري والرحلات والحجوزات تم تطويرها باستخدام Flutter و Firebase بهدف رقمنة وتحسين العمليات التشغيلية المتعلقة بالنقل وإدارة الرحلات والمركبات والحجوزات والمدفوعات.
+
+تربط المنصة بين:
+
+الركاب
+السائقين
+الوكالات ومكاتب النقل
+الجهات الإدارية
+الجهات التنظيمية
+وتوفر منظومة موحدة لإدارة:
+
+الرحلات
+الحجوزات
+المركبات
+المدفوعات
+المحافظ الرقمية
+الرسوم الحكومية
+العمولات
+الإشعارات
+التقارير
+الوثائق التشغيلية
+🎯 الرؤية
+بناء منصة تقنية متقدمة تسهم في تطوير قطاع النقل من خلال توفير حلول رقمية موثوقة وآمنة وقابلة للتوسع.
 
-A new Flutter project.
+📨 الرسالة
+توفير منصة رقمية حديثة تساعد على إدارة الرحلات والحجوزات والمدفوعات والعمليات التشغيلية بكفاءة وتحسين تجربة جميع المستخدمين.
 
-## Getting Started
+🚀 المميزات الرئيسية
+👤 الراكب
+البحث عن الرحلات
+فلترة الرحلات
+حجز المقاعد
+متابعة الحجوزات
+الدفع
+استقبال الإشعارات
+تقييم السائقين
+متابعة الرحلات القادمة
+🚘 السائق
+إدارة الملف الشخصي
+رفع الوثائق
+إدارة المركبات
+إنشاء الرحلات
+تعديل الرحلات
+إدارة الحجوزات
+إدارة المقاعد
+توليد كشف الركاب PDF
+🏢 الوكالات ومكاتب النقل
+إدارة بيانات الوكالة
+إدارة المركبات
+إدارة الرحلات
+إدارة الحجوزات
+إدارة المعاملات
+إدارة المحفظة
+تحديد موقع المكتب على الخريطة
+👨‍💼 الإدارة
+إدارة المستخدمين
+إدارة الوكالات
+مراقبة العمليات
+إدارة الرحلات
+إدارة البيانات التشغيلية
+🏛 الجهات التنظيمية
+الاطلاع على البيانات المسموح بها
+مراجعة كشوفات الرحلات
+التحقق من المعلومات التشغيلية
+🌍 دعم اللغات
+✅ العربية
 
-This project is a starting point for a Flutter application.
+✅ الإنجليزية
 
-A few resources to get you started if this is your first Flutter project:
+✅ التبديل بين اللغات أثناء تشغيل التطبيق
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+✅ دعم RTL
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-##📘 مشروع rhlaa
-مشروع Flutter لإدارة الرحلات والحجوزات بين السائقين والركاب، مع دعم الدفع، التقييمات، والإشعارات.
+✅ نظام Localization باستخدام ARB Files
 
-🗂️ هيكل الملفات
-State
-lib/state/auth_state.dart  
-إدارة حالة المصادقة (تسجيل الدخول/الخروج، التسجيل، جلب دور المستخدم).
+🎨 تجربة المستخدم
+✅ الوضع الليلي (Dark Mode)
 
-Screens
-lib/screens/auth_screen.dart — واجهة تسجيل الدخول والتسجيل.
+✅ الوضع النهاري (Light Mode)
 
-lib/screens/loading_screen.dart — شاشة تحميل عامة.
+✅ تغيير الثيم أثناء التشغيل
 
-lib/screens/passenger_home_screen.dart — واجهة رئيسية للراكب.
+✅ Material Design 3
 
-lib/screens/driver_home_screen.dart — واجهة رئيسية للسائق.
+✅ Responsive Design
 
-lib/screens/create_trip_screen.dart — إنشاء رحلة جديدة.
+✅ واجهات عربية وإنجليزية
 
-lib/screens/available_trips_screen.dart — عرض الرحلات المتاحة مع فلترة.
+📍 الخرائط والموقع الجغرافي
+✅ Google Maps Integration
 
-lib/screens/trip_details_screen.dart — تفاصيل رحلة محددة مع إمكانية الحجز.
+✅ تحديد موقع المكتب
 
-lib/screens/my_bookings_screen.dart — عرض وإدارة حجوزات المستخدم.
+✅ إدارة مواقع الوكالات
 
-lib/screens/rating_screen.dart — تقييم السائق بعد إتمام الرحلة.
+✅ Geolocation Services
 
-lib/screens/notification_screen.dart — عرض الإشعارات مع إمكانية وضع كمقروء أو حذف.
+✅ حفظ بيانات الموقع
 
-lib/screens/payment_screen.dart — تأكيد الدفع للحجز.
+💳 نظام الدفع
+✅ Wallet Payments
 
-lib/screens/driver_bookings_screen.dart — إدارة حجوزات السائق (مع إصلاحات للتعامل مع Timestamp).
+✅ QR Code Payments
 
-Widgets
-lib/widgets/trip_card.dart — بطاقة عرض الرحلة (العنوان، الوجهة، المقاعد، السعر، السائق).
+✅ Payment Confirmation
 
-Services
-lib/services/firebase_service.dart — خدمة عامة للاستماع إلى مجموعات Firestore.
+✅ Deep Link Support
 
-lib/services/booking_service.dart — إدارة الحجوزات (إنشاء، إلغاء، جلب حجوزات السائق/الراكب).
+✅ Commission Calculation
 
-lib/services/payment_service.dart — معالجة الدفع (محاكاة + تحديث حالة الدفع).
+✅ Government Fee Calculation
 
-lib/services/notification_service.dart — إرسال واستقبال الإشعارات.
+✅ Payment Tracking
 
-lib/services/trip_service.dart — إدارة الرحلات (إنشاء، تعديل، جلب).
+📄 التقارير والمستندات
+✅ Passenger Manifest PDF
 
-lib/services/rating_service.dart — إدارة التقييمات (إضافة، جلب، فرز).
+✅ Trip Reports
 
-Models
-lib/models/trip.dart — نموذج الرحلة.
+✅ Excel Export
 
-lib/models/booking_model.dart — نموذج الحجز.
+✅ Downloadable Documents
 
-lib/models/app_user.dart — نموذج المستخدم.
+✅ Passenger Lists
 
-lib/models/notification_model.dart — نموذج الإشعار.
+🔔 الإشعارات
+✅ Push Notifications
 
-lib/models/rating.dart — نموذج التقييم (أُنشئ حديثًا).
+✅ Booking Notifications
 
-lib/models/vehicle.dart — نموذج المركبة (مع إصلاحات للقيم الافتراضية).
+✅ Payment Notifications
 
-Utils
-lib/utils/trip_exporter.dart — تصدير الرحلات إلى Excel (مع دعم حفظ الملف في مجلد مؤقت).
+✅ Trip Notifications
 
-Tester
-lib/pages_tester.dart — صفحة اختبارية لتجربة جميع الشاشات والخدمات بشكل منفصل.
+✅ Notification Preferences
 
-🛠️ المراحل التي مررنا بها
-المرحلة الأولى
-إعداد AuthState لإدارة تسجيل الدخول والتسجيل.
+✅ Read / Unread Management
 
-بناء واجهة AuthScreen مع دعم السائق/الراكب.
+🛡 الأمان والحوكمة
+✅ Firebase Authentication
 
-المرحلة الثانية
-إنشاء شاشة CreateTripScreen لإنشاء الرحلات مع التحقق من البيانات.
-
-دعم الحقول بصيغ متعددة (camelCase و snake_case).
-
-المرحلة الثالثة
-شاشة TripDetailsScreen لعرض تفاصيل الرحلة والحجز.
-
-ربطها بـ BookingService لإنشاء الحجز.
-
-المرحلة الرابعة
-إضافة شاشة PaymentScreen لتأكيد الدفع.
-
-إنشاء خدمة PaymentService لمعالجة الدفع وتحديث حالة الحجز.
-
-المرحلة الخامسة
-شاشة AvailableTripsScreen لعرض الرحلات المتاحة مع فلترة.
-
-شاشة MyBookingsScreen لإدارة حجوزات المستخدم (إلغاء/تقييم).
-
-شاشة NotificationScreen لعرض الإشعارات.
-
-إصلاحات في BookingService لإرجاع bookingId عند النجاح.
-
-المرحلة السادسة
-تحسين TripCard لعرض تفاصيل الرحلة بشكل أنيق وآمن.
-
-دعم النصوص الطويلة، حالة المقاعد، وتنسيق السعر.
-
-المرحلة الأخيرة
-إنشاء ملف pages_tester.dart لتجربة جميع الشاشات والخدمات بشكل منفصل.
-
-إضافة ملفات مفقودة (rating.dart, trip_exporter.dart).
-
-إصلاحات في vehicle.dart, driver_bookings_screen.dart, وrating_service.dart.
-
-
-# 📘 توثيق جلسة العمل الأخيرة
-**التاريخ:** 25 مايو 2026  
-**الغرض:** إصلاح الأخطاء، إضافة خدمات جديدة، وتجهيز خطة مرحلة البرق.
-
----
-
-## ✅ ما تم إنجازه
-1. **إصلاح مشكلة التشغيل في TripHistoryScreen**
-   - أضفنا دالة `fetchTrips` داخل ملف `lib/screens/trip_exporter.dart` لجلب رحلات السائق من Firestore.
-   - عدّلنا `TripHistoryScreen` ليستخدم هذه الدالة بشكل صحيح عند تحميل سجل الرحلات.
-
-2. **إضافة خدمات جديدة**
-   - **UserService** (`lib/services/user_service.dart`):  
-     - إدارة بيانات المستخدم.  
-     - رفع الوثائق إلى Firebase Storage وحفظ روابطها في Firestore.  
-     - تحديث وحذف الوثائق.  
-   - **AuthService** (`lib/services/auth_service.dart`):  
-     - تسجيل الدخول والخروج.  
-     - إنشاء حساب جديد مع سجل في Firestore.  
-     - جلب بيانات المستخدم.  
-     - معالجة الأخطاء برسائل عربية واضحة.
-
-3. **تحديث ملف التشغيل `pages_tester.dart`**
-   - أضفنا الاستيرادات الجديدة (`UserService`, `AuthService`).  
-   - أدرجنا مزودات الخدمات في قائمة الـ `providers`.  
-   - أضفنا عناصر اختبار جديدة في قائمة `TestSelector`:  
-     - اختبار `UserService.getUserById`.  
-     - اختبار `AuthService.getCurrentUser` و`signOut`.
-
-4. **تجهيز خطة مرحلة البرق**
-   - وضعنا جدول زمني لأربع أسابيع يتضمن:
-     - توحيد النماذج (`trip.dart`, `app_user.dart`).  
-     - إصلاح الأخطاء وحالات الحافة.  
-     - تحسين الواجهات (UI/UX) وإضافة Theme موحّد.  
-     - تفعيل إشعارات Firebase Cloud Messaging.  
-     - إضافة Firebase Analytics وCrashlytics.  
-     - كتابة اختبارات وحدات وتكامل.  
-     - إعداد قواعد Firestore للأمان والخصوصية.
-
----
-
-## 📂 الملفات التي تم تعديلها
-- `lib/screens/trip_exporter.dart` → إضافة دالة `fetchTrips`.
-- `lib/screens/trip_history_screen.dart` → استخدام `TripExporter.fetchTrips`.
-- `lib/services/user_service.dart` → إدارة بيانات المستخدم والوثائق.
-- `lib/services/auth_service.dart` → إدارة المصادقة.
-- `lib/pages_tester.dart` → إدراج الخدمات الجديدة + إضافة اختبارات لها.
-
----
-
-## 🎯 النتيجة
-- أصبح التطبيق قادرًا على تشغيل شاشة سجل الرحلات بدون أخطاء.  
-- الخدمات الأساسية للمستخدم والمصادقة أصبحت جاهزة ومتصلة بـ Firestore وFirebaseAuth.  
-- ملف التشغيل الآن يحتوي على اختبارات عملية لكل خدمة وشاشة.  
-- لدينا خطة واضحة للمرحلة التالية (البرق) مع جدول زمني محدد.
-
----
-
-## 📌 ملاحظات
-- جميع التعديلات تمت في إطار **تحسين الاستقرار** وتجهيز المشروع للمرحلة التالية.  
-- التركيز القادم سيكون على **تحسين الواجهات** و**إضافة المزايا التفاعلية** (إشعارات، تحليلات).  
-- هذا التوثيق محفوظ تحت قسم **Log of Work Sessions** بتاريخ **25 مايو 2026**.
-
-
-# ملخّص التعديلات (2026-05-26 — 2026-05-27)
-**المعدّ:** Mohammed  
-**الفترة المغطاة:** 26 مايو 2026 — 27 مايو 2026
-
-## ملخّص سريع
-خلال اليومين الماضيين أنجزنا مجموعة تغييرات وظيفية وواجهية واختبارية أساسية: إضافة بيئة دفع تجريبية (sandbox) مع محاكاة webhooks وQR/deep-link، توحيد حقول المستخدم إلى camelCase، إضافة حقول مركبة في الملف الشخصي، منع إنشاء الرحلات قبل اكتمال بيانات السائق، وتحديث الثيم والألوان العامة للتطبيق.
-
-## الملفات المعدّلة والمضافة
-- **`lib/services/payment_service.dart`**
-  - إضافة `PaymentResult`, `PaymentProviderAdapter`, و`MockProviderAdapter` مع إعدادات `failureRate`, `minDelayMs`, `maxDelayMs`.
-  - توحيد دوال الدفع لتُعيد `PaymentResult`، ودوال لبناء payload للـ deep link/QR.
-- **`lib/screens/payment_screen.dart`**
-  - تعديل لمعالجة `PaymentResult` صراحةً، عرض أخطاء واضحة، والانتقال إلى شاشة التأكيد عند النجاح.
-- **`lib/screens/payment_confirmation_screen.dart`**
-  - شاشة جديدة لعرض رقم المعاملة، المبلغ، وطريقة الدفع.
-- **`lib/widgets/payment_deeplink_widget.dart`**
-  - ويدجت لعرض URI وQR لاختبار التكامل مع تطبيقات التحويل (يتطلب `qr_flutter`).
-- **`lib/screens/edit_profile_screen.dart`**
-  - إضافة حقول المركبة: `carPlateNumber`, `carOwnerOfficialName`, `drivingLicenseNumber`.
-  - القراءة تدعم camelCase أولاً ثم snake_case احتياطياً؛ الكتابة تكتب camelCase فقط.
-- **`lib/services/user_service.dart`**
-  - إضافة `updateUserFields(uid, Map)`؛ تطبيع مفاتيح الخريطة إلى camelCase؛ إزالة القيم الفارغة قبل الكتابة؛ دعم رفع/حفظ المستندات.
-- **`lib/models/app_user.dart`**
-  - `toMap()` يكتب camelCase فقط؛ `fromDocument()` يقرأ camelCase أولاً ثم snake_case؛ دعم الحقول الجديدة.
-- **`lib/screens/create_trip_screen.dart`**
-  - منع إنشاء الرحلة ما لم تكتمل بيانات السائق المطلوبة؛ حوار توجيهي للانتقال إلى `EditProfileScreen`; كتابة الرحلة بصيغة camelCase.
-- **`lib/pages_tester.dart`**
-  - تهيئة `PaymentService.providerAdapter = MockProviderAdapter(...)`؛ إضافة اختبار Deep Link/QR؛ تحديث providers.
-- **الثيم والألوان**
-  - تحديث الثيم العام (primaryColor, colorScheme, appBarTheme, elevatedButtonTheme, fontFamily).
-  - **ألوان رئيسية:** `#6A0DAD` (بنفسجي) — **ثانوي:** `#5DADE2` (أزرق فاتح).
-
-## تعليمات الاختبار السريعة
-1. **تثبيت الاعتماديات**
-   ```bash
-   flutter pub get
-# تقرير شامل لمشروع إدارة الرحلات والحجوزات
-
-**التاريخ:** 27 يوليو 2026  
-**المكان:** صنعاء – اليمن  
-**المشروع:** نظام إدارة الرحلات والحجوزات (Flutter + Firebase)
-
----
-
-## 1. النماذج (Models) المضافة والمصححة
-- [Trip](ca://s?q=عرض_تفاصيل_Trip_model): نموذج الرحلة مع الحقول الكاملة (المقاعد، السعر، الحالة، المكتب، إلخ).
-- [Booking](ca://s?q=عرض_تفاصيل_Booking_model): نموذج الحجز مع دعم camelCase/snake_case وحالة الدفع.
-- [GovFeeRule](ca://s?q=عرض_تفاصيل_GovFeeRule_model): قاعدة الرسوم الحكومية مع شرائح المسافة وحساب تلقائي للرسوم.
-- [Agency](ca://s?q=عرض_تفاصيل_Agency_model): نموذج المكتب مع بيانات المدير، الموقع، الرصيد، وحالة النشاط.
-- [AgencyTransaction](ca://s?q=عرض_تفاصيل_AgencyTransaction_model): نموذج المعاملة المالية للمكتب (credit/debit).
-- [AppUser](ca://s?q=عرض_تفاصيل_AppUser_model): نموذج المستخدم مع بيانات السائق/المسافر/المكتب والتحقق من الهوية.
-- [Rating](ca://s?q=عرض_تفاصيل_Rating_model): نموذج التقييم مع النص، الدرجة الرقمية، التعليقات والوسوم.
-- [Vehicle](ca://s?q=عرض_تفاصيل_Vehicle_model): نموذج المركبة مع بيانات اللوحة، النوع، السعة، الوثائق، وحالة التحقق.
-
----
-
-## 2. شاشة التشغيل (AllScreensLauncher)
-- مشغّل آمن يعرض جميع الشاشات والنماذج في قائمة واحدة.
-- معاينات (Preview Screens) لكل نموذج:
-    - BookingPreviewScreen
-    - GovFeeRulePreviewScreen
-    - AgencyPreviewScreen
-    - AgencyTransactionPreviewScreen
-    - AppUserPreviewScreen
-    - RatingPreviewScreen
-    - VehiclePreviewScreen
-
----
-
-## 3. التصحيحات
-- حل أخطاء مثل:
-    - `The named parameter 'trip' is required`
-    - `The named parameter 'tripId' isn't defined`
-    - `The named parameter 'notificationId' isn't defined`
-    - `The method 'BookingPreviewScreen' isn't defined`
-
----
-
-## 4. خطوات التنفيذ
-1. نسخ الملفات المحدثة (`models/*.dart` و`all_screens_launcher.dart`) إلى المشروع.
-2. تشغيل الأوامر:
-   ```bash
-   flutter clean
-   flutter pub get
-   flutter run
-# تقرير شامل للمحادثة
-
-## الملخص العام
-هذه المحادثة تناولت تطوير تطبيق Flutter خاص بالرحلات (راكب/سائق)، وفصل الشاشات، وتصحيح الأخطاء في ملفات الودجيتس والثيمات. كما ناقشنا مشاكل تشغيل التطبيق على الويب (Flutter Web) وتحذيرات متعلقة بـ Google Maps API.
-
----
-
-## المواضيع التي تمت مناقشتها
-
-### 1. تشغيل الجهاز والتأكد من الاتصال
-- خطوات التحقق من أن جهاز الموبايل متصل ويظهر في `adb devices` و `flutter devices`.
-- أهمية تثبيت تعريفات USB للهاتف.
-
-### 2. ملفات Flutter الأساسية
-- **home_screen.dart**: يحتوي على منطق اختيار واجهة السائق أو الراكب.
-- **passenger_home_screen.dart**: واجهة الراكب مع البحث عن الرحلات، رسائل للمسافر، وأزرار وصول سريع.
-- مشكلة: `HomeScreen` كان يحتوي منطق زائد (قائمة، إشعارات، إلخ) مما جعل الفصل غير واضح.
-
-### 3. فصل الشاشات
-- اقتراح جعل `HomeScreen` موجّه فقط (Router).
-- جعل كل شاشة (`DriverHomeScreen`, `PassengerHomeScreen`) تحتوي على `Scaffold` خاص بها.
-- نقل القائمة العالمية (Global Menu) والـ Settings إلى ويدجت مشتركة.
-
-### 4. مراجعة الودجيتس
-تم تحليل عدة ملفات:
-- **app_scaffold.dart**: قالب واجهة رئيسي مع AppBar و Loading Overlay.
-- **custom_button.dart**: زر مخصص مع أنيميشن الضغط.
-- **trip_card.dart**: عرض تفاصيل الرحلة (العنوان، السعر، المقاعد).
-- **app_card.dart**: بطاقة عامة مع ظل وتأثير ضغط.
-- **trip_filter_sheet.dart**: BottomSheet لتصفية الرحلات (الحالة، السعر، نوع المركبة).
-
-### 5. مشاكل Null و Providers
-- `TripCard` كان يستخدم حقول قد تكون null (`status`, `departureTime`, `price`).
-- تم اقتراح نسخة محمية من `TripCard` لتفادي الاستثناءات.
-- ضرورة التأكد من أن `TripProvider` و `AuthState` معلنان في `MultiProvider` أعلى التطبيق.
-
-### 6. ملفات الثيم
-- **app_colors.dart**: يحتوي على تعريف الألوان والخطوط والثوابت.
-- **app_theme.dart**: بناء ThemeData للثيم الفاتح والمظلم.
-- مشاكل ظهرت:
-    - استخدام `CardTheme` بدلاً من `CardThemeData`.
-    - استخدام `DialogTheme` بدلاً من `DialogThemeData`.
-    - استخدام `withValues` بدلاً من `withOpacity`.
-    - استخدام `WidgetStateProperty` بدلاً من `MaterialStateProperty`.
-
-### 7. تشغيل على Flutter Web
-- تحذيرات ظهرت في الكونسول:
-    - `ERR_NAME_NOT_RESOLVED`: مشكلة DNS أو مورد غير موجود.
-    - تحذير `viewport`: وسم مكرر في `index.html`.
-    - `Google Maps API InvalidKey`: مفتاح غير صالح أو غير مفعّل.
-    - تحذير تحميل Google Maps بدون `async`.
-
-### 8. الحلول المقترحة
-- إصلاح `app_colors.dart` بإزالة getter الذي يعيد null.
-- تعديل `app_theme.dart` لاستخدام الأنواع الصحيحة (`CardThemeData`, `DialogThemeData`, `MaterialStateProperty`, `withOpacity`).
-- إضافة ملف `pop_scope.dart` لتعويض PopScope.
-- تفعيل Google Maps API في Google Cloud Console، وضبط قيود المفتاح لتشمل `localhost`.
-- تحميل سكربت Google Maps باستخدام `async defer`.
-
----
-
-## الخلاصة
-- تم فصل شاشات السائق والراكب بنجاح.
-- تم إصلاح معظم الأخطاء في ملفات الثيم والودجيتس.
-- بقيت بعض التحذيرات مرتبطة بـ Google Maps API تحتاج ضبط المفتاح الصحيح وتفعيل الفوترة.
-- التطبيق الآن أكثر تنظيمًا: `HomeScreen` موجّه فقط، وكل شاشة لها Scaffold مستقل، والودجيتس المشتركة موجودة في مجلد `widgets/shared`.
-
----
-
-## الخطوات التالية المقترحة
-- مراجعة `index.html` وضبط تحميل Google Maps.
-- التأكد من أن جميع Providers معلنة في `main.dart`.
-- اختبار التطبيق على Android/iOS للتأكد من أن المشاكل خاصة بالويب فقط.
-- إضافة اختبارات وحدات (Unit Tests) للودجيتس الأساسية مثل `TripCard` و `TripFilterSheet`.
-
-# 📂 هيكلية الودجتس في المشروع
-
-## الهدف
-تنظيم جميع الودجتس في مجلدات واضحة حسب المسؤولية:
-- **Shared**: ويدجتس مشتركة بين السائق والراكب.
-- **Passenger**: ويدجتس خاصة بالراكب.
-- **Driver**: ويدجتس خاصة بالسائق.
-
----
-
-## 📂 المجلدات
-
-### 1. lib/widgets/shared/
-يحتوي على الودجتس العامة التي تُستخدم في أكثر من شاشة:
-- `app_scaffold.dart` — AppScaffold — قالب واجهة رئيسي مع AppBar و Loading Overlay.
-- `app_card.dart` — AppCard — بطاقة عامة بستايل موحد مع ظل وتأثير ضغط.
-- `custom_button.dart` — CustomButton — زر مخصص مع أنيميشن الضغط وحالة تحميل.
-- `custom_text_field.dart` — CustomTextField — حقل إدخال نص مخصص.
-- `loading_indicator.dart` — LoadingIndicator — مؤشر تحميل مشترك.
-- `settings_sheet.dart` — SettingsSheet — BottomSheet للإعدادات.
-- `pop_scope.dart` — PopScope — بديل لـ WillPopScope للتحكم في الرجوع.
-- **مقترح جديد:**
-  - `notification_bell.dart` — NotificationBell — جرس إشعارات مع عداد.
-  - `global_menu.dart` — GlobalMenu — قائمة عالمية BottomSheet للوصول السريع.
-
----
-
-### 2. lib/widgets/passenger/
-يحتوي على الودجتس الخاصة بالراكب:
-- `trip_card.dart` — TripCard — كرت يعرض تفاصيل الرحلة (عنوان، سعر، مقاعد، وقت).
-- `trip_filter_sheet.dart` — TripFilterSheet — BottomSheet لتصفية الرحلات.
-- `travel_prayer_card.dart` — TravelPrayerCard — بطاقة تعرض دعاء السفر.
-- `otp_dialog.dart` — OtpDialog — نافذة حوار لإدخال رمز تحقق (OTP).
-
----
-
-### 3. lib/widgets/driver/
-يحتوي على الودجتس الخاصة بالسائق:
-- `payment_deeplink_widget.dart` — PaymentDeeplinkWidget — ويدجت للتعامل مع روابط الدفع (deeplink).
-
----
-
-## 🛠️ خطوات عملية للتنظيم
-
-1. أنشئ المجلدات الفرعية:
+✅ Firestore Security Rules
+
+✅ Role Based Access Control (RBAC)
+
+✅ Driver Verification
+
+✅ Identity Verification
+
+✅ Agency Validation
+
+✅ Ownership Validation
+
+✅ Protected Financial Data
+
+✅ Default Deny Security Strategy
+
+⚡ الأداء والتحسين
+✅ Firebase Emulator Suite
+
+✅ Firestore Composite Indexes
+
+✅ Query Optimization
+
+✅ Local Testing Environment
+
+✅ Service Layer Architecture
+
+✅ Provider State Management
+
+✅ Firebase Cloud Functions
+
+🧩 الوحدات الرئيسية
+Authentication
+تسجيل الدخول
+إنشاء الحسابات
+إدارة الجلسات
+إدارة الأدوار
+Trip Management
+إنشاء الرحلات
+تعديل الرحلات
+إدارة المقاعد
+إدارة حالة الرحلات
+Booking Management
+الحجز
+تأكيد الحجز
+إلغاء الحجز
+الحجز العائلي
+Vehicle Management
+إدارة المركبات
+ربط المركبات بالسائق
+التحقق من المركبات
+Agency Management
+إدارة الوكالة
+المحفظة
+المعاملات
+الموقع الجغرافي
+Payment System
+الدفع
+الرسوم الحكومية
+العمولات
+المحافظ
+Reporting
+PDF
+Excel
+كشوفات الركاب
+Notification System
+الإشعارات الفورية
+الإشعارات المحلية
+إعدادات الإشعارات
+🛠 التقنيات المستخدمة
+Frontend
+Flutter
+Dart
+Provider
+Material Design 3
+Backend
+Firebase Authentication
+Cloud Firestore
+Firebase Storage
+Firebase Cloud Messaging (FCM)
+Firebase Cloud Functions
+Maps & Location
+Google Maps Flutter
+Geolocator
+Notifications
+Firebase Messaging
+Flutter Local Notifications
+Reporting
+PDF
+Syncfusion Excel
+Localization
+flutter_localizations
+intl
+intl_utils
+Payments
+QR Flutter
+Barcode Widget
+URL Launcher
+🏗 هيكل المشروع
+lib
+│
+├── l10n
+│
+├── models
+│
+├── providers
+│
+├── screens
+│   ├── admin
+│   ├── agency
+│   ├── driver
+│   └── passenger
+│
+├── services
+│
+├── state
+│
+├── theme
+│
+├── utils
+│
+├── widgets
+│   ├── admin
+│   ├── agency
+│   ├── driver
+│   ├── passenger
+│   └── shared
+│
+├── firebase_options.dart
+└── main.dart
+📸 لقطات الشاشة
+تسجيل الدخول
+assets/screenshots/login.png
+إنشاء حساب سائق
+assets/screenshots/driver_register.png
+إدارة المركبات
+assets/screenshots/vehicle_management.png
+إنشاء رحلة
+assets/screenshots/create_trip.png
+تأكيد الحجز والدفع
+assets/screenshots/booking_payment_confirmation.png
+سند الدفع والـ QR
+assets/screenshots/payment_receipt_qr.png
+مركز الإشعارات
+assets/screenshots/notifications_center.png
+لوحة تحكم المكاتب
+assets/screenshots/agency_dashboard.png
+لوحة الجهة الحكومية
+assets/screenshots/government_dashboard.png
+لوحة الإدارة
+assets/screenshots/admin_dashboard.png
+📚 التوثيق
+docs/
+├── PROJECT_SUMMARY.md
+├── ARCHITECTURE.md
+├── DATABASE_SCHEMA.md
+├── FIRESTORE_RULES.md
+├── SECURITY_AND_GOVERNANCE.md
+└── LOCAL_TESTING.md
+🇬🇧 English
+Overview
+RHLAA is a transportation management platform built using Flutter and Firebase.
+
+The platform provides a unified ecosystem for managing transportation operations, including trips, bookings, vehicles, payments, notifications, agencies, commissions, government fees, and operational reports.
+
+It connects:
+
+Passengers
+Drivers
+Transportation Agencies
+Administrators
+Regulatory Authorities
+Key Features
+✅ Trip Management
+
+✅ Vehicle Management
+
+✅ Passenger Bookings
+
+✅ QR Code Payments
+
+✅ Government Fee Calculation
+
+✅ Commission Engine
+
+✅ Google Maps Integration
+
+✅ Agency Location Management
+
+✅ Mode
+
+✅ Push Notifications
+
+✅ PDF Manifest Generation
+
+✅ Excel Export
+
+✅ Firebase Cloud Functions
+
+✅ Firestore Composite Indexes
+
+✅ Firebase Security Rules
+
+✅ Firebase Emulator Suite
+
+Technology Stack
+Frontend
+Flutter
+Dart
+Provider
+Material Design 3
+Backend
+Firebase Authentication
+Cloud Firestore
+Firebase Storage
+Firebase Cloud Messaging
+Firebase Cloud Functions
+Maps & Location
+Google Maps Flutter
+Geolocator
+Reporting
+PDF
+Excel
+Notifications
+Firebase Messaging
+Flutter Local Notifications
+Documentation
+docs/
+├── PROJECT_SUMMARY.md
+├── ARCHITECTURE.md
+├── DATABASE_SCHEMA.md
+├── FIRESTORE_RULES.md
+├── SECURITY_AND_GOVERNANCE.md
+└── LOCAL_TESTING.md
+Developer
+Mohammed Abdulrahman Saif Aqlan Al-Qadsi
+
+Computer & IT Engineer
+
+Flutter Developer • Firebase Developer • DevOps Engineer • Network Engineer
+
+GitHub: https://github.com/mohammedaqlan27
+
+Email: abdulrahmanaqlan10@gmail.com
+
+Future Vision
+RHLAA is currently developed as an independent transportation platform with a long-term vision of evolving into a large-scale transportation ecosystem that supports digital transformation, smart mobility, and transportation management services.

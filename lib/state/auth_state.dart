@@ -18,15 +18,20 @@ class AuthState with ChangeNotifier {
 
   StreamSubscription<User?>? _authSub;
 
-  AuthState() {
-    _user = _auth.currentUser;
-    if (_user != null) _loadUserProfile(_user!.uid);
+  // Completer لانتظار انتهاء التهيئة الأولية (مفيد قبل التنقل)
+  final Completer<void> _readyCompleter = Completer<void>();
 
+  AuthState() {
+    // تهيئة الحالة بشكل غير متزامن
+    _init();
+    // نستمع لتغيرات حالة المصادقة
     _authSub = _auth.userChanges().listen((u) {
       _user = u;
       if (u != null) {
-        _loadUserProfile(u.uid);
+        // عند تسجيل دخول جديد أو تغيير المستخدم، نجدد التوكن ونحمّل البروفايل
+        _refreshTokenAndLoadProfile(u);
       } else {
+        // عند تسجيل الخروج
         userType = null;
         userRole = null;
         notifyListeners();
@@ -34,8 +39,31 @@ class AuthState with ChangeNotifier {
     });
   }
 
+  /// تهيئة أولية: تحميل المستخدم الحالي وتجديد التوكن إن وُجد
+  Future<void> _init() async {
+    try {
+      _user = _auth.currentUser;
+      if (_user != null) {
+        isLoading = true;
+        notifyListeners();
+        await _refreshTokenAndLoadProfile(_user!);
+      }
+    } catch (e, st) {
+      debugPrint('AuthState._init error: $e\n$st');
+    } finally {
+      isLoading = false;
+      notifyListeners();
+      if (!_readyCompleter.isCompleted) _readyCompleter.complete();
+    }
+  }
+
+  /// انتظر انتهاء التهيئة الأولية (يمكن استدعاؤها قبل التنقل)
+  Future<void> waitForInitialization() => _readyCompleter.future;
+
+  // --- getters ---
   User? get firebaseUser => _user;
   bool get isPhoneVerified => verificationId != null;
+  bool get isAuthenticated => _auth.currentUser != null;
 
   // --- منطق التحقق من الهاتف ---
   Future<void> verifyPhoneNumber(String phoneNumber, Function(String) onCodeSent) async {
@@ -45,7 +73,12 @@ class AuthState with ChangeNotifier {
       await _auth.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         verificationCompleted: (PhoneAuthCredential credential) async {
-          await _auth.signInWithCredential(credential);
+          final userCred = await _auth.signInWithCredential(credential);
+          _user = userCred.user;
+          // بعد تسجيل الدخول عبر credential، نجدد التوكن ونحمّل البروفايل
+          if (_auth.currentUser != null) {
+            await _refreshTokenAndLoadProfile(_auth.currentUser!);
+          }
         },
         verificationFailed: (FirebaseAuthException e) {
           errorMessage = e.message;
@@ -78,10 +111,17 @@ class AuthState with ChangeNotifier {
         verificationId: verificationId!,
         smsCode: smsCode,
       );
-      await _auth.signInWithCredential(credential);
+      final userCred = await _auth.signInWithCredential(credential);
+      _user = userCred.user;
+
+      // بعد تسجيل الدخول بنجاح، نجدد التوكن ونحمّل البروفايل
+      if (userCred.user != null) {
+        await _refreshTokenAndLoadProfile(userCred.user!);
+      }
       return true;
     } catch (e) {
       errorMessage = "كود التحقق غير صحيح";
+      debugPrint('AuthState.signInWithOTP error: $e');
       return false;
     } finally {
       isLoading = false;
@@ -98,7 +138,7 @@ class AuthState with ChangeNotifier {
     String? mobileNumber,
     String? idNumber,
     String? plateNumber,
-    String? agencyStatus, // الحقل الجديد
+    String? agencyStatus,
     String? drivingLicenseNumber,
   }) async {
     try {
@@ -107,9 +147,21 @@ class AuthState with ChangeNotifier {
 
       UserCredential cred;
       if (_auth.currentUser != null) {
-        cred = await _auth.currentUser!.linkWithCredential(
-          EmailAuthProvider.credential(email: email, password: password),
-        );
+        // إذا كان هناك مستخدم مسجل عبر OTP، نحاول الربط (link) مع بيانات البريد/كلمة المرور
+        try {
+          cred = await _auth.currentUser!.linkWithCredential(
+            EmailAuthProvider.credential(email: email, password: password),
+          );
+        } on FirebaseAuthException catch (e) {
+          // إذا فشل الربط لأن البريد مستخدم مسبقًا، نحاول تسجيل الدخول بالبريد بدلاً من الربط
+          if (e.code == 'credential-already-in-use' || e.code == 'email-already-in-use') {
+            debugPrint('AuthState.register: credential already in use, trying signInWithEmailAndPassword');
+            final userCred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+            cred = userCred;
+          } else {
+            rethrow;
+          }
+        }
       } else {
         cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
       }
@@ -131,10 +183,22 @@ class AuthState with ChangeNotifier {
       };
 
       await _firestore.collection('users').doc(uid).set(userMap, SetOptions(merge: true));
+      _user = cred.user;
       await _loadUserProfile(uid);
+
+      // بعد التسجيل، نجدد الـ ID token ونقرأ الـ custom claims إن وُجدت
+      if (cred.user != null) {
+        await _refreshTokenAndLoadProfile(cred.user!);
+      }
+
       return true;
     } on FirebaseAuthException catch (e) {
       errorMessage = e.message;
+      debugPrint('AuthState.register FirebaseAuthException: code=${e.code} message=${e.message}');
+      return false;
+    } catch (e, st) {
+      errorMessage = e.toString();
+      debugPrint('AuthState.register unexpected error: $e\n$st');
       return false;
     } finally {
       isLoading = false;
@@ -142,14 +206,25 @@ class AuthState with ChangeNotifier {
     }
   }
 
+  // --- تسجيل الدخول بالبريد وكلمة المرور ---
   Future<bool> login(String email, String password) async {
     try {
       isLoading = true;
       notifyListeners();
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      if (_auth.currentUser != null) await _loadUserProfile(_auth.currentUser!.uid);
+      final userCred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      _user = userCred.user;
+      debugPrint('Auth: signIn success uid=${userCred.user?.uid}');
+
+      if (_auth.currentUser != null) {
+        await _refreshTokenAndLoadProfile(_auth.currentUser!);
+      }
       return true;
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Auth: signIn failed code=${e.code} message=${e.message}');
+      errorMessage = e.message ?? "خطأ في البريد أو كلمة المرور";
+      return false;
+    } catch (e, st) {
+      debugPrint('Auth: unexpected error $e\n$st');
       errorMessage = "خطأ في البريد أو كلمة المرور";
       return false;
     } finally {
@@ -158,6 +233,66 @@ class AuthState with ChangeNotifier {
     }
   }
 
+  // --- تجديد التوكن وقراءة الـ custom claims ثم تحميل البروفايل ---
+  Future<void> _refreshTokenAndLoadProfile(User user) async {
+    try {
+      // تحديث المرجع المحلي للمستخدم
+      _user = user;
+      notifyListeners();
+
+      // يجبر تجديد الـ ID token من الخادم
+      await user.getIdToken(true);
+
+      // جلب idTokenResult لقراءة الـ custom claims
+      final idTokenResult = await user.getIdTokenResult(true);
+      final claims = idTokenResult.claims ?? {};
+      debugPrint('AuthState: ID token claims for ${user.uid}: $claims');
+
+      // إذا كان هناك دور داخل الـ claims يمكن استخدامه لتعيين userRole محلياً
+      if (claims.containsKey('role')) {
+        userRole = claims['role']?.toString();
+        debugPrint('AuthState: userRole set from claims => $userRole');
+      }
+
+      // حمّل بيانات المستخدم من Firestore (ستقوم _loadUserProfile بتعيين userType/userRole إن وُجدت)
+      await _loadUserProfile(user.uid);
+
+      // إذا لم يتم تعيين userRole من الـ claims، فابقَ على ما جلبته من Firestore أو افتراضي
+      if ((userRole == null || userRole!.isEmpty) && claims.containsKey('role')) {
+        userRole = claims['role']?.toString();
+      }
+
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('AuthState._refreshTokenAndLoadProfile error: $e\n$st');
+    }
+  }
+
+  // --- دالة مساعدة لإجبار تجديد التوكن من خارج الكلاس ---
+  Future<void> forceRefreshToken() async {
+    final u = _auth.currentUser;
+    if (u != null) {
+      await _refreshTokenAndLoadProfile(u);
+    }
+  }
+
+  // --- دالة مساعدة للحصول على ID token كسلسلة لاستخدامها في طلبات HTTP ---
+  Future<String?> getIdTokenForRequests({bool forceRefresh = false}) async {
+    final u = _auth.currentUser;
+    if (u == null) return null;
+    try {
+      if (forceRefresh) {
+        await u.getIdToken(true);
+      }
+      final token = await u.getIdToken();
+      return token;
+    } catch (e) {
+      debugPrint('AuthState.getIdTokenForRequests error: $e');
+      return null;
+    }
+  }
+
+  // --- تحميل بروفايل المستخدم من Firestore ---
   Future<void> _loadUserProfile(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
@@ -168,25 +303,40 @@ class AuthState with ChangeNotifier {
         final rawUserRole = data['userRole'] ?? data['user_role'] ?? data['role'] ?? data['userType'] ?? data['user_type'];
 
         userType = rawUserType?.toString().trim();
-        userRole = rawUserRole?.toString().trim();
+        final firestoreRole = rawUserRole?.toString().trim();
+
+        // إذا لم يكن userRole محددًا من الـ claims، استخدم ما في Firestore
+        if (firestoreRole != null && firestoreRole.isNotEmpty) {
+          userRole = firestoreRole;
+        }
 
         if ((userRole == null || userRole!.isEmpty) && userType != null && userType!.isNotEmpty) {
           userRole = userType;
         }
       } else {
         userType = null;
-        userRole = null;
+        // لا نغير userRole هنا لأن قد يكون قد تم تعيينه من الـ claims
       }
     } catch (e, st) {
       debugPrint('AuthState._loadUserProfile error: $e\n$st');
       userType = null;
-      userRole = null;
+      // لا نغير userRole هنا حفاظًا على أي قيمة من الـ claims
     }
   }
 
+  // --- تسجيل الخروج ---
   Future<void> logout() async {
     await _auth.signOut();
     _user = null;
+    userType = null;
+    userRole = null;
     notifyListeners();
+  }
+
+  // --- تنظيف الموارد عند التخلص من الحالة ---
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
   }
 }

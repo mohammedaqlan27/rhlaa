@@ -1,4 +1,3 @@
-// lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,15 +6,10 @@ import '../models/app_user.dart';
 import 'edit_profile_screen.dart';
 import 'my_bookings_screen.dart';
 import 'driver_trips_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-
-  // لوحة الألوان الاحترافية
-  static const Color _primaryBlue = Color(0xFF1E70B8);
-  static const Color _accentTeal = Color(0xFF17A5A3);
-  static const Color _bgGrey = Color(0xFFF8FAFC);
-  static const Color _textDark = Color(0xFF1E293B);
 
   Future<AppUser?> _fetchUserData(String userId) async {
     final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
@@ -25,6 +19,8 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
     final userId = FirebaseAuth.instance.currentUser?.uid;
 
     if (userId == null) {
@@ -32,20 +28,22 @@ class ProfileScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: _bgGrey,
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: const Text('الملف الشخصي',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'الملف الشخصي',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: _primaryBlue,
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder<AppUser?>(
         future: _fetchUserData(userId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: _primaryBlue));
+            return Center(child: CircularProgressIndicator(color: primaryColor));
           }
 
           if (snapshot.hasError || !snapshot.hasData) {
@@ -63,7 +61,7 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 _buildHeader(context, user),
                 const SizedBox(height: 20),
-                _buildStatsRow(user),
+                _buildStatsRow(context, user),
                 const SizedBox(height: 20),
                 _buildMenuSection(context, user, createdAt),
                 const SizedBox(height: 30),
@@ -77,13 +75,16 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // الرأس (الصورة والاسم) بتصميم حديث
   Widget _buildHeader(BuildContext context, AppUser user) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+    final secondaryColor = theme.colorScheme.secondary;
+
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: _primaryBlue,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: primaryColor,
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(40),
           bottomRight: Radius.circular(40),
         ),
@@ -98,7 +99,7 @@ class ProfileScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 4),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)],
                 ),
                 child: CircleAvatar(
                   radius: 55,
@@ -107,15 +108,18 @@ class ProfileScreen extends StatelessWidget {
                       ? NetworkImage(user.profilePictureUrl!)
                       : null,
                   child: user.profilePictureUrl == null || user.profilePictureUrl!.isEmpty
-                      ? const Icon(Icons.person, size: 60, color: _primaryBlue)
+                      ? Icon(Icons.person, size: 60, color: primaryColor)
                       : null,
                 ),
               ),
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                ),
                 child: Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(color: _accentTeal, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: secondaryColor, shape: BoxShape.circle),
                   child: const Icon(Icons.edit, color: Colors.white, size: 18),
                 ),
               ),
@@ -128,24 +132,24 @@ class ProfileScreen extends StatelessWidget {
           ),
           Text(
             user.userType == 'Driver' ? 'كابتن معتمد' : 'مسافر هلا',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.white.withOpacity(0.8)),
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.white.withValues(alpha: 0.8)),
           ),
         ],
       ),
     );
   }
 
-  // شريط الإحصائيات
-  Widget _buildStatsRow(AppUser user) {
+  Widget _buildStatsRow(BuildContext context, AppUser user) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          _buildStatItem('التقييم', user.averageRating?.toStringAsFixed(1) ?? '0.0', Icons.star, Colors.amber),
+          _buildStatItem('التقييم', user.averageRating.toStringAsFixed(1), Icons.star, Colors.amber),
           const SizedBox(width: 12),
-          _buildStatItem('الرحلات', '12', Icons.directions_car, _primaryBlue), // رقم افتراضي أو من الداتابيز
+          _buildStatItem('الرحلات', '12', Icons.directions_car, theme.colorScheme.primary),
           const SizedBox(width: 12),
-          _buildStatItem('المحفظة', '0', Icons.account_balance_wallet, _accentTeal),
+          _buildStatItem('المحفظة', '0', Icons.account_balance_wallet, theme.colorScheme.secondary),
         ],
       ),
     );
@@ -158,7 +162,7 @@ class ProfileScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
         ),
         child: Column(
           children: [
@@ -172,35 +176,49 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // قائمة الخيارات والمعلومات
   Widget _buildMenuSection(BuildContext context, AppUser user, String createdAt) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('المعلومات الشخصية',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _textDark)),
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           _buildMenuCard([
-            _buildMenuTile(Icons.email_outlined, 'البريد الإلكتروني', user.email ?? 'غير مسجل'),
-            _buildMenuTile(Icons.phone_android_outlined, 'رقم الهاتف', user.mobileNumber ?? 'غير مسجل'),
-            _buildMenuTile(Icons.calendar_month_outlined, 'تاريخ الانضمام', createdAt),
+            _buildMenuTile(Icons.email_outlined, 'البريد الإلكتروني', user.email ?? 'غير مسجل', primaryColor),
+            _buildMenuTile(Icons.phone_android_outlined, 'رقم الهاتف', user.mobileNumber ?? 'غير مسجل', primaryColor),
+            _buildMenuTile(Icons.calendar_month_outlined, 'تاريخ الانضمام', createdAt, primaryColor),
           ]),
           const SizedBox(height: 20),
           const Text('إدارة الحساب',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _textDark)),
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           _buildMenuCard([
             _buildMenuTile(
               user.userType == 'Driver' ? Icons.local_taxi : Icons.local_mall,
               user.userType == 'Driver' ? 'رحلاتي ككابتن' : 'حجوزاتي السابقة',
               'عرض السجل',
-              onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => user.userType == 'Driver' ? const DriverTripsScreen() : const MyBookingsScreen()
-              )),
+              primaryColor,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => user.userType == 'Driver' ? const DriverTripsScreen() : const MyBookingsScreen(),
+                ),
+              ),
             ),
-            _buildMenuTile(Icons.settings_outlined, 'إعدادات التطبيق', 'اللغة والتنبيهات'),
+            _buildMenuTile(
+              Icons.settings_outlined,
+              'إعدادات التطبيق',
+              'اللغة والتنبيهات والثيم',
+              primaryColor,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
+            ),
           ]),
         ],
       ),
@@ -212,16 +230,16 @@ class ProfileScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
       ),
       child: Column(children: children),
     );
   }
 
-  Widget _buildMenuTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
+  Widget _buildMenuTile(IconData icon, String title, String subtitle, Color iconColor, {VoidCallback? onTap}) {
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: _primaryBlue, size: 22),
+      leading: Icon(icon, color: iconColor, size: 22),
       title: Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
       trailing: onTap != null ? const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey) : null,
@@ -266,20 +284,18 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // واجهات الحالات الخاصة
   Widget _buildNotLoggedInView(BuildContext context) {
     return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.account_circle_outlined, size: 80, color: _primaryBlue),
+            Icon(Icons.account_circle_outlined, size: 80, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 20),
             const Text('سجل دخولك لعرض ملفك الشخصي', style: TextStyle(fontFamily: 'Cairo', fontSize: 16)),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: _primaryBlue),
               child: const Text('العودة للرئيسية', style: TextStyle(color: Colors.white)),
             )
           ],

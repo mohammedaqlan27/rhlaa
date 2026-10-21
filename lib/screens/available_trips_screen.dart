@@ -1,8 +1,7 @@
-// lib/screens/available_trips_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/trip_provider.dart';
-import '../models/trip.dart';
+import '../theme/app_colors.dart';
 import '../widgets/Passenger/trip_card.dart';
 import 'trip_details_screen.dart';
 
@@ -23,11 +22,6 @@ class AvailableTripsScreen extends StatefulWidget {
 }
 
 class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
-  // لوحة الألوان المعتمدة (Modern Flat Design 2.0)
-  static const Color _primaryBlue = Color(0xFF1E70B8);
-  static const Color _bgSecondary = Color(0xFFF8FAFC);
-  static const Color _textDark = Color(0xFF1E293B);
-
   @override
   void initState() {
     super.initState();
@@ -42,48 +36,46 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: _bgSecondary,
-        // --- 1. القائمة الجانبية الكبيرة (Drawer) ---
+        backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background,
         drawer: _buildSideDrawer(context),
-
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: isDark ? AppColors.webCardBackground : Colors.white,
           elevation: 0.5,
           centerTitle: true,
-          iconTheme: const IconThemeData(color: _textDark),
-          title: const Text(
-            'الرحلات المتاحة', // تم تبسيط العنوان بناءً على طلبك
+          iconTheme: IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
+          title: Text(
+            'الرحلات المتاحة',
             style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w900,
+              fontFamily: AppFonts.arabic,
+              fontWeight: FontWeight.bold,
               fontSize: 18,
-              color: _textDark,
+              color: isDark ? Colors.white : AppColors.textPrimary,
             ),
           ),
           actions: [
             IconButton(
               icon: const Icon(Icons.tune_rounded),
               onPressed: () {
-                // منطق الفلترة المتقدمة
+                // فلترة إضافية حسب الحاجة
               },
             ),
           ],
         ),
-
         body: Consumer<TripProvider>(
           builder: (context, tripProvider, child) {
             if (tripProvider.isLoading) {
-              return const Center(child: CircularProgressIndicator(color: _primaryBlue));
+              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
             }
 
             if (tripProvider.errorMessage != null) {
               return _buildErrorState(tripProvider.errorMessage!);
             }
 
-            // منطق عرض جميع الرحلات أو المفلترة
             final allTrips = tripProvider.availableTrips;
             final filteredTrips = allTrips.where((trip) {
               final matchesDest = widget.destination.isEmpty ||
@@ -97,7 +89,7 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
 
             return RefreshIndicator(
               onRefresh: _onRefresh,
-              color: _primaryBlue,
+              color: AppColors.primary,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 itemCount: filteredTrips.length,
@@ -120,42 +112,45 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
             );
           },
         ),
-
-        // --- 2. القائمة السفلية (Bottom Navigation) ---
         bottomNavigationBar: _buildBottomNav(context),
       ),
     );
   }
 
-  // تصميم القائمة الجانبية (Drawer)
   Widget _buildSideDrawer(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Drawer(
+      backgroundColor: isDark ? AppColors.webCardBackground : Colors.white,
       child: Column(
         children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: _primaryBlue),
-            currentAccountPicture: const CircleAvatar(
+          const UserAccountsDrawerHeader(
+            decoration: BoxDecoration(color: AppColors.primary),
+            currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.white,
-              child: Icon(Icons.person, size: 40, color: _primaryBlue),
+              child: Icon(Icons.person, size: 40, color: AppColors.primary),
             ),
-            accountName: const Text('مستخدم رحلاء', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-            accountEmail: const Text('user@rhlaa.com', style: TextStyle(fontFamily: 'Cairo')),
+            accountName: Text('مستخدم رحلاء', style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold)),
+            accountEmail: Text('user@rhlaa.com', style: TextStyle(fontFamily: AppFonts.arabic)),
           ),
           _buildDrawerItem(Icons.home_rounded, 'الرئيسية', () => Navigator.pushReplacementNamed(context, '/passenger_home')),
           _buildDrawerItem(Icons.confirmation_number_rounded, 'حجوزاتي', () => Navigator.pushNamed(context, '/my_bookings')),
           _buildDrawerItem(Icons.settings_suggest_rounded, 'الإعدادات', () => Navigator.pushNamed(context, '/settings')),
           const Divider(),
           _buildDrawerItem(Icons.help_outline_rounded, 'مركز المساعدة', () {}),
-          _buildDrawerItem(Icons.logout_rounded, 'تسجيل الخروج', () {}, color: Colors.redAccent),
+          _buildDrawerItem(Icons.logout_rounded, 'تسجيل الخروج', () {}, color: AppColors.error),
         ],
       ),
     );
   }
 
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap, {Color? color}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final defaultColor = isDark ? Colors.white : AppColors.textPrimary;
+
     return ListTile(
-      leading: Icon(icon, color: color ?? _textDark),
-      title: Text(title, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, color: color ?? _textDark)),
+      leading: Icon(icon, color: color ?? defaultColor),
+      title: Text(title, style: TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.w600, color: color ?? defaultColor)),
       onTap: onTap,
     );
   }
@@ -165,18 +160,21 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.network('https://cdn-icons-png.flaticon.com/512/7486/7486744.png', height: 150, opacity: const AlwaysStoppedAnimation(0.5)),
+          const Icon(Icons.directions_bus_filled_outlined, size: 80, color: AppColors.gray400),
           const SizedBox(height: 20),
-          const Text('لا توجد رحلات متاحة حالياً', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'لا توجد رحلات متاحة حالياً',
+            style: TextStyle(fontFamily: AppFonts.arabic, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(), // إصلاح زر العودة للبحث
+            onPressed: () => Navigator.of(context).pop(),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryBlue,
+              backgroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('العودة للبحث', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+            child: const Text('العودة للبحث', style: TextStyle(fontFamily: AppFonts.arabic, color: Colors.white)),
           )
         ],
       ),
@@ -188,27 +186,30 @@ class _AvailableTripsScreenState extends State<AvailableTripsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.wifi_off_rounded, size: 60, color: Colors.orange),
+          const Icon(Icons.wifi_off_rounded, size: 60, color: AppColors.warning),
           const SizedBox(height: 16),
-          Text(message, style: const TextStyle(fontFamily: 'Cairo')),
-          TextButton(onPressed: _onRefresh, child: const Text('تحديث القائمة')),
+          Text(message, style: const TextStyle(fontFamily: AppFonts.arabic)),
+          TextButton(onPressed: _onRefresh, child: const Text('تحديث القائمة', style: TextStyle(fontFamily: AppFonts.arabic))),
         ],
       ),
     );
   }
 
   Widget _buildBottomNav(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
       ),
       child: BottomNavigationBar(
         currentIndex: 1,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: _primaryBlue,
-        unselectedItemColor: Colors.grey.shade400,
-        selectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11),
-        unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 11),
+        backgroundColor: isDark ? AppColors.webCardBackground : Colors.white,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.gray400,
+        selectedLabelStyle: const TextStyle(fontFamily: AppFonts.arabic, fontWeight: FontWeight.bold, fontSize: 11),
+        unselectedLabelStyle: const TextStyle(fontFamily: AppFonts.arabic, fontSize: 11),
         onTap: (index) {
           switch (index) {
             case 0: Navigator.pushReplacementNamed(context, '/passenger_home'); break;

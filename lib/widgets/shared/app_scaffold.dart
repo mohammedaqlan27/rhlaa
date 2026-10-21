@@ -1,7 +1,7 @@
-import 'dart:ui'; // ضروري لتأثير التمويه (Blur)
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ضروري للاهتزاز اللمسي والتحكم في الـ System UI
-import 'custom_button.dart';
+import 'package:flutter/services.dart';
+import '../../theme/app_colors.dart';
 import 'settings_sheet.dart';
 
 class AppScaffold extends StatelessWidget {
@@ -17,8 +17,8 @@ class AppScaffold extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final bool extendBodyBehindAppBar;
   final Color? appBarColor;
-  final bool canPop; // خيار للتحكم في إمكانية الرجوع للخلف
-  final bool hideBackButton; // تم إضافة تعريف المتغير هنا لإصلاح الخطأ
+  final bool canPop;
+  final bool hideBackButton;
 
   const AppScaffold({
     super.key,
@@ -38,30 +38,30 @@ class AppScaffold extends StatelessWidget {
     this.hideBackButton = false,
   });
 
-  static const Color _logoBlue = Color(0xFF1E70B8);
-  static const Color _baseBg = Color(0xFFF8FAFC);
-
   void _openSettings(BuildContext context) {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (ctx) => const SettingsSheet(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? AppColors.webBackground : AppColors.background;
+
     return PopScope(
       canPop: !isLoading && canPop,
       child: Scaffold(
-        backgroundColor: _baseBg,
+        backgroundColor: backgroundColor,
         extendBodyBehindAppBar: extendBodyBehindAppBar,
         drawer: drawer,
         bottomNavigationBar: bottomNavigationBar,
-        appBar: _buildAppBar(context),
+        appBar: _buildAppBar(context, isDark),
         body: Stack(
           children: [
             IgnorePointer(
@@ -73,7 +73,7 @@ class AppScaffold extends StatelessWidget {
                 ),
               ),
             ),
-            _buildLoadingOverlay(),
+            _buildLoadingOverlay(isDark),
           ],
         ),
         floatingActionButton: floatingActionButton,
@@ -81,20 +81,25 @@ class AppScaffold extends StatelessWidget {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
+  PreferredSizeWidget _buildAppBar(BuildContext context, bool isDark) {
     return AppBar(
-      systemOverlayStyle: SystemUiOverlayStyle.dark,
+      systemOverlayStyle: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       automaticallyImplyLeading: !hideBackButton,
       title: title != null
           ? Text(
         title!,
-        style: const TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontFamily: AppFonts.arabic,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: isDark ? Colors.white : AppColors.textPrimary,
+        ),
       )
           : null,
       centerTitle: true,
       elevation: 0,
-      backgroundColor: appBarColor ?? _baseBg,
-      foregroundColor: _logoBlue,
+      backgroundColor: appBarColor ?? (isDark ? AppColors.webBackground : AppColors.background),
+      foregroundColor: isDark ? Colors.white : AppColors.primary,
       surfaceTintColor: Colors.transparent,
       actions: [
         if (actions != null) ...actions!,
@@ -110,7 +115,7 @@ class AppScaffold extends StatelessWidget {
     );
   }
 
-  Widget _buildLoadingOverlay() {
+  Widget _buildLoadingOverlay(bool isDark) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       child: isLoading
@@ -120,20 +125,26 @@ class AppScaffold extends StatelessWidget {
           children: [
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-              child: Container(color: Colors.white.withOpacity(0.4)),
+              child: Container(
+                color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.4),
+              ),
             ),
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(_logoBlue),
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                     strokeWidth: 3,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'يرجى الانتظار...',
-                    style: TextStyle(fontFamily: 'Cairo', color: _logoBlue.withOpacity(0.8), fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontFamily: AppFonts.arabic,
+                      color: isDark ? Colors.white : AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),

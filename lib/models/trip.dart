@@ -83,25 +83,23 @@ class Trip {
   }) : seatStatus = seatStatus ?? List<bool>.filled(totalSeats > 0 ? totalSeats : 0, true);
 
   // =========================
-  // Factory: from Firestore doc
+  // Factory: from Map
   // =========================
-  factory Trip.fromDocument(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    int _parseInt(dynamic v) {
+  factory Trip.fromMap(Map<String, dynamic> map, String docId) {
+    int parseInt(dynamic v) {
       if (v is int) return v;
       if (v is double) return v.toInt();
       if (v is String) return int.tryParse(v) ?? 0;
       return 0;
     }
 
-    double _parseDouble(dynamic v) {
+    double parseDouble(dynamic v) {
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v) ?? 0.0;
       return 0.0;
     }
 
-    DateTime? _parseDate(dynamic v) {
+    DateTime? parseDate(dynamic v) {
       if (v is Timestamp) return v.toDate();
       if (v is DateTime) return v;
       if (v is String) return DateTime.tryParse(v);
@@ -109,7 +107,7 @@ class Trip {
       return null;
     }
 
-    List<bool> _parseSeatStatus(dynamic raw, int total) {
+    List<bool> parseSeatStatus(dynamic raw, int total) {
       if (raw is List) {
         final parsed = raw.map<bool>((e) {
           if (e is bool) return e;
@@ -125,41 +123,50 @@ class Trip {
       return List<bool>.filled(total, true);
     }
 
-    final totalSeats = _parseInt(data['totalSeats']);
+    final totalSeats = parseInt(map['totalSeats']);
+
     return Trip(
-      id: doc.id,
-      title: data['title'] ?? '',
-      description: data['description'] ?? '',
-      driverId: data['driverId'] ?? '',
-      driverName: data['driverName'] ?? '',
-      agencyId: data['agencyId'],
-      tripCategory: data['tripCategory'] ?? '',
-      origin: data['origin'] ?? '',
-      destination: data['destination'] ?? '',
-      vehicleType: data['vehicleType'] ?? '',
-      vehicleId: data['vehicleId'],
+      id: docId,
+      title: map['title'] ?? '',
+      description: map['description'] ?? '',
+      driverId: map['driverId'] ?? '',
+      driverName: map['driverName'] ?? '',
+      agencyId: map['agencyId'],
+      tripCategory: map['tripCategory'] ?? '',
+      origin: map['origin'] ?? '',
+      destination: map['destination'] ?? '',
+      vehicleType: map['vehicleType'] ?? '',
+      vehicleId: map['vehicleId'],
       totalSeats: totalSeats,
-      availableSeats: _parseInt(data['availableSeats']),
-      seatStatus: _parseSeatStatus(data['seatStatus'], totalSeats),
-      departureTime: _parseDate(data['departureTime']),
-      date: _parseDate(data['date']),
-      time: data['time'] ?? '',
-      flexibleWindow: data['flexibleWindow'] ?? '',
-      status: data['status'] ?? 'active',
-      price: _parseDouble(data['price']),
-      driverRating: _parseDouble(data['driverRating']),
-      carPlateNumber: data['carPlateNumber'] ?? data['plateNumber'] ?? '',
-      carOwnerOfficialName: data['carOwnerOfficialName'] ?? '',
-      govFeeAmount: data['govFeeAmount'] != null ? _parseDouble(data['govFeeAmount']) : null,
-      distanceKm: data['distanceKm'] != null ? _parseDouble(data['distanceKm']) : null,
-      manifestUrl: data['manifestUrl'],
-      manifestStoragePath: data['manifestStoragePath'],
-      manifestGeneratedAt: data['manifestGeneratedAt'] is Timestamp ? data['manifestGeneratedAt'] : null,
-      manifestStatus: data['manifestStatus'],
-      cancellationPolicy: data['cancellationPolicy'],
-      createdAt: data['createdAt'] is Timestamp ? data['createdAt'] : null,
-      updatedAt: data['updatedAt'] is Timestamp ? data['updatedAt'] : null,
+      availableSeats: parseInt(map['availableSeats']),
+      seatStatus: parseSeatStatus(map['seatStatus'], totalSeats),
+      departureTime: parseDate(map['departureTime']),
+      date: parseDate(map['date']),
+      time: map['time'] ?? '',
+      flexibleWindow: map['flexibleWindow'] ?? '',
+      status: map['status'] ?? 'active',
+      price: parseDouble(map['price'] ?? map['pricePerSeat']), // دعم التوافق مع pricePerSeat إن وجد في قاعدة البيانات
+      driverRating: parseDouble(map['driverRating']),
+      carPlateNumber: map['carPlateNumber'] ?? map['plateNumber'] ?? '',
+      carOwnerOfficialName: map['carOwnerOfficialName'] ?? '',
+      govFeeAmount: map['govFeeAmount'] != null ? parseDouble(map['govFeeAmount']) : null,
+      distanceKm: map['distanceKm'] != null ? parseDouble(map['distanceKm']) : null,
+      manifestUrl: map['manifestUrl'],
+      manifestStoragePath: map['manifestStoragePath'],
+      manifestGeneratedAt: map['manifestGeneratedAt'] is Timestamp ? map['manifestGeneratedAt'] : null,
+      manifestStatus: map['manifestStatus'],
+      cancellationPolicy: map['cancellationPolicy'],
+      createdAt: map['createdAt'] is Timestamp ? map['createdAt'] : null,
+      updatedAt: map['updatedAt'] is Timestamp ? map['updatedAt'] : null,
     );
+  }
+
+  // =========================
+  // Factory: from Firestore doc
+  // =========================
+  factory Trip.fromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return Trip.fromMap(data, doc.id);
   }
 
   // =========================
@@ -202,7 +209,7 @@ class Trip {
   }
 
   // =========================
-  // CopyWith: تم إضافة كافة الحقول الناقصة هنا
+  // CopyWith
   // =========================
   Trip copyWith({
     String? id,

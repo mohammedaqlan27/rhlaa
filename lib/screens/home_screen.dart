@@ -8,8 +8,8 @@ import '../state/auth_state.dart';
 import '../widgets/shared/custom_button.dart';
 import '../widgets/shared/app_scaffold.dart';
 import '../widgets/shared/app_card.dart';
-import 'driver_home_screen.dart';
-import 'passenger_home_screen.dart';
+import 'driver/driver_home_screen.dart';
+import 'passenger/passenger_home_screen.dart';
 import 'auth_screen.dart';
 import 'edit_profile_screen.dart';
 import 'notification_screen.dart';
@@ -60,7 +60,7 @@ class HomeScreen extends StatelessWidget {
 
           // 5. الواجهة الرئيسية المعتمدة
           return AppScaffold(
-            title: isDriver ? 'لوحة الكابتن' : 'رحلاء للسفريات',
+            title: isDriver ? 'لوحة الكابتن' : 'رحلة للسفريات',
             hideBackButton: true, // حذف سهم الرجوع الزائد (اللمسة 3)
             actions: [
               _buildNotificationBell(context),
@@ -152,7 +152,7 @@ class HomeScreen extends StatelessWidget {
                     Navigator.pop(ctx);
                     _launchWhatsAppSupport(context);
                   }),
-                  _buildMenuTile(Icons.info_outline, 'عن تطبيق رحلاء', () {}),
+                  _buildMenuTile(Icons.info_outline, 'عن تطبيق رحلة', () {}),
                   const SizedBox(height: 20),
                   _buildLogoutButton(context),
                 ],
@@ -171,14 +171,14 @@ class HomeScreen extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 35,
-            backgroundColor: _primaryBlue.withOpacity(0.1),
+            backgroundColor: _primaryBlue.withValues(alpha: 0.1),
             child: Text(user.displayName?[0] ?? 'U', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _primaryBlue)),
           ),
           const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(user.displayName ?? 'مستكشف رحلاء', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: _textDark)),
+              Text(user.displayName ?? 'مستكشف رحلة', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: _textDark)),
               Text(user.phoneNumber ?? user.email ?? 'لا يوجد بيانات اتصال', style: TextStyle(fontSize: 13, color: Colors.grey[600], fontFamily: 'Cairo')),
             ],
           ),
@@ -224,7 +224,7 @@ class HomeScreen extends StatelessWidget {
       },
       text: 'تسجيل الخروج',
       icon: Icons.logout_rounded,
-      backgroundColor: Colors.redAccent.withOpacity(0.1),
+      backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
       textColor: Colors.redAccent,
     );
   }
@@ -245,7 +245,7 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const Icon(Icons.map_rounded, size: 80, color: _primaryBlue),
                 const SizedBox(height: 24),
-                const Text('أهلاً بك في رحلاء', style: TextStyle(fontFamily: 'Cairo', fontSize: 22, fontWeight: FontWeight.bold, color: _primaryBlue)),
+                const Text('أهلاً بك في رحلة', style: TextStyle(fontFamily: 'Cairo', fontSize: 22, fontWeight: FontWeight.bold, color: _primaryBlue)),
                 const SizedBox(height: 12),
                 const Text('خطوتك الأولى لتجربة تنقل ذكية واقتصادية باليمن.', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', color: Colors.black54)),
                 const SizedBox(height: 40),

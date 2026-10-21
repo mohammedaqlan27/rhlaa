@@ -114,7 +114,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     title: const Text('إشعارات تسويقية', style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
                     subtitle: const Text('عروض، كوبونات خصم، وأخبار الرحلات', style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
                     value: _prefs!.marketing,
-                    activeColor: const Color(0xFF1E70B8),
+                    activeThumbColor: const Color(0xFF1E70B8),
                     onChanged: (v) => setState(() => _prefs = _prefs!.copyWith(marketing: v)),
                   ),
                   const Divider(height: 1),
@@ -122,7 +122,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     title: const Text('إشعارات العمليات', style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
                     subtitle: const Text('تأكيد الحجز، الدفع، وتنبيهات الأمان', style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
                     value: _prefs!.transactional,
-                    activeColor: const Color(0xFF1E70B8),
+                    activeThumbColor: const Color(0xFF1E70B8),
                     onChanged: (v) => setState(() => _prefs = _prefs!.copyWith(transactional: v)),
                   ),
                 ],
@@ -144,7 +144,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 return ChoiceChip(
                   label: Text('$h ساعة', style: const TextStyle(fontFamily: 'Cairo')),
                   selected: selected,
-                  selectedColor: const Color(0xFF1E70B8).withOpacity(0.2),
+                  selectedColor: const Color(0xFF1E70B8).withValues(alpha: 0.2),
                   labelStyle: TextStyle(
                     color: selected ? const Color(0xFF1E70B8) : Colors.black87,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,

@@ -37,21 +37,6 @@
         "npm --prefix \"$RESOURCE_DIR\" run lint"
       ],
       "source": "functions"
-    },
-    {
-      "source": "main",
-      "codebase": "main",
-      "disallowLegacyRuntimeConfig": true,
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "*.local"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run lint"
-      ]
     }
   ],
   "emulators": {
@@ -69,9 +54,11 @@
       "port": 4002
     },
     "auth": {
+      "host": "127.0.0.1",
       "port": 9099
     },
     "database": {
+      "host": "127.0.0.1",
       "port": 9000
     },
     "hosting": {
@@ -88,7 +75,7 @@
   "firestore": {
     "database": "(default)",
     "location": "europe-west3",
-    "rules": "y",
+    "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
   "hosting": {

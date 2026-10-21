@@ -15,7 +15,7 @@ class DistanceTier {
   });
 
   factory DistanceTier.fromMap(Map<String, dynamic> m) {
-    double _toDouble(dynamic v, [double fallback = 0.0]) {
+    double toDouble(dynamic v, [double fallback = 0.0]) {
       if (v == null) return fallback;
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v) ?? fallback;
@@ -23,9 +23,9 @@ class DistanceTier {
     }
 
     return DistanceTier(
-      minKm: _toDouble(m['minKm'] ?? m['min_km'] ?? m['min'] ?? 0.0),
-      maxKm: _toDouble(m['maxKm'] ?? m['max_km'] ?? m['max'] ?? double.infinity),
-      amount: _toDouble(m['amount'] ?? m['fee'] ?? 0.0),
+      minKm: toDouble(m['minKm'] ?? m['min_km'] ?? m['min'] ?? 0.0),
+      maxKm: toDouble(m['maxKm'] ?? m['max_km'] ?? m['max'] ?? double.infinity),
+      amount: toDouble(m['amount'] ?? m['fee'] ?? 0.0),
     );
   }
 
@@ -43,7 +43,7 @@ class GovFeeRule {
   final String destination; // اسم الوجهة أو '*'
   final bool exact; // تطابق دقيق origin/destination
   final bool distanceBased; // هل تعتمد الرسوم على المسافة
-  final double fixedAmount; // مبلغ ثابت إن وُجد
+  final double? fixedAmount; // مبلغ ثابت إن وُجد (اختياري)
   final List<DistanceTier> distanceTiers; // شرائح المسافة
   final int priority; // أولوية القاعدة
   final bool isActive;
@@ -56,7 +56,7 @@ class GovFeeRule {
     required this.destination,
     required this.exact,
     required this.distanceBased,
-    required this.fixedAmount,
+    this.fixedAmount = 0.0, // جعلناه اختيارياً بقيمة افتراضية لتفادي أخطاء الإنشاء
     required this.distanceTiers,
     required this.priority,
     required this.isActive,
@@ -103,12 +103,9 @@ class GovFeeRule {
   factory GovFeeRule.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // distanceTiers قد تكون Map أو List أو JSON string
-
     List<DistanceTier> parseTiers(dynamic raw) {
       if (raw == null) return [];
 
-      // إذا كانت خريطة (map) من كائنات
       if (raw is Map) {
         try {
           return raw.values.map((e) {
@@ -120,7 +117,6 @@ class GovFeeRule {
         }
       }
 
-      // إذا كانت قائمة
       if (raw is List) {
         return raw.map((e) {
           if (e is Map<String, dynamic>) return DistanceTier.fromMap(e);
@@ -129,7 +125,6 @@ class GovFeeRule {
         }).toList();
       }
 
-      // إذا كانت نص JSON
       if (raw is String) {
         final parsed = raw.trim();
         if (parsed.isEmpty) return [];
@@ -142,14 +137,13 @@ class GovFeeRule {
             return decoded.values.map((e) => DistanceTier.fromMap(Map<String, dynamic>.from(e))).toList();
           }
         } catch (_) {
-          // JSON غير صالح — نرجع قائمة فارغة بدل رمي استثناء
           return [];
         }
       }
 
-      // أي نوع آخر
       return [];
     }
+
     final tiers = parseTiers(data['distanceTiers'] ?? data['distance_tiers'] ?? data['tiers']);
 
     return GovFeeRule(
@@ -174,7 +168,7 @@ class GovFeeRule {
       'destination': destination,
       'exact': exact,
       'distanceBased': distanceBased,
-      'fixedAmount': fixedAmount,
+      'fixedAmount': fixedAmount ?? 0.0,
       'distanceTiers': distanceTiers.map((t) => t.toMap()).toList(),
       'priority': priority,
       'isActive': isActive,
@@ -184,9 +178,7 @@ class GovFeeRule {
   }
 
   /// احسب الرسوم الحكومية لرحلة بناءً على المسافة والقاعدة
-  /// ترجع null إذا لم تنطبق القاعدة (مثلاً origin/destination لا تطابق)
   double? calculateFee({required double distanceKm, required String origin, required String destination}) {
-    // تحقق من التطابق مع origin/destination
     if (exact) {
       if (this.origin != '*' && this.origin != origin) return null;
       if (this.destination != '*' && this.destination != destination) return null;
@@ -198,7 +190,7 @@ class GovFeeRule {
     if (!isActive) return null;
 
     if (!distanceBased) {
-      return fixedAmount;
+      return fixedAmount ?? 0.0;
     }
 
     // البحث في الشرائح
@@ -209,6 +201,6 @@ class GovFeeRule {
     }
 
     // إذا لم يطابق أي شريحة، استخدم fixedAmount إن وُجد
-    return fixedAmount;
+    return fixedAmount ?? 0.0;
   }
 }

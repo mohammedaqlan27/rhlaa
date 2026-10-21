@@ -19,10 +19,15 @@ class ThemeProvider with ChangeNotifier {
   })  : _mode = initialMode,
         _highContrast = initialHighContrast,
         _seedColor = initialSeedColor;
-
+  void setThemeMode(ThemeMode mode) {
+    _themeMode = mode;
+    notifyListeners();
+  }
   ThemeMode get mode => _mode;
   bool get highContrast => _highContrast;
   Color? get seedColor => _seedColor;
+
+  set _themeMode(ThemeMode _themeMode) {}
 
   Future<void> setMode(ThemeMode mode) async {
     _mode = mode;
@@ -45,7 +50,7 @@ class ThemeProvider with ChangeNotifier {
     if (color == null) {
       await prefs.remove(_kSeedColorKey);
     } else {
-      await prefs.setString(_kSeedColorKey, '#${color.value.toRadixString(16).padLeft(8, '0')}');
+      await prefs.setString(_kSeedColorKey, '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}');
     }
   }
 
@@ -106,5 +111,6 @@ class ThemeProvider with ChangeNotifier {
       initialHighContrast: highContrast,
       initialSeedColor: _parseHexColor(seedHex),
     );
+
   }
 }

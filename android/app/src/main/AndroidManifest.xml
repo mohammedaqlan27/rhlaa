@@ -1,11 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- ==================== الأذونات الأساسية ==================== -->
+    <!-- إذن الاتصال بالإنترنت -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- إذن التحقق من حالة الشبكة (Wi-Fi / البيانات) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <application
         android:label="rhlaa"
-        android:name="${Rhlaa}"
+        android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -16,26 +21,33 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <meta-data
-                android:name="com.google.android.geo.API_KEY"
-                android:value="1:644270097493:android:be4f5e0f71628d43bfc0dc"/>
+            <!-- ثيم البداية الخاص بـ Flutter -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"
                 />
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
+        <!-- إعدادات محرك Flutter -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
 
+    <!-- ==================== استعلامات الأنظمة (Android 11+) ==================== -->
     <queries>
-        <!-- الأسطر المضافة لفتح روابط الـ PDF والمواقع الخارجية -->
+        <!-- إذن التعامل مع النصوص مع محرك Flutter -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+
+        <!-- دعم فتح الروابط الخارجية وتطبيقات المشاركة -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
@@ -43,12 +55,6 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="http" />
-        </intent>
-
-        <!-- الأسطر الأصلية الخاصة بمعالجة النصوص -->
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
         </intent>
     </queries>
 </manifest>

@@ -1,4 +1,5 @@
-// lib/widgets/trip_card.dart (نسخة مؤقتة محمية من null)
+// lib/widgets/trip_card.dart
+// بطاقة عرض الرحلة مع تحسينات null-safety، قابلية القراءة، ودعم RTL/Localization
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/trip.dart';
@@ -21,21 +22,25 @@ class TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final String status = (trip.status ?? 'غير معروف').toString();
+    // الحقول في نموذج Trip مُهيأة بقيم افتراضية، لذا لا حاجة لفحص null باستثناء departureTime
+    final String status = trip.status;
     final bool isStatusActive = status.toLowerCase().contains('active') || status.contains('مفع');
 
-    final int availableSeats = trip.availableSeats ?? 0;
+    final int availableSeats = trip.availableSeats;
     final bool isLowSeats = availableSeats <= 1;
 
     final DateTime? dt = trip.departureTime;
     final String formattedTime = dt != null
-        ? DateFormat('hh:mm a', 'ar').format(dt)
-        : (trip.time ?? 'غير محدد');
+        ? DateFormat.jm('ar').format(dt) // يستخدم تنسيق محلي عربي مثل ٠٧:٣٠ ص
+        : (trip.time.isNotEmpty ? trip.time : 'غير محدد');
 
-    final double price = trip.price ?? 0.0;
-    final String title = (trip.title != null && trip.title!.isNotEmpty) ? trip.title! : 'رحلة تنقل مباشر';
-    final String origin = trip.origin ?? 'غير معروف';
-    final String destination = trip.destination ?? 'غير معروف';
+    final double price = trip.price;
+    final String title = trip.title.isNotEmpty ? trip.title : 'رحلة تنقل مباشر';
+    final String origin = trip.origin.isNotEmpty ? trip.origin : 'غير معروف';
+    final String destination = trip.destination.isNotEmpty ? trip.destination : 'غير معروف';
+
+    // تنسيق رقمي عربي للسعر
+    final priceFormatter = NumberFormat.decimalPattern('ar');
 
     return AppCard(
       onTap: onTap,
@@ -43,6 +48,7 @@ class TripCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
+          // رأس البطاقة: أيقونة + عنوان + حالة
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
@@ -57,7 +63,7 @@ class TripCard extends StatelessWidget {
                         child: Text(
                           title,
                           style: TextStyle(
-                            fontFamily: 'Cairo',
+                            fontFamily: AppFonts.arabic,
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: isDark ? Colors.white : AppColors.textPrimary,
@@ -73,6 +79,8 @@ class TripCard extends StatelessWidget {
               ],
             ),
           ),
+
+          // محتوى البطاقة: مسار الرحلة و السعر
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -90,14 +98,16 @@ class TripCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (showPrice) _buildPriceSection(context, price),
+                if (showPrice) _buildPriceSection(context, priceFormatter.format(price)),
               ],
             ),
           ),
+
+          // تذييل البطاقة: معلومات إضافية (المقاعد، الوقت)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.03) : AppColors.gray100.withOpacity(0.5),
+              color: isDark ? Colors.white.withValues(alpha: 0.03) : AppColors.gray100.withValues(alpha: 0.5),
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
             ),
             child: Row(
@@ -125,7 +135,7 @@ class TripCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Icon(Icons.directions_car_filled_rounded, color: AppColors.primary, size: 20),
@@ -136,13 +146,13 @@ class TripCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isActive ? AppColors.success.withOpacity(0.1) : AppColors.gray200,
+        color: isActive ? AppColors.success.withValues(alpha: 0.12) : AppColors.gray200,
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(
         isActive ? 'نشطة الآن' : status,
         style: TextStyle(
-          fontFamily: 'Cairo',
+          fontFamily: AppFonts.arabic,
           fontSize: 11,
           fontWeight: FontWeight.bold,
           color: isActive ? AppColors.success : AppColors.textSecondary,
@@ -162,7 +172,7 @@ class TripCard extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [AppColors.secondary, Colors.redAccent.withOpacity(0.5)],
+              colors: [AppColors.secondary, Colors.redAccent.withValues(alpha: 0.6)],
             ),
           ),
         ),
@@ -175,7 +185,7 @@ class TripCard extends StatelessWidget {
     return Text(
       name,
       style: TextStyle(
-        fontFamily: 'Cairo',
+        fontFamily: AppFonts.arabic,
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: isDark ? Colors.white70 : AppColors.textPrimary,
@@ -185,7 +195,7 @@ class TripCard extends StatelessWidget {
     );
   }
 
-  Widget _buildPriceSection(BuildContext context, double price) {
+  Widget _buildPriceSection(BuildContext context, String formattedPrice) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -194,19 +204,19 @@ class TripCard extends StatelessWidget {
           textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
-              price.toStringAsFixed(0),
+              formattedPrice,
               style: const TextStyle(
-                fontFamily: 'Cairo',
+                fontFamily: AppFonts.arabic,
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
                 color: AppColors.primary,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             const Text(
               'ر.ي',
               style: TextStyle(
-                fontFamily: 'Cairo',
+                fontFamily: AppFonts.arabic,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textSecondary,
@@ -214,9 +224,10 @@ class TripCard extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 4),
         const Text(
           'للمقعد الواحد',
-          style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textSecondary),
+          style: TextStyle(fontFamily: AppFonts.arabic, fontSize: 10, color: AppColors.textSecondary),
         ),
       ],
     );
@@ -230,7 +241,7 @@ class TripCard extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontFamily: 'Cairo',
+            fontFamily: AppFonts.arabic,
             fontSize: 12,
             color: color,
             fontWeight: FontWeight.bold,

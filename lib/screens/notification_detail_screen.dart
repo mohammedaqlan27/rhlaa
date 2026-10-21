@@ -80,7 +80,7 @@ class NotificationDetailScreen extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: themeColor.withOpacity(0.1),
+                            color: themeColor.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(style['icon'], size: 60, color: themeColor),
@@ -99,7 +99,7 @@ class NotificationDetailScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: Colors.black.withValues(alpha: 0.03),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -158,7 +158,7 @@ class NotificationDetailScreen extends StatelessWidget {
                         context: context,
                         backgroundColor: Colors.transparent,
                         isScrollControlled: true,
-                        builder: (context) => const TravelPrayerCard(),
+                        builder: (context) => const TravelPrayerCard(title: '', content: '',),
                       );
                     },
                   ),
@@ -204,9 +204,9 @@ class NotificationDetailScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.blueGrey.withOpacity(0.05),
+        color: Colors.blueGrey.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.blueGrey.withOpacity(0.1)),
+        border: Border.all(color: Colors.blueGrey.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +225,7 @@ class NotificationDetailScreen extends StatelessWidget {
                 Text(entry.value.toString(), style: const TextStyle(fontFamily: _fontCairo, fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
               ],
             ),
-          )).toList(),
+          )),
         ],
       ),
     );

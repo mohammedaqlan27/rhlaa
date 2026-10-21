@@ -213,14 +213,14 @@ class _RatingScreenState extends State<RatingScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
                 ],
               ),
               child: Column(
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundColor: _logoBlue.withOpacity(0.1),
+                    backgroundColor: _logoBlue.withValues(alpha: 0.1),
                     child: Icon(Icons.person_rounded, size: 45, color: _logoBlue),
                   ),
                   const SizedBox(height: 20),

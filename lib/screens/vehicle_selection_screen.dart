@@ -68,7 +68,7 @@ class _VehicleSelectionScreenState extends State<VehicleSelectionScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: isSelected ? _primaryColor.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+            color: isSelected ? _primaryColor.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
             blurRadius: isSelected ? 14 : 8,
             offset: const Offset(0, 4),
           ),

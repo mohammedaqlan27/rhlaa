@@ -46,7 +46,6 @@ class UserService {
   // -------------------------
   // إدارة توكنات الإشعارات (FCM Tokens)
   // -------------------------
-  /// تقوم بحفظ التوكن في المجموعة الفرعية fcmTokens داخل مستند المستخدم
   Future<void> saveFcmToken(String uid, String token, String platform) async {
     if (uid.isEmpty || token.isEmpty) return;
     try {
@@ -96,11 +95,10 @@ class UserService {
       final data = user.toUpdateMap();
       data.removeWhere((k, v) => v == null);
 
-      // حماية الحقول الأساسية والحساسة لضمان قبول الطلب من قبل Security Rules
       data.remove('id');
       data.remove('uid');
       data.remove('createdAt');
-      data.remove('walletBalance'); // الرصيد لا يُعدل من طرف العميل
+      data.remove('walletBalance');
 
       await _firestore.collection(_collection).doc(user.id).update(data);
       return true;
@@ -119,13 +117,11 @@ class UserService {
       fields.removeWhere((k, v) => v == null);
       if (fields.isEmpty) return true;
 
-      // منع تعديل الحقول المحمية في التحديث الجزئي أيضاً
       fields.remove('uid');
       fields.remove('id');
       fields.remove('createdAt');
       fields.remove('walletBalance');
 
-      // معالجة childrenCount لضمان التوافق مع Firestore (String)
       if (fields.containsKey('childrenCount')) {
         fields['childrenCount'] = fields['childrenCount'].toString();
       }
@@ -139,9 +135,6 @@ class UserService {
     }
   }
 
-  // -------------------------
-  // مساعدة لتنظيف الامتداد
-  // -------------------------
   String _normalizeExtension(String? extension, String fallback) {
     if (extension == null || extension.trim().isEmpty) return fallback;
     final ext = extension.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toLowerCase();
@@ -202,7 +195,7 @@ class UserService {
           return;
         }
 
-        final data = snap.data() as Map<String, dynamic>? ?? {};
+        final data = snap.data() ?? {};
         final Map<String, dynamic> docs = data['documents'] != null
             ? Map<String, dynamic>.from(data['documents'])
             : <String, dynamic>{};
@@ -218,9 +211,6 @@ class UserService {
     }
   }
 
-  // -------------------------
-  // رفع وحفظ الوثيقة (تجميعي)
-  // -------------------------
   Future<bool> uploadAndSaveDocument(File file, String uid, String type, {String? extension}) async {
     final url = await uploadDocument(file, uid, type, extension: extension);
     if (url != null) {
@@ -252,7 +242,7 @@ class UserService {
         await _firestore.runTransaction((tx) async {
           final snap = await tx.get(userRef);
           if (!snap.exists) return;
-          final data = snap.data() as Map<String, dynamic>? ?? {};
+          final data = snap.data() ?? {};
           final Map<String, dynamic> docs = data['documents'] != null
               ? Map<String, dynamic>.from(data['documents'])
               : <String, dynamic>{};
@@ -270,9 +260,6 @@ class UserService {
     }
   }
 
-  // -------------------------
-  // التحقق من وجود الوثيقة
-  // -------------------------
   Future<bool> documentExists(String uid, String type, {String? extension}) async {
     if (uid.isEmpty) return false;
     try {

@@ -22,6 +22,14 @@ class L10nKeys {
   static const confirm = 'confirm';
   static const cancel = 'cancel';
   static const error = 'error';
+
+  // مفاتيح جديدة مطلوبة للشاشة
+  static const whereTo = 'where_to';
+  static const tripCategory = 'trip_category';
+  static const destination = 'destination';
+  static const filter = 'filter';
+  static const calendar = 'calendar';
+  static const support = 'support';
 // أضف مفاتيح جديدة هنا عند الحاجة
 }
 
@@ -56,9 +64,22 @@ class AppLocalizations {
       'confirm': 'Confirm',
       'cancel': 'Cancel',
       'error': 'Something went wrong',
+      // new keys
+      'where_to': 'Where do you want to go?',
+      'trip_category': 'Trip category',
+      'destination': 'Destination',
+      'filter': 'Filter',
+      'calendar': 'Calendar',
+      'support': 'Support',
+
+      "privacy": "Privacy",
+        "language": "Language",
+        "help_center": "Help Center"
+
+
     },
     'ar': {
-      'app_title': 'تطبيق الرحلات',
+      'app_title': 'تطبيق رحلة',
       'login': 'تسجيل الدخول',
       'register': 'إنشاء حساب',
       'email': 'البريد الإلكتروني',
@@ -75,6 +96,16 @@ class AppLocalizations {
       'confirm': 'تأكيد',
       'cancel': 'إلغاء',
       'error': 'حدث خطأ ما',
+      // new keys
+      'where_to': 'أين تريد الذهاب؟',
+      'trip_category': 'فئة الرحلة',
+      'destination': 'الوجهة',
+      'filter': 'فلتر',
+      'calendar': 'التقويم',
+      'support': 'الدعم',
+      "privacy": "الخصوصية",
+      "language": "اللغة",
+      "help_center": "مركز المساعدة",
     },
   };
 
@@ -108,6 +139,8 @@ class AppLocalizations {
   /// Delegate المطلوب من Flutter
   static const LocalizationsDelegate<AppLocalizations> delegate =
   _AppLocalizationsDelegate();
+
+  static void load(Locale locale) {}
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

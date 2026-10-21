@@ -76,7 +76,7 @@ class PaymentDeepLinkWidget extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.1),
+                  color: AppColors.success.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.security_rounded, color: AppColors.success, size: 20),
@@ -92,10 +92,10 @@ class PaymentDeepLinkWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.primary.withOpacity(0.1), width: 2),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.1), width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.05),
+                  color: AppColors.primary.withValues(alpha: 0.05),
                   blurRadius: 20,
                   spreadRadius: 5,
                 )

@@ -1,10 +1,8 @@
-// lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
 
-/// شاشة الإعدادات لربط ThemeProvider (وضع الثيم، التباين العالي، لون seed)
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -17,23 +15,23 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الإعدادات'),
+        title: const Text('الإعدادات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('مظهر التطبيق', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          // ---------------- مظهر التطبيق ----------------
+          const Text('مظهر التطبيق', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
 
-          // اختيار وضع الثيم (System / Light / Dark)
           Card(
             child: Column(
               children: [
                 RadioListTile<ThemeMode>(
                   value: ThemeMode.system,
                   groupValue: currentMode,
-                  title: const Text('اتباع نظام الجهاز'),
+                  title: const Text('اتباع نظام الجهاز', style: TextStyle(fontFamily: 'Cairo')),
                   onChanged: (v) {
                     if (v != null) themeProvider.setMode(v);
                   },
@@ -41,7 +39,7 @@ class SettingsScreen extends StatelessWidget {
                 RadioListTile<ThemeMode>(
                   value: ThemeMode.light,
                   groupValue: currentMode,
-                  title: const Text('فاتح'),
+                  title: const Text('فاتح', style: TextStyle(fontFamily: 'Cairo')),
                   onChanged: (v) {
                     if (v != null) themeProvider.setMode(v);
                   },
@@ -49,7 +47,7 @@ class SettingsScreen extends StatelessWidget {
                 RadioListTile<ThemeMode>(
                   value: ThemeMode.dark,
                   groupValue: currentMode,
-                  title: const Text('داكن'),
+                  title: const Text('داكن', style: TextStyle(fontFamily: 'Cairo')),
                   onChanged: (v) {
                     if (v != null) themeProvider.setMode(v);
                   },
@@ -60,11 +58,10 @@ class SettingsScreen extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // High Contrast toggle
           Card(
             child: SwitchListTile(
-              title: const Text('وضع التباين العالي'),
-              subtitle: const Text('يزيد أحجام النصوص ويعزز التباين لتحسين الوصول'),
+              title: const Text('وضع التباين العالي', style: TextStyle(fontFamily: 'Cairo')),
+              subtitle: const Text('يزيد أحجام النصوص ويعزز التباين لتحسين الوصول', style: TextStyle(fontFamily: 'Cairo')),
               value: highContrast,
               onChanged: (val) => themeProvider.setHighContrast(val),
             ),
@@ -72,8 +69,7 @@ class SettingsScreen extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Seed color picker
-          const Text('لون الهوية (Seed Color)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text('لون الهوية (Seed Color)', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           Card(
             child: Padding(
@@ -81,7 +77,7 @@ class SettingsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('اللون الحالي:'),
+                  const Text('اللون الحالي:', style: TextStyle(fontFamily: 'Cairo')),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -97,12 +93,12 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(width: 12),
                       ElevatedButton(
                         onPressed: () => _showColorPicker(context, themeProvider),
-                        child: const Text('تغيير اللون'),
+                        child: const Text('تغيير اللون', style: TextStyle(fontFamily: 'Cairo')),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton(
                         onPressed: () => themeProvider.setSeedColor(null),
-                        child: const Text('إعادة الافتراضي'),
+                        child: const Text('إعادة الافتراضي', style: TextStyle(fontFamily: 'Cairo')),
                       ),
                     ],
                   ),
@@ -113,15 +109,99 @@ class SettingsScreen extends StatelessWidget {
 
           const SizedBox(height: 24),
 
+          // ---------------- إدارة الحساب ----------------
+          const Text('إدارة الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Card(
+            child: Column(
+              children: [
+                ListTile(title: Text('ربط الحساب', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.link)),
+                ListTile(title: Text('الـ UID', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.perm_identity)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ---------------- التخصيص ----------------
+          const Text('التخصيص', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Card(
+            child: Column(
+              children: [
+                ListTile(title: Text('اللغة', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.language)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ---------------- المساعدة والملاحظات ----------------
+          const Text('المساعدة والملاحظات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Card(
+            child: Column(
+              children: [
+                ListTile(title: Text('دليل المساعدة', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.help_outline)),
+                ListTile(title: Text('خدمة العملاء', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.support_agent)),
+                ListTile(title: Text('ملاحظات المستخدم', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.feedback)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ---------------- قانوني ----------------
+          const Text('قانوني', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Card(
+            child: Column(
+              children: [
+                ListTile(title: Text('معلومات', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.info)),
+                ListTile(title: Text('سياسة الخصوصية', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.privacy_tip)),
+                ListTile(title: Text('ملفات تعريف الارتباط', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.cookie)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ---------------- تفضيلات البيانات ----------------
+          const Text('تفضيلات البيانات الخاصة بك', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Card(
+            child: Column(
+              children: [
+                ListTile(title: Text('إدارة التفضيلات', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.settings)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ---------------- إعدادات متقدمة ----------------
+          const Text('إعدادات متقدمة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Card(
+            child: Column(
+              children: [
+                ListTile(title: Text('بيانات فريق العمل', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.group)),
+                ListTile(title: Text('حذف الحساب', style: TextStyle(fontFamily: 'Cairo')), leading: Icon(Icons.delete_forever)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
           // زر حفظ/معاينة
           ElevatedButton.icon(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم حفظ الإعدادات'), behavior: SnackBarBehavior.floating),
+                const SnackBar(content: Text('تم حفظ الإعدادات', style: TextStyle(fontFamily: 'Cairo')), behavior: SnackBarBehavior.floating),
               );
             },
             icon: const Icon(Icons.save),
-            label: const Text('حفظ الإعدادات'),
+            label: const Text('حفظ الإعدادات', style: TextStyle(fontFamily: 'Cairo')),
           ),
 
           const SizedBox(height: 12),
@@ -133,17 +213,16 @@ class SettingsScreen extends StatelessWidget {
               await themeProvider.setHighContrast(false);
               await themeProvider.setSeedColor(null);
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعادة الإعدادات إلى الافتراضي')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعادة الإعدادات إلى الافتراضي', style: TextStyle(fontFamily: 'Cairo'))));
               }
             },
-            child: const Text('إعادة الإعدادات إلى الافتراضي'),
+            child: const Text('إعادة الإعدادات إلى الافتراضي', style: TextStyle(fontFamily: 'Cairo')),
           ),
         ],
       ),
     );
   }
 
-  // نافذة اختيار لون بسيطة مع مجموعة ألوان مقترحة
   void _showColorPicker(BuildContext context, ThemeProvider themeProvider) {
     final colors = <Color>[
       AppColors.primary,
@@ -162,7 +241,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('اختر لون الهوية'),
+          title: const Text('اختر لون الهوية', style: TextStyle(fontFamily: 'Cairo')),
           content: SizedBox(
             width: double.maxFinite,
             child: GridView.builder(
@@ -193,7 +272,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('إلغاء')),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo'))),
           ],
         );
       },

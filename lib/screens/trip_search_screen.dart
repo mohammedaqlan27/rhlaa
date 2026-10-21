@@ -23,6 +23,9 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   String? _selectedDestination;
   bool _hasSearched = false;
 
+  // مجموعة الوجهات المحذوفة محلياً (إخفاء من القوائم دون تعديل AppConstants)
+  final Set<String> _removedDestinations = {};
+
   @override
   void initState() {
     super.initState();
@@ -33,11 +36,12 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   }
 
   void _handleSearch() {
-    if (_selectedDestination == null) {
+    // إذا أردت السماح بالبحث بدون وجهة (عرض كل الرحلات حسب الفئة) قم بإزالة هذا الشرط
+    if (_selectedDestination == null && _selectedTripCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            '⚠️ يرجى تحديد الوجهة للبدء بالبحث',
+            '⚠️ يرجى تحديد الوجهة أو الفئة للبدء بالبحث',
             style: TextStyle(fontFamily: AppFonts.arabic),
           ),
           backgroundColor: AppColors.warning,
@@ -74,23 +78,32 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
   }
 
   Widget _buildSearchForm() {
-    // 1. استخراج جميع المدن الخارجية من الخريطة (Map) وتحويلها لقائمة (List)
+    // استخراج جميع المدن الخارجية من الخريطة (Map) وتحويلها لقائمة (List)
     final List<String> allExternalCities = AppConstants.externalDestinations.values
         .expand((cities) => cities)
         .toList();
 
-    // 2. دمج جميع الوجهات (استخدام yemenGovernorates بدلاً من internalDestinations)
+    // دمج جميع الوجهات
     final List<String> allDestinations = [
       ...AppConstants.yemenGovernorates,
       ...allExternalCities
     ];
 
-    // 3. تحديد ما سيظهر في القائمة بناءً على الفئة المختارة
-    List<String> currentDestinations = allDestinations;
+    // استبعاد الوجهات التي حُذفت محلياً
+    final List<String> visibleDestinations = allDestinations
+        .where((d) => !_removedDestinations.contains(d))
+        .toList();
+
+    // تحديد ما سيظهر في القائمة بناءً على الفئة المختارة
+    List<String> currentDestinations = visibleDestinations;
     if (_selectedTripCategory == 'داخلية') {
-      currentDestinations = AppConstants.yemenGovernorates;
+      currentDestinations = AppConstants.yemenGovernorates
+          .where((d) => !_removedDestinations.contains(d))
+          .toList();
     } else if (_selectedTripCategory == 'خارجية') {
-      currentDestinations = allExternalCities;
+      currentDestinations = allExternalCities
+          .where((d) => !_removedDestinations.contains(d))
+          .toList();
     }
 
     return Container(
@@ -140,7 +153,7 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
                       _selectedDestination = val;
                       _hasSearched = false;
 
-                      // ذكاء اصطناعي بسيط: تحديد الفئة تلقائياً بناءً على المدينة المختارة
+                      // تحديد الفئة تلقائياً بناءً على المدينة المختارة
                       if (val != null) {
                         if (AppConstants.yemenGovernorates.contains(val)) {
                           _selectedTripCategory = 'داخلية';
@@ -151,6 +164,14 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
                     });
                   },
                 ),
+              ),
+              const SizedBox(width: 8),
+              // زر إدارة الوجهات (حذف/استعادة محلي)
+              IconButton(
+                tooltip: 'إدارة الوجهات',
+                icon: const Icon(Icons.edit_location, size: 22),
+                color: AppColors.primary,
+                onPressed: _showManageDestinationsDialog,
               ),
             ],
           ),
@@ -223,9 +244,25 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
         }
 
         // فلترة النتائج بناءً على المدخلات
+        final selected = _selectedDestination?.trim();
         final results = provider.availableTrips.where((trip) {
-          final matchDest = trip.destination.trim() == _selectedDestination?.trim();
+          // افتراض أن Trip يحتوي على حقلي origin و destination
+          final tripOrigin = (trip.origin ?? '').trim();
+          final tripDest = (trip.destination ?? '').trim();
+
+          // إذا تم تحديد وجهة، نطابقها مع origin أو destination (يدعم داخل→خارج و خارج→داخل)
+          final matchDest = selected == null
+              ? true // إذا لم تُحدد الوجهة، لا نقيّد بالوجهة
+              : (tripDest == selected || tripOrigin == selected);
+
+          // الفئة: إذا لم تُحدد الفئة نسمح بكل الفئات
           final matchCat = _selectedTripCategory == null || trip.tripCategory == _selectedTripCategory;
+
+          // استبعاد الرحلات التي تتضمن وجهات محذوفة محلياً (إن رغبت بذلك)
+          final tripUsesRemoved = _removedDestinations.contains(tripOrigin) || _removedDestinations.contains(tripDest);
+          // هنا نختار ألا نعرض الرحلات التي تحتوي على وجهات محذوفة
+          if (tripUsesRemoved) return false;
+
           return matchCat && matchDest;
         }).toList();
 
@@ -295,6 +332,67 @@ class _TripSearchScreenState extends State<TripSearchScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // حوار لإدارة الوجهات (حذف محلي / استعادة)
+  void _showManageDestinationsDialog() {
+    final List<String> allExternalCities = AppConstants.externalDestinations.values
+        .expand((cities) => cities)
+        .toList();
+    final List<String> allDestinations = [
+      ...AppConstants.yemenGovernorates,
+      ...allExternalCities
+    ]..sort((a, b) => a.compareTo(b));
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: const Text('إدارة الوجهات', style: TextStyle(fontFamily: AppFonts.arabic)),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: allDestinations.length,
+                itemBuilder: (context, index) {
+                  final dest = allDestinations[index];
+                  final removed = _removedDestinations.contains(dest);
+                  return ListTile(
+                    title: Text(dest, style: const TextStyle(fontFamily: AppFonts.arabic)),
+                    trailing: IconButton(
+                      icon: Icon(removed ? Icons.restore : Icons.delete,
+                          color: removed ? AppColors.primary : AppColors.warning),
+                      onPressed: () {
+                        setState(() {
+                          if (removed) {
+                            _removedDestinations.remove(dest);
+                          } else {
+                            _removedDestinations.add(dest);
+                            // إذا كانت الوجهة المحذوفة هي المختارة حالياً، نلغي الاختيار
+                            if (_selectedDestination == dest) {
+                              _selectedDestination = null;
+                            }
+                          }
+                        });
+                        // نعيد بناء الـ dialog محلياً
+                        setStateDialog(() {});
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('إغلاق', style: TextStyle(fontFamily: AppFonts.arabic)),
+              ),
+            ],
+          );
+        });
+      },
     );
   }
 }

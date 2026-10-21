@@ -1,6 +1,7 @@
 // lib/screens/auth_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../state/auth_state.dart';
 import '../widgets/shared/custom_button.dart';
 import '../widgets/Passenger/otp_dialog.dart'; // استيراد الواجهة الجديدة
@@ -89,7 +90,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 final success = await auth.signInWithOTP(otpCode);
                 if (success && mounted) {
                   Navigator.pop(context); // إغلاق الدايلوج
-                  _submitAuthForm(auth); // إكمال حفظ البيانات في Firestore
+                  // هنا نتصرف بحسب وضع الواجهة (تسجيل دخول أم إنشاء حساب)
+                  await _onOtpSuccess(auth);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(auth.errorMessage ?? 'كود التحقق غير صحيح'))
@@ -107,7 +109,79 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  // التنفيذ النهائي (حفظ البيانات في Firebase/Firestore)
+  // دالة تُنفذ بعد نجاح OTP لتوحيد السلوك
+  Future<void> _onOtpSuccess(AuthState auth) async {
+    // إذا المستخدم الآن مسجل عبر الهاتف (currentUser != null)
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      // حالة نادرة: لم يتم تسجيل الدخول فعليًا
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يوجد مستخدم مسجل حالياً')));
+      return;
+    }
+
+    // إذا المستخدم يريد فقط تسجيل الدخول (_isLogin == true) فنجدد التوكن وننقل
+    if (_isLogin) {
+      try {
+        await user.getIdToken(true);
+        final idTokenResult = await user.getIdTokenResult(true);
+        debugPrint('ID token claims after auth: ${idTokenResult.claims}');
+      } catch (e) {
+        debugPrint('Failed to refresh token after OTP: $e');
+      }
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+      return;
+    }
+
+    // أما إذا المستخدم في وضع إنشاء حساب (_isLogin == false)
+    // فنحاول استدعاء register ليتم حفظ بيانات المستخدم في Firestore
+    // ملاحظة: AuthState.register يتعامل مع الحالة إن كان currentUser موجودًا (linkWithCredential)
+    try {
+      final password = _passwordController.text.trim();
+      final name = _nameController.text.trim();
+      final userType = _isDriver.value ? 'Driver' : 'Passenger';
+
+      final success = await auth.register(
+        email: "${
+            _phoneController.text.trim()
+        }@phone.com",
+        password: password.isEmpty ? DateTime.now().millisecondsSinceEpoch.toString() : password,
+        nickname: _nicknameController.text.isEmpty ? name : _nicknameController.text.trim(),
+        userType: userType,
+        mobileNumber: _phoneController.text.trim(),
+        idNumber: _idNumberController.text.trim(),
+        plateNumber: _plateNumberController.text.trim(),
+        agencyStatus: _agencyStatus,
+        drivingLicenseNumber: _licenseController.text.trim(),
+      );
+
+      if (!mounted) return;
+      if (success) {
+        // بعد التسجيل، نجدد التوكن ونقرأ الـ claims (AuthState يقوم بذلك أيضاً)
+        try {
+          final cur = FirebaseAuth.instance.currentUser;
+          if (cur != null) {
+            await cur.getIdToken(true);
+            final idTokenResult = await cur.getIdTokenResult(true);
+            debugPrint('ID token claims after auth: ${idTokenResult.claims}');
+          }
+        } catch (e) {
+          debugPrint('Failed to refresh token or read claims after register: $e');
+        }
+
+        Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('❌ ${auth.errorMessage ?? 'حدث خطأ ما أثناء إنشاء الحساب'}'))
+        );
+      }
+    } catch (e) {
+      debugPrint('Error in _onOtpSuccess register flow: $e');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('فشل إنشاء الحساب بعد التحقق')));
+    }
+  }
+
+  // التنفيذ النهائي (حفظ البيانات في Firebase/Firestore) للحالات غير OTP
   Future<void> _submitAuthForm(AuthState auth) async {
     final identifier = _usePhone ? _phoneController.text.trim() : _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -115,8 +189,35 @@ class _AuthScreenState extends State<AuthScreen> {
     final userType = _isDriver.value ? 'Driver' : 'Passenger';
 
     bool success;
+
+    // بناء المعرف المستخدم للدخول (إذا كان الهاتف نستخدم بريد وهمي)
+    final loginIdentifier = _usePhone ? "$identifier@phone.com" : identifier;
+
+    // حالة خاصة: إذا نُفّذت عملية OTP لتسجيل الدخول، currentUser سيكون موجودًا
+    // وإذا المستخدم في وضع تسجيل دخول ولم يدخل كلمة مرور (OTP flow)، نتعامل كحالة دخول ناجحة
+    if (_usePhone && _isLogin && password.isEmpty) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          await user.getIdToken(true);
+          final idTokenResult = await user.getIdTokenResult(true);
+          debugPrint('ID token claims after auth: ${idTokenResult.claims}');
+        } catch (e) {
+          debugPrint('Failed to refresh token in OTP-login path: $e');
+        }
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+        return;
+      }
+    }
+
     if (_isLogin) {
-      success = await auth.login(identifier, password);
+      // تأكد من أن كلمة المرور غير فارغة
+      if (password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل كلمة المرور')));
+        return;
+      }
+      success = await auth.login(loginIdentifier, password);
     } else {
       success = await auth.register(
         email: _usePhone ? "$identifier@phone.com" : identifier,
@@ -133,11 +234,42 @@ class _AuthScreenState extends State<AuthScreen> {
 
     if (!mounted) return;
     if (success) {
+      // بعد تسجيل الدخول/التسجيل نجدد التوكن ونقرأ الـ claims (AuthState يقوم بذلك أيضاً)
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await user.getIdToken(true);
+          final idTokenResult = await user.getIdTokenResult(true);
+          debugPrint('ID token claims after auth: ${idTokenResult.claims}');
+        }
+      } catch (e) {
+        debugPrint('Failed to refresh token or read claims: $e');
+      }
+
       Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('❌ ${auth.errorMessage ?? 'حدث خطأ ما'}'))
       );
+    }
+  }
+
+  // زر Debug لتجديد التوكن يدوياً وعرض الـ claims (مفيد أثناء التطوير)
+  Future<void> _debugRefreshToken() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يوجد مستخدم مسجل حالياً')));
+        return;
+      }
+      await user.getIdToken(true);
+      final idTokenResult = await user.getIdTokenResult(true);
+      final claims = idTokenResult.claims ?? {};
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Claims: ${claims.toString()}')));
+      debugPrint('Debug token claims: $claims');
+    } catch (e) {
+      debugPrint('Debug refresh token failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل تجديد التوكن: $e')));
     }
   }
 
@@ -155,6 +287,13 @@ class _AuthScreenState extends State<AuthScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.black54),
+            tooltip: 'تجديد التوكن (Debug)',
+            onPressed: _debugRefreshToken,
+          ),
+        ],
       ),
       body: auth.isLoading
           ? const LoadingScreen(message: 'جاري المعالجة...')
@@ -180,14 +319,14 @@ class _AuthScreenState extends State<AuthScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.primaryColor.withOpacity(0.1),
+            color: theme.primaryColor.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(Icons.directions_bus_filled_rounded, size: 64, color: theme.primaryColor),
         ),
         const SizedBox(height: 16),
         const Text(
-          'رُحلاء للسفريات',
+          'رُحلة للسفريات',
           style: TextStyle(fontFamily: 'Cairo', fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
         ),
         const Text('سفرك أسهل، أسرع، وأكثر أماناً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
@@ -259,7 +398,7 @@ class _AuthScreenState extends State<AuthScreen> {
           decoration: BoxDecoration(
             color: isSelected ? Colors.white : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
-            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))] : [],
+            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))] : [],
           ),
           child: Center(
             child: Text(label, style: TextStyle(fontFamily: 'Cairo', fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.blue : Colors.grey)),
@@ -304,7 +443,7 @@ class _AuthScreenState extends State<AuthScreen> {
               _buildTextField(controller: _plateNumberController, label: 'رقم لوحة السيارة (اختياري)', icon: Icons.tag),
               const SizedBox(height: 15),
               DropdownButtonFormField<String>(
-                value: _agencyStatus,
+                initialValue: _agencyStatus,
                 decoration: InputDecoration(
                   labelText: 'تبعية السائق/المركبة',
                   prefixIcon: const Icon(Icons.business_rounded),

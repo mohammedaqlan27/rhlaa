@@ -1,15 +1,17 @@
 // lib/models/agency.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// نموذج Agency موحّد وآمن للقراءة والكتابة إلى Firestore.
 class Agency {
   final String id;
   final String agencyName;
   final String managerName;
-  final dynamic location; // GeoPoint أو Map أو null
+  final dynamic location;
   final String mobileNumber;
+  final String? email;
+  final String? authUid; // الربط مع Firebase Auth
   final double walletBalance;
   final bool isActive;
+  final String? searchKey;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
 
@@ -19,13 +21,15 @@ class Agency {
     this.managerName = '',
     this.location,
     this.mobileNumber = '',
+    this.email,
+    this.authUid,
     this.walletBalance = 0.0,
     this.isActive = true,
+    this.searchKey,
     this.createdAt,
     this.updatedAt,
   });
 
-  /// قراءة من خريطة (مثلاً من DocumentSnapshot.data())
   factory Agency.fromMap(String id, Map<String, dynamic>? data) {
     final d = data ?? <String, dynamic>{};
 
@@ -68,31 +72,35 @@ class Agency {
       managerName: (d['managerName'] ?? '') as String,
       location: parseLocation(d['location']),
       mobileNumber: (d['mobileNumber'] ?? '') as String,
+      email: d['email'] as String?,
+      authUid: d['authUid'] as String?,
       walletBalance: toDoubleSafe(d['walletBalance']),
       isActive: d['isActive'] is bool ? d['isActive'] as bool : (d['isActive'] == null ? true : d['isActive'].toString().toLowerCase() == 'true'),
+      searchKey: d['searchKey'] as String?,
       createdAt: parseTs(d['createdAt']),
       updatedAt: parseTs(d['updatedAt']),
     );
   }
 
-  /// إنشاء من DocumentSnapshot
   factory Agency.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
     return Agency.fromMap(doc.id, data);
   }
 
-  /// تحويل إلى Map للحفظ في Firestore
   Map<String, dynamic> toMap() {
     return {
       'agencyName': agencyName,
       'managerName': managerName,
       'location': location,
       'mobileNumber': mobileNumber,
+      'email': email ?? '',
+      'authUid': authUid ?? '',
       'walletBalance': walletBalance,
       'isActive': isActive,
+      'searchKey': searchKey ?? agencyName.toLowerCase(),
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
       'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
-    }..removeWhere((k, v) => v == null);
+    }..removeWhere((k, v) => v == null || (v is String && v.isEmpty && (k == 'email' || k == 'authUid')));
   }
 
   Agency copyWith({
@@ -100,8 +108,11 @@ class Agency {
     String? managerName,
     dynamic location,
     String? mobileNumber,
+    String? email,
+    String? authUid,
     double? walletBalance,
     bool? isActive,
+    String? searchKey,
     Timestamp? createdAt,
     Timestamp? updatedAt,
   }) {
@@ -111,8 +122,11 @@ class Agency {
       managerName: managerName ?? this.managerName,
       location: location ?? this.location,
       mobileNumber: mobileNumber ?? this.mobileNumber,
+      email: email ?? this.email,
+      authUid: authUid ?? this.authUid,
       walletBalance: walletBalance ?? this.walletBalance,
       isActive: isActive ?? this.isActive,
+      searchKey: searchKey ?? this.searchKey,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
