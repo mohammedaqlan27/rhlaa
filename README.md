@@ -275,7 +275,8 @@ lib
 │   └── shared
 │
 ├── firebase_options.dart
-└── main.dart## 📸 لقطات الشاشة | Screenshots
+└── main.dart
+## 📸 لقطات الشاشة | Screenshots
 
 ### 🔐 تسجيل الدخول
 ![تسجيل الدخول](assets/screenshots/login.png)
@@ -293,11 +294,11 @@ lib
 ![تأكيد الحجز والدفع](assets/screenshots/booking_payment_confirmation.png)
 
 ### 🧾 سند الدفع والـ QR
-![سند الدفع](assets/screenshots/payment_receipt_qr.png)
-
+`![سند الدفع](assets/screenshots/payment_receipt_qr.png)
+`
 ### 🔔 مركز الإشعارات
-![مركز الإشعارات](assets/screenshots/notifications_center.png)
-
+`![مركز الإشعارات](assets/screenshots/notifications_center.png)
+`
 ### 🏢 لوحة تحكم المكاتب
 ![لوحة تحكم المكاتب](assets/screenshots/agency_dashboard.png)
 
@@ -306,6 +307,7 @@ lib
 
 ### ⚙️ لوحة الإدارة
 ![لوحة الإدارة](assets/screenshots/admin_dashboard.png)
+![img.png](img.png)
 📚 التوثيق
 docs/
 ├── PROJECT_SUMMARY.md
