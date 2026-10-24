@@ -71,3 +71,13 @@ Thumbs.db
 .next
 web/.next/
 build/
+# Next.js cache
+.next/
+web/.next/
+
+# Flutter build
+build/
+.dart_tool/
+
+# Logs
+*.log
