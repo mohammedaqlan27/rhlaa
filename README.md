@@ -329,7 +329,7 @@ lib
 ### 🏛️ لوحة الجهة الحكومية
 
 <p align="center">
-  <img src="assets/screenshots/government_dashboard.png" width="300">
+  <img src="assets/screenshots/government dashboard.png" width="300">
 </p>
 
 ### ⚙️ لوحة الإدارة
