@@ -279,35 +279,65 @@ lib
 ## 📸 لقطات الشاشة | Screenshots
 
 ### 🔐 تسجيل الدخول
-![تسجيل الدخول](assets/screenshots/login.png)
+
+<p align="center">
+  <img src="assets/screenshots/login.png" width="300">
+</p>
 
 ### 🚗 إنشاء حساب سائق
-![إنشاء حساب سائق](assets/screenshots/driver_register.png)
+
+<p align="center">
+  <img src="assets/screenshots/driver_register.png" width="300">
+</p>
 
 ### 🚙 إدارة المركبات
-![إدارة المركبات](assets/screenshots/vehicle_management.png)
+
+<p align="center">
+  <img src="assets/screenshots/vehicle_management.png" width="300">
+</p>
 
 ### 🛣️ إنشاء رحلة
-![إنشاء رحلة](assets/screenshots/create_trip.png)
+
+<p align="center">
+  <img src="assets/screenshots/create_trip.png" width="300">
+</p>
 
 ### 💳 تأكيد الحجز والدفع
-![تأكيد الحجز والدفع](assets/screenshots/booking_payment_confirmation.png)
+
+<p align="center">
+  <img src="assets/screenshots/booking_payment_confirmation.png" width="300">
+</p>
 
 ### 🧾 سند الدفع والـ QR
-`![سند الدفع](assets/screenshots/payment_receipt_qr.png)
-`
+
+<p align="center">
+  <img src="assets/screenshots/payment_receipt_qr.png" width="300">
+</p>
+
 ### 🔔 مركز الإشعارات
-`![مركز الإشعارات](assets/screenshots/notifications_center.png)
-`
+
+<p align="center">
+  <img src="assets/screenshots/notifications_center.png" width="300">
+</p>
+
 ### 🏢 لوحة تحكم المكاتب
-![لوحة تحكم المكاتب](assets/screenshots/agency_dashboard.png)
+
+<p align="center">
+  <img src="assets/screenshots/agency_dashboard.png" width="300">
+</p>
 
 ### 🏛️ لوحة الجهة الحكومية
-![لوحة الجهة الحكومية](assets/screenshots/government_dashboard.png)
+
+<p align="center">
+  <img src="assets/screenshots/government_dashboard.png" width="300">
+</p>
 
 ### ⚙️ لوحة الإدارة
-![لوحة الإدارة](assets/screenshots/admin_dashboard.png)
-![img.png](img.png)
+
+<p align="center">
+  <img src="assets/screenshots/admin_dashboard.png" width="300">
+</p>
+
 📚 التوثيق
 docs/
 ├── PROJECT_SUMMARY.md
