@@ -85,3 +85,5 @@ build/
 
 # Logs
 *.log
+node_modules/
+web/node_modules/
