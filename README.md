@@ -434,3 +434,13 @@ Email: abdulrahmanaqlan10@gmail.com
 
 Future Vision
 RHLAA is currently developed as an independent transportation platform with a long-term vision of evolving into a large-scale transportation ecosystem that supports digital transformation, smart mobility, and transportation management services.
+
+## ⚖️ Intellectual Property Notice
+
+This repository is published for portfolio and evaluation purposes only.
+
+Unauthorized copying, modification, redistribution, commercial use, or republication of any part of this project is prohibited without prior written permission from the author.
+
+See:
+- LICENSE
+- NOTICE.md
