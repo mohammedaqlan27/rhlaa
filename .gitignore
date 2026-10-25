@@ -67,6 +67,10 @@ Thumbs.db
 
 # إضافاتك المحلية
 .env
+.env.*
+web/.env.local
+functions/serviceAccountKey.json
+
 .secret
 .next
 web/.next/
